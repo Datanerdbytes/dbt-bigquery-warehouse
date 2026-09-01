@@ -1,0 +1,252 @@
+version: 2
+
+models:
+  - name: stg_crm_cust_info
+    description: "Cleaned, deduplicated, and typed customer profile data sourced from CRM landing tables."
+    columns:
+      - name: cst_id
+        description: "The primary internal identifier for a customer record."
+        data_tests:
+          - unique
+          - not_null
+
+      - name: cst_key
+        description: "A standardized business key used to identify the customer across CRM records."
+        data_tests:
+          - is_clean_trimmed
+          - not_null
+
+      - name: cst_firstname
+        description: "The customer's cleaned and standardized first name."
+        data_tests:
+          - is_clean_trimmed
+          - not_null
+
+      - name: cst_lastname
+        description: "The customer's cleaned and standardized last name."
+        data_tests:
+          - is_clean_trimmed
+          - not_null
+
+      - name: cst_marital_status
+        description: "The customer's standardized marital status."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Single', 'Married', null]
+          - is_clean_trimmed
+
+      - name: cst_gndr
+        description: "The customer's standardized gender."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Male', 'Female', null]
+          - is_clean_trimmed
+
+  - name: stg_crm_prd_info
+    description: "Cleaned and typed product information sourced from CRM landing tables."
+    columns:
+      - name: prd_id
+        description: "The primary internal identifier for a product record, cast to integer."
+        data_tests:
+          - unique
+          - not_null
+
+      - name: cat_id
+        description: "Category identifier derived from the first five characters of prd_key, with hyphens replaced by underscores."
+        data_tests:
+          - not_null
+          - is_clean_trimmed
+
+      - name: prd_key
+        description: "The product business key extracted from position seven onwards of the source prd_key."
+        data_tests:
+          - not_null
+
+      - name: prd_nm
+        description: "The product name with leading and trailing whitespace trimmed."
+        data_tests:
+          - not_null
+          - is_clean_trimmed
+
+      - name: prd_cost
+        description: "The product cost with nulls replaced by 0."
+        data_tests:
+          - not_null
+
+      - name: prd_line
+        description: "The standardized product line, mapped from the source single-character code."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Mountain', 'Road', 'Standard', 'Touring', null]
+          - is_clean_trimmed
+
+      - name: prd_start_dt
+        description: "The product availability start date, cast from the source string."
+        data_tests:
+          - not_null
+
+      - name: prd_end_dt
+        description: "The product availability end date, derived as one day before the next product version's start date. Null indicates the product is currently active."
+
+      - name: ingested_at
+        description: "Timestamp recording when the row was ingested into the staging layer."
+        data_tests:
+          - not_null
+
+  - name: stg_crm_sales_details
+    description: "Cleaned and typed sales transaction details sourced from CRM landing tables."
+    columns:
+      - name: sls_ord_num
+        description: "The unique order number identifier for the sales transaction."
+        data_tests:
+          - is_clean_trimmed
+
+      - name: sls_prd_key
+        description: "The product business key associated with the sales transaction, used to join to product information in the staging layer."
+        data_tests:
+          - is_clean_trimmed
+          - relationships:
+              arguments:
+                to: ref('stg_crm_prd_info')
+                field: prd_key
+
+      - name: sls_cust_id
+        description: "The customer identifier associated with the sales transaction, used to join to customer information in the staging layer."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_crm_cust_info')
+                field: cst_id
+
+      - name: sls_order_dt
+        description: "The date on which the sales transaction was ordered."
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= '1900-01-01'"
+          - is_date_before_columns:
+              arguments:
+                compare_columns:
+                  - sls_ship_dt
+                  - sls_due_dt
+
+      - name: sls_ship_dt
+        description: "The date on which the sales transaction was shipped."
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= '1900-01-01'"
+
+      - name: sls_due_dt
+        description: "The date on which the sales transaction is due."
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= '1900-01-01'"
+
+      - name: sls_sales
+        description: "The total sales amount for the transaction, cleaned and typed for analytics use."
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> 0"
+
+      - name: sls_quantity
+        description: "The number of units included in the sales transaction."
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> 0"
+
+      - name: sls_price
+        description: "The unit price of the product included in the sales transaction, cleaned and typed for analytics use."
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> 0"
+
+  - name: stg_erp_cust_az12
+    description: "Cleaned and standardized customer demographic data sourced from ERP landing tables."
+    columns:
+      - name: cid
+        description: "The customer identifier associated with the demographic record, standardized for joining to CRM customer data."
+        data_tests:
+          - not_null
+          - is_clean_trimmed
+          - relationships:
+              arguments:
+                to: ref('stg_crm_cust_info')
+                field: cst_key
+
+      - name: bdate
+        description: "The customer's birth date, standardized for demographic analysis."
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "<= current_date()"
+              config:
+                severity: error
+
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= '1900-01-01'"
+              config:
+                severity: warn
+      - name: gen
+        description: "The customer's standardized gender from the ERP demographic record."
+        data_tests:
+          - is_clean_trimmed
+          - accepted_values:
+              arguments:
+                values: [Male, Female, null]
+                quote: true
+
+  - name: stg_erp_loc_a101
+    description: "Cleaned and standardized customer location data sourced from ERP landing tables."
+    columns:
+      - name: cid
+        description: "The customer identifier associated with the location record, standardized for joining to CRM customer data."
+        data_tests:
+          - not_null
+          - unique
+          - is_clean_trimmed
+          - relationships:
+              arguments:
+                to: ref('stg_crm_cust_info')
+                field: cst_key
+      - name: cntry
+        description: "The customer's country of residence, standardized for location analysis."
+        data_tests:
+          - is_clean_trimmed
+
+  - name: stg_erp_px_cat_g1v2
+    description: "Cleaned and standardized product category data sourced from ERP landing tables."
+    columns:
+      - name: id
+        description: "The unique identifier for the product category."
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('stg_crm_prd_info')
+                field: cat_id
+      - name: cat
+        description: "The product category name, standardized and cleaned for consistency across ERP records."
+        data_tests:
+          - is_clean_trimmed
+      - name: subcat
+        description: "The product subcategory name, standardized and cleaned for consistency across ERP records."
+        data_tests:
+          - is_clean_trimmed
+      - name: maintenance
+        description: "The maintenance status of the product category, standardized for product catalog analysis."
+        data_tests:
+          - is_clean_trimmed

@@ -1,0 +1,28 @@
+name: 'analytics_layer'
+version: '1.0.0'
+profile: 'analytics_layer'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:    
+  - "target"
+  - "dbt_packages"
+
+models:
+  analytics_layer:
+    # Config indicated by + and applies to all files under models/example/
+    staging:
+      +materialized: view
+      +schema: silver
+
+    marts:
+      +materialized: table
+      +schema: gold
+
+flags:
+  require_generic_test_arguments_property: true

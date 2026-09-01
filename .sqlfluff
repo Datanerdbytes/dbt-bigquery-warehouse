@@ -1,0 +1,25 @@
+[sqlfluff]
+# 1. Switched to bigquery based on your project stack
+dialect = bigquery
+
+templater = dbt
+rules = all
+
+# 2. Combined your original exclusions with the new ones to quiet down the terminal
+exclude_rules = LT01, LT05, AM06, AL01, AL03, ST06, RF02
+
+max_line_length = 80
+
+[sqlfluff:indentation]
+indent_unit = space
+tab_space_size = 4
+indented_joins = False
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = upper
+
+[sqlfluff:rules:capitalisation.identifiers]
+capitalisation_policy = lower
+
+[sqlfluff:rules:aliasing.expression]
+allow_implicit = False

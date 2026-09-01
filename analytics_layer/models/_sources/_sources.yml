@@ -1,0 +1,401 @@
+version: 2
+
+sources:
+  - name: bronze_source
+    project: quantum-echo-data-eng-prod
+    dataset: bronze
+    description: >
+      Bronze layer raw ingest of CRM + ERP source systems. No
+      ingestion-timestamp column is present, so freshness is intentionally
+      NOT configured here. Every test in this source is set to
+      severity: warn — failures are visibility, not gates. Severity is
+      set per-test in the YAML below because dbt 1.10+ no longer accepts
+      config.severity at the source level (lint rule dbt1060). Tighten
+      per-test severity to "error" once the silver transformation work
+      is complete.
+    tables:
+
+      # ─────────────────────────────────────────────────────────────────
+      # CRM
+      # ─────────────────────────────────────────────────────────────────
+
+      - name: crm_cust_info
+        description: >
+          Bronze CRM customer info ingested from SQL Server Demo_Database.
+          Pandas EDA baseline: ~18,494 rows. PK is cst_id but 4 rows in
+          the source had null cst_id — that condition is flagged by the
+          not_null test as a warn rather than blocked.
+        columns:
+          - name: cst_id
+            description: "Customer ID (BIGINT). Primary key candidate."
+            data_tests:
+              - unique:
+                  config:
+                    severity: warn
+              - not_null:
+                  config:
+                    severity: warn
+
+          - name: cst_key
+            description: "Customer business key (NVARCHAR(50))."
+            data_tests:
+              - not_null:
+                  config:
+                    severity: warn
+              - is_clean_trimmed:
+                  config:
+                    severity: warn
+
+          - name: cst_firstname
+            description: "Customer first name."
+            data_tests:
+              - not_null:
+                  config:
+                    severity: warn
+              - is_clean_trimmed:
+                  config:
+                    severity: warn
+
+          - name: cst_lastname
+            description: "Customer last name."
+            data_tests:
+              - not_null:
+                  config:
+                    severity: warn
+              - is_clean_trimmed:
+                  config:
+                    severity: warn
+
+          - name: cst_marital_status
+            description: "Marital status code (M/S/N/n/a)."
+            data_tests:
+              - is_clean_trimmed:
+                  config:
+                    severity: warn
+
+          - name: cst_gndr
+            description: >
+              Gender code (M/F). Source has ~4,578 nulls out of ~18,494;
+              null is permitted by the column type so it is excluded from
+              the accepted_values list to avoid false-failing on a known
+              source condition.
+            data_tests:
+              - is_clean_trimmed:
+                  config:
+                    severity: warn
+
+          - name: cst_create_date
+            description: >
+              Account create date stored as NVARCHAR(10). Cast to DATE
+              happens in the silver layer, not here.
+            data_tests:
+              - not_null:
+                  config:
+                    severity: warn
+
+      - name: crm_prd_info
+        description: >
+          Bronze CRM product info ingested from SQL Server Demo_Database.
+          This product catalog source provides the reference dimension used
+          to enrich customer and transactional data in downstream silver
+          models. Quality checks remain warning-level until the associated
+          transformation logic is fully validated. 
+        columns:
+          - name: prd_id
+            description: "Product ID (BIGINT). Primary key candidate."
+            data_tests:
+              - unique:
+                  config:
+                    severity: warn
+              - not_null:
+                  config:
+                    severity: warn
+
+          - name: prd_nm
+            description: "Product name."
+            data_tests:
+              - is_clean_trimmed:
+                  config:
+                    severity: warn
+
+          - name: prd_cost
+            description: "Product cost in the source system."
+            data_tests:
+              - not_null:
+                  config:
+                    severity: warn
+              - dbt_utils.expression_is_true:
+                  arguments:
+                    expression: ">= 0"
+                    config:
+                      severity: warn
+
+          - name: prd_start_dt
+            description: "Product start date in the source system; cast to DATE in the silver layer."
+            data_tests:
+              - not_null:
+                  config:
+                    severity: warn
+              - is_date_before:
+                  arguments:
+                    end_date_column: prd_end_dt
+                  config:
+                    severity: warn
+
+      - name: crm_sales_details
+        description: >
+          Bronze CRM sales details table capturing transaction-level source
+          sales activity. This raw event feed is used for downstream fact and
+          enrichment logic in the silver layer, with quality checks retained
+          at warn level until the transformation pipeline is fully validated.
+        columns:
+          - name: sls_ord_num
+            description: >
+              Sales order number from the CRM source system. This is the
+              transaction-level order key used to associate details with
+              downstream fact and enrichment logic in the silver layer.
+            data_tests:
+              - is_clean_trimmed:
+                  config:
+                    severity: warn
+
+          - name: sls_prd_key
+            description: >
+              Product key for the sold item from the CRM sales detail feed.
+              This key joins to the CRM product catalog and is used in the
+              silver layer to enrich transactional sales records.
+            data_tests:
+              - is_clean_trimmed:
+                  config:
+                    severity: warn
+              - relationships:
+                  arguments:
+                    to: ref('stg_crm_prd_info')
+                    field: prd_key
+
+          - name: sls_cust_id
+            description: >
+              Customer ID associated with the sales transaction. This key
+              joins to the CRM customer information and is used to enrich
+              transactional sales records in the silver layer.
+            data_tests:
+              - relationships:
+                  arguments:
+                    to: ref('stg_crm_cust_info')
+                    field: cst_id
+
+          - name: sls_order_dt
+            description: >
+              Order date for the CRM sales transaction. This source value is
+              stored in the raw bronze layer and is cast to DATE in the silver
+              layer for downstream reporting and analysis.
+            data_tests:
+              - dbt_utils.expression_is_true:
+                  arguments:
+                    expression: "> 0 and length(cast(sls_order_dt as string)) = 8"
+                  config:
+                    severity: warn
+              - is_date_before_columns:
+                  arguments:
+                    compare_columns:
+                      - sls_ship_dt
+                      - sls_due_dt
+                  config:
+                    severity: warn
+
+          - name: sls_ship_dt
+            description: >
+              Ship date for the CRM sales transaction. This source value is
+              stored in the raw bronze layer and is cast to DATE in the silver
+              layer for downstream reporting and analysis.
+            data_tests:
+              - dbt_utils.expression_is_true:
+                  arguments:
+                    expression: "> 0 and length(cast(sls_ship_dt as string)) = 8"
+                  config:
+                    severity: warn
+
+          - name: sls_due_dt
+            description: >
+              Due date for the CRM sales transaction. This source value is
+              stored in the raw bronze layer and is cast to DATE in the silver
+              layer for downstream reporting and analysis.
+            data_tests:
+              - dbt_utils.expression_is_true:
+                  arguments:
+                    expression: "> 0 and length(cast(sls_due_dt as string)) = 8"
+                  config:
+                    severity: warn
+
+          - name: sls_sales
+            description: >
+              Sales amount for the CRM transaction line item. This raw
+              source value is retained in the bronze layer and used to
+              calculate downstream sales metrics in the silver layer.
+            data_tests:
+              - not_null:
+                  config:
+                    severity: warn
+              - dbt_utils.expression_is_true:
+                  arguments:
+                    expression: "> 0"
+                  config:
+                    severity: warn
+
+          - name: sls_quantity
+            description: >
+              Quantity sold for the CRM transaction line item. This raw
+              source value is retained in the bronze layer and used to
+              calculate downstream sales and fulfillment metrics in the
+              silver layer.
+            data_tests:
+              - not_null:
+                  config:
+                    severity: warn
+              - dbt_utils.expression_is_true:
+                  arguments:
+                    expression: "> 0"
+                  config:
+                    severity: warn
+
+          - name: sls_price
+            description: >
+              Price charged for the CRM transaction line item. This raw
+              source value is retained in the bronze layer and used to
+              calculate downstream pricing and sales metrics in the silver
+              layer.
+            data_tests:
+              - not_null:
+                  config:
+                    severity: warn
+              - dbt_utils.expression_is_true:
+                  arguments:
+                    expression: "> 0"
+                  config:
+                    severity: warn
+# ─────────────────────────────────────────────────────────────────
+# ERP
+# ─────────────────────────────────────────────────────────────────
+
+      - name: erp_cust_az12
+        description: >
+          Raw ERP customer data from the AZ12 source. This bronze-layer model
+          preserves the source records for downstream customer enrichment and
+          reporting in the silver layer.
+        columns:
+          - name: cid
+            description: >
+              Raw customer identifier from the ERP AZ12 source. This value is
+              retained in the bronze layer for downstream customer enrichment
+              and reporting in the silver layer.
+            data_tests:
+              - not_null:
+                  config:
+                    severity: warn
+              - is_clean_trimmed:
+                  config:
+                    severity: warn
+
+          - name: bdate
+            description: >
+              Raw birth date from the ERP AZ12 source, retained in the bronze
+              layer for downstream customer enrichment and reporting.
+            data_tests:
+              - dbt_utils.expression_is_true:
+                  arguments:
+                    expression: "is null or safe_cast(bdate as date) <= current_date()"
+                  config:
+                    severity: warn
+
+          - name: gen
+            description: >
+              Raw gender value from the ERP AZ12 source, retained in the bronze
+              layer for downstream customer enrichment and reporting.
+            data_tests:
+              - is_clean_trimmed:
+                  config:
+                    severity: warn
+
+      - name: erp_loc_a101
+        description: >
+          Raw ERP customer location data from the A101 source. This
+          bronze-layer model preserves the source records for downstream
+          customer enrichment and reporting in the silver layer.
+        columns:
+          - name: cid 
+            description: >
+              Raw customer identifier from the ERP A101 location source. This
+              value is retained in the bronze layer for downstream customer
+              enrichment and reporting in the silver layer.
+            data_tests:
+              - not_null:
+                  config:
+                    severity: warn
+              - unique: 
+                  config:
+                    severity: warn
+              - is_clean_trimmed:
+                  config:
+                    severity: warn
+
+          - name: cntry
+            description: >
+              Raw customer country value from the ERP A101 location source,
+              retained in the bronze layer for downstream customer enrichment
+              and reporting in the silver layer.
+            data_tests:
+              - is_clean_trimmed:
+                  config:
+                    severity: warn
+
+      - name: erp_px_cat_g1v2
+        description: >
+          Raw ERP product category data from the G1V2 source. This bronze-layer
+          model preserves the source records for downstream product
+          categorization and reporting in the silver layer.
+        columns:
+          - name: id
+            description: >
+              Raw product category identifier from the ERP G1V2 source. This
+              value is retained in the bronze layer for downstream product
+              categorization and reporting in the silver layer.
+            data_tests:
+              - not_null:
+                  config:
+                    severity: warn
+              - unique:
+                  config:
+                    severity: warn
+              - is_clean_trimmed:
+                  config:
+                    severity: warn
+          - name: cat 
+            description: >
+              Raw product category name from the ERP G1V2 source. This
+              value is retained in the bronze layer for downstream product
+              categorization and reporting in the silver layer.
+            data_tests:
+              - is_clean_trimmed:
+                  config:
+                    severity: warn
+
+          - name: subcat 
+            description: >
+              Raw ERP product category name from the ERP G1V2 source. This
+              value is retained in the bronze layer for downstream product
+              categorization and reporting in the silver layer.
+            data_tests:
+              - is_clean_trimmed:
+                  config: 
+                    severity: warn
+
+          - name: maintenance 
+            description: >
+              Raw product subcategory name from the ERP G1V2 source. This
+              value is retained in the bronze layer for downstream product
+              categorization and reporting in the silver layer.
+            data_tests:
+              - is_clean_trimmed:
+                  config:
+                    severity: warn
+                   

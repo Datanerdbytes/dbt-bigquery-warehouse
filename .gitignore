@@ -1,0 +1,18 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Local environment / secrets — never commit
+.env
+.env.*
+gcp-key.json
+
+# dbt target directory
+**/target/

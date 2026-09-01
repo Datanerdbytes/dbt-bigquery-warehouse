@@ -1,0 +1,69 @@
+version: 2
+
+models:
+  - name: dim_customers
+    description: "Unified customer dimension table."
+    columns:
+      - name: customer_key
+        data_tests:
+          - unique
+          - not_null
+      - name: gender
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Male', 'Female', 'n/a']
+
+  - name: dim_products
+    description: "Dimension table containing active product attributes and category details."
+    columns:
+      - name: product_key
+        description: "Primary key (surrogate key) generated via dbt_utils."
+        data_tests:
+          - unique
+          - not_null
+          
+      - name: product_id
+        description: "Natural business key for the product."
+        data_tests:
+          - unique
+          - not_null
+
+      - name: cost
+        description: "Standard unit cost of the product."
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+      - name: category
+        description: "Product category description."
+        data_tests:
+          - not_null
+
+  - name: fct_sales
+    description: "Line-item level sales transactions fact table."
+    columns:
+      - name: sales_item_key
+        data_tests:
+          - unique
+          - not_null
+
+      - name: customer_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_key
+      - name: product_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_products')
+                field: product_key
+      - name: gross_sales_amount
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"

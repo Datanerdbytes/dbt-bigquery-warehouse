@@ -1,0 +1,9 @@
+# Ignore local build folders
+target/
+dbt_packages/
+macros/
+
+# Ignore specific files
+raw_vendor_data.sql
+
+analyses/
