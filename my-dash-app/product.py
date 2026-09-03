@@ -107,20 +107,19 @@ app.layout = html.Div(
                             [
                                 html.Div(
                                     [
-                                        html.H1(
+                                        html.H2(
                                             "Product 360 Executive Dashboard",
-                                            className="fw-bold mb-1 text-white",
+                                            className="fw-bold mb-0 text-white",
                                         ),
                                         html.P(
                                             "Comprehensive Performance, Health, and Customer Metrics",
-                                            className="mb-0 text-white-50",
-                                        ),
-                                        html.Hr(className="my-3"),
+                                            className="mb-0 text-white-50 small",
+                                        )
                                     ],
-                                    className="header-banner"
+                                    className="header-banner p-2 mb-2"
                                 )
                             ],
-                            width=12, className="mb-3"
+                            width=12
                         )
                     ]
                 ),
@@ -135,7 +134,7 @@ app.layout = html.Div(
                                         # Filter 1: Date Range
                                         dbc.Col(
                                             [
-                                                html.Label("Date Range", className="fw-bold text-muted small mb-1"),
+                                                html.Label("Date Range", className="fw-bold text-muted small mb-0"),
                                                 dcc.DatePickerRange(
                                                     id="date-picker-range",
                                                     min_date_allowed=min_data_date,
@@ -151,7 +150,7 @@ app.layout = html.Div(
                                         # Filter 2: Product Category Dropdown
                                         dbc.Col(
                                             [
-                                                html.Label("Product Category", className="fw-bold text-muted small mb-1"),
+                                                html.Label("Product Category", className="fw-bold text-muted small mb-0"),
                                                 dcc.Dropdown(
                                                     id="category-dropdown",
                                                     options=category_options,
@@ -164,7 +163,7 @@ app.layout = html.Div(
                                         # Filter 3: Region Selector
                                         dbc.Col(
                                             [
-                                                html.Label("Region", className="fw-bold text-muted small mb-1"),
+                                                html.Label("Region", className="fw-bold text-muted small mb-0"),
                                                 dcc.Dropdown(
                                                     id="country-dropdown",
                                                     options=country_options,
@@ -175,10 +174,10 @@ app.layout = html.Div(
                                             width=12, md=4
                                         ),
                                     ],
-                                    className="g-3 align-items-center"
+                                    className="g-2 align-items-center"
                                 )
                             ],
-                            className="bg-white p-3 rounded shadow-sm border mb-4"
+                            className="bg-white p-2 rounded shadow-sm border mb-3"
                         ),
                         width=12
                     ),
@@ -191,48 +190,48 @@ app.layout = html.Div(
                         dbc.Col(
                             html.Div(
                                 [
-                                    html.H6("TOTAL SALES", className="text-muted fw-bold mb-1"),
-                                    html.H2(id="kpi-sales-value", className="text-dark fw-bold mb-0")
+                                    html.H6("TOTAL SALES", className="text-muted fw-bold mb-0 small"),
+                                    html.H3(id="kpi-sales-value", className="text-dark fw-bold mb-0")
                                 ],
-                                className="kpi-card kpi-sales"
+                                className="kpi-card kpi-sales p-2"
                             ),
-                            width=3, className="h-100"
+                            width=3
                         ),
                         # Column 2: Total Orders
                         dbc.Col(
                             html.Div(
                                 [
-                                    html.H6("TOTAL ORDERS", className="text-muted fw-bold mb-1"),
-                                    html.H2(id="kpi-orders-value", className="text-dark fw-bold mb-0")
+                                    html.H6("TOTAL ORDERS", className="text-muted fw-bold mb-0 small"),
+                                    html.H3(id="kpi-orders-value", className="text-dark fw-bold mb-0")
                                 ],
-                                className="kpi-card kpi-orders"
+                                className="kpi-card kpi-orders p-2"
                             ),
-                            width=3, className="h-100"
+                            width=3
                         ),
                         # Column 3: Total Quantity
                         dbc.Col(
                             html.Div(
                                 [
-                                    html.H6("TOTAL QUANTITY", className="text-muted fw-bold mb-1"),
-                                    html.H2(id="kpi-quantity-value", className="text-dark fw-bold mb-0")
+                                    html.H6("TOTAL QUANTITY", className="text-muted fw-bold mb-0 small"),
+                                    html.H3(id="kpi-quantity-value", className="text-dark fw-bold mb-0")
                                 ],
-                                className="kpi-card kpi-quantity"
+                                className="kpi-card kpi-quantity p-2"
                             ),
-                            width=3, className="h-100"
+                            width=3
                         ),
                         # Column 4: Total Customers
                         dbc.Col(
                             html.Div(
                                 [
-                                    html.H6("TOTAL CUSTOMERS", className="text-muted fw-bold mb-1"),
-                                    html.H2(id="kpi-customers-value", className="text-dark fw-bold mb-0")
+                                    html.H6("TOTAL CUSTOMERS", className="text-muted fw-bold mb-0 small"),
+                                    html.H3(id="kpi-customers-value", className="text-dark fw-bold mb-0")
                                 ],
-                                className="kpi-card kpi-customers"
+                                className="kpi-card kpi-customers p2"
                             ),
-                            width=3, className="h-100"
+                            width=3
                         )
                     ],
-                    className="align-items-stretch"
+                    className="g-2 mb-3"
                 ),
 
                 # Row 4: Interactive Charts Section
@@ -243,14 +242,15 @@ app.layout = html.Div(
                             dbc.Card(
                                 dbc.CardBody(
                                     [
-                                        html.H5("Sales Revenue Performance", className="card-title fw-bold text-dark mb-3"),
+                                        html.H5("Sales Revenue Performance", className="card-title fw-bold text-dark mb-1"),
                                         dcc.Graph(
                                             id="sales-trend-graph",
                                             config={"displayModeBar": False}
                                         )
-                                    ]
+                                    ],
+                                    className="p-2"
                                 ),
-                                className="shadow-sm border-0 mb-4"
+                                className="shadow-sm border-0 mb-3"
                             ),
                             width=12, lg=7
                         ),
@@ -260,19 +260,20 @@ app.layout = html.Div(
                             dbc.Card(
                                 dbc.CardBody(
                                     [
-                                        html.H5("Revenue by Category", className="card-title fw-bold text-dark mb-3"),
+                                        html.H5("Revenue by Category", className="card-title fw-bold text-dark mb-1"),
                                         dcc.Graph(
                                             id="category-pie-graph",
                                             config={"displayModeBar": False}
                                         )
-                                    ]
+                                    ],
+                                    className="p-2"
                                 ),
-                                className="shadow-sm border-0 mb-4"
+                                className="shadow-sm border-0 mb-3"
                             ),
                             width=12, lg=5
                         )
                     ],
-                    className="mt-4"
+                    className="mt-1"
                 ),
 
                 # Row 5: Top Products & Regional Performance Breakdown
@@ -419,7 +420,7 @@ def update_sales_trend(start_date, end_date, selected_category, selected_country
         plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(showgrid=False),
         yaxis=dict(showgrid=True, gridcolor="#f0f0f0", tickprefix="$"),
-        height=300
+        height=260
     )
 
     return fig
@@ -483,7 +484,7 @@ def update_category_pie(start_date, end_date, selected_category, selected_countr
         margin=dict(l=10, r=10, t=10, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        height=300
+        height=260
     )
 
     return fig
