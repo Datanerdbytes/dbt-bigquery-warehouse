@@ -1,3 +1,15 @@
+/* @datacloud.settings
+{
+  "version": 1,
+  "service": "BIG_QUERY",
+  "connectionInfo": {
+    "billingProjectId": "INHERIT",
+    "location": "us-central1"
+  },
+  "dialect": "GOOGLE_SQL"
+}
+*/
+
 WITH dataset_anchor AS (
     SELECT 
         customer_key,
