@@ -5,7 +5,7 @@ from google.cloud import bigquery
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from dash import Dash, html, dcc, callback, Input, Output, dash_table
+from dash import Dash, html, dcc, callback, Input, Output, dash_table, State, callback_context
 import dash_bootstrap_components as dbc
 
 load_dotenv()
@@ -16,6 +16,25 @@ client = bigquery.Client.from_service_account_json(
     key_file_path,
     project="quantum-echo-data-eng-prod"
 )
+
+def filter_dataframe(df, start_date, end_date, selected_category, selected_country):
+    if not start_date or not end_date:
+        return df.iloc[0:0] # Return empty DF if dates are missing
+
+    # Standardize string inputs to pandas Datetime
+    start_dt = pd.to_datetime(start_date)
+    end_dt = pd.to_datetime(end_date)
+
+    # Inclusive date masking
+    mask = (df["order_date"] >= start_dt) & (df["order_date"] <= end_dt)
+
+    if selected_category and selected_category != "ALL":
+        mask = mask & (df["category"] == selected_category)
+
+    if selected_country and selected_country != "ALL":
+        mask = mask & (df["country"] == selected_country)
+
+    return df.loc[mask]
 
 query_sales = """
     SELECT 
@@ -50,7 +69,8 @@ df_sales = client.query(query_sales).to_dataframe()
 df_products = client.query(query_products).to_dataframe()
 df_customers = client.query(query_customers).to_dataframe()
 
-df_sales['order_date'] = pd.to_datetime(df_sales['order_date'])
+# Convert order_date explicitly to datetime64[ns]
+df_sales['order_date'] = pd.to_datetime(df_sales['order_date'], errors='coerce')
 
 # 1. Merge all three tables
 df_merged = (
@@ -59,11 +79,15 @@ df_merged = (
     .merge(df_customers, on="customer_key", how="left")  
 )
 
+# Force order_date to datetime64[ns] AFTER merges
+df_merged['order_date'] = pd.to_datetime(df_merged['order_date'], errors='coerce')
+
 # --- DYNAMIC Date Range OPTIONS SETUP ---
 df_merged = df_merged[df_merged["order_date"].dt.year >= 2010].copy()
 
-min_data_date = df_merged["order_date"].min().date()
-max_data_date = df_merged["order_date"].max().date()
+# Ensure min/max dates are converted to string format (YYYY-MM-DD) for Dash DatePicker
+min_data_date = df_merged["order_date"].min().strftime("%Y-%m-%d")
+max_data_date = df_merged["order_date"].max().strftime("%Y-%m-%d")
 
 # --- DYNAMIC CATEGORY OPTIONS SETUP ---
 # Extract unique categories, drop NaNs, and sort them
@@ -403,9 +427,11 @@ def update_sales_trend(start_date, end_date, selected_category, selected_country
     if not start_date or not end_date:
         return px.line()
 
-    mask = (df_merged["order_date"] >= pd.to_datetime(start_date)) & (
-        df_merged["order_date"] <= pd.to_datetime(end_date)
-    )
+    # Cast inputs to Timestamps explicitly
+    start_dt = pd.to_datetime(start_date)
+    end_dt = pd.to_datetime(end_date) + pd.Timedelta(days=1) - pd.Timedelta(nanoseconds=1)
+
+    mask = (df_merged["order_date"] >= start_dt) & (df_merged["order_date"] <= end_dt)
 
     if selected_category and selected_category != "ALL":
         mask = mask & (df_merged["category"] == selected_category)
@@ -415,15 +441,20 @@ def update_sales_trend(start_date, end_date, selected_category, selected_country
 
     filtered_df = df_merged.loc[mask]
 
-    # Aggregate sales by month for a smooth line chart
+    if filtered_df.empty:
+        return px.area(title="No data for selected period")
+
+    # Aggregate sales by date/month
+    # NOTE: If filtering a single month (e.g. Aug 2012), resample('D') shows daily sales instead of collapsing everything into 1 point
+    resample_freq = "D" if (end_dt - start_dt).days <= 60 else "ME"
+
     trend_df = (
         filtered_df.set_index("order_date")
-        .resample("ME")["gross_sales_amount"]
+        .resample(resample_freq)["gross_sales_amount"]
         .sum()
         .reset_index()
     )
 
-    # Plotly Area/Line Chart matching the Sales KPI green color (#2ecc71)
     fig = px.area(
         trend_df,
         x="order_date",
@@ -434,7 +465,7 @@ def update_sales_trend(start_date, end_date, selected_category, selected_country
     fig.update_traces(
         line_color="#2ecc71",
         fillcolor="rgba(46, 204, 113, 0.15)",
-        hovertemplate="<b>Date:</b> %{x|%b %Y}<br><b>Revenue:</b> $%{y:,.0f}<extra></extra>"
+        hovertemplate="<b>Date:</b> %{x|%b %d, %Y}<br><b>Revenue:</b> $%{y:,.0f}<extra></extra>"
     )
 
     fig.update_layout(
@@ -657,7 +688,8 @@ def update_regional_sales(start_date, end_date, selected_category, selected_coun
 
     return fig
 
-# MODAL CALLBACK (UPDATED WITH GLOBAL FILTER STATES)
+
+# MODAL CALLBACK
 @app.callback(
     [
         Output("product-detail-modal", "is_open"),
@@ -670,31 +702,30 @@ def update_regional_sales(start_date, end_date, selected_category, selected_coun
         Input("close-modal-btn", "n_clicks")
     ],
     [
-        Input("date-picker-range", "start_date"),
-        Input("date-picker-range", "end_date"),
-        Input("category-dropdown", "value"),
-        Input("country-dropdown", "value")
+        State("date-picker-range", "start_date"),
+        State("date-picker-range", "end_date"),
+        State("category-dropdown", "value"),
+        State("country-dropdown", "value")
     ],
     prevent_initial_call=True
 )
 def toggle_product_modal(clickData, close_clicks, start_date, end_date, selected_category, selected_country):
-    from dash import callback_context
     ctx = callback_context
+    if not ctx.triggered:
+        return False, "", None, None
+
     trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
-    # Handle Modal Close Button Click
     if trigger_id == "close-modal-btn":
         return False, "", None, None
 
-    # Handle Chart Click Trigger
     if trigger_id == "top-products-graph" and clickData:
-        # Extract product name from Plotly payload
         product_name = clickData["points"][0]["y"]
 
-        # 1. Apply active global filters
-        mask = (df_merged["order_date"] >= pd.to_datetime(start_date)) & (
-            df_merged["order_date"] <= pd.to_datetime(end_date)
-        )
+        start_dt = pd.to_datetime(start_date)
+        end_dt = pd.to_datetime(end_date) + pd.Timedelta(days=1) - pd.Timedelta(nanoseconds=1)
+
+        mask = (df_merged["order_date"] >= start_dt) & (df_merged["order_date"] <= end_dt)
 
         if selected_category and selected_category != "ALL":
             mask = mask & (df_merged["category"] == selected_category)
@@ -702,10 +733,12 @@ def toggle_product_modal(clickData, close_clicks, start_date, end_date, selected
         if selected_country and selected_country != "ALL":
             mask = mask & (df_merged["country"] == selected_country)
 
-        # 2. Filter for specific product
+        # Filter dataset
         product_df = df_merged.loc[mask & (df_merged["product_name"] == product_name)].copy()
 
-        # Build Mini Modal KPIs
+        if product_df.empty:
+            return True, f"Product Details: {product_name}", None, html.Div("No transactions found within the selected date range.", className="p-3 text-muted text-center fw-bold")
+
         total_rev = product_df["gross_sales_amount"].sum()
         total_qty = product_df["quantity"].sum()
         total_orders = product_df["order_number"].nunique()
@@ -716,16 +749,14 @@ def toggle_product_modal(clickData, close_clicks, start_date, end_date, selected
             dbc.Col(html.Div([html.Small("Total Orders", className="text-muted d-block text-uppercase fw-semibold"), html.Strong(f"{total_orders:,}", className="fs-5")]), width=4),
         ], className="bg-light p-3 rounded mb-3 text-center border")
 
-        # Format table dataset (top 50 recent orders)
         records_df = (
             product_df[["order_number", "order_date", "first_name", "last_name", "country", "quantity", "gross_sales_amount"]]
             .sort_values(by="order_date", ascending=False)
             .head(50)
         )
-        records_df["customer_name"] = records_df["first_name"] + " " + records_df["last_name"]
+        records_df["customer_name"] = records_df["first_name"].fillna('') + " " + records_df["last_name"].fillna('')
         records_df["order_date"] = records_df["order_date"].dt.strftime("%Y-%m-%d")
 
-        # Build Granular Data Table with Clean Alignment & Typography
         detail_table = dash_table.DataTable(
             data=records_df.to_dict("records"),
             columns=[
@@ -738,18 +769,8 @@ def toggle_product_modal(clickData, close_clicks, start_date, end_date, selected
             ],
             page_size=8,
             style_table={"overflowX": "auto"},
-            style_header={
-                "backgroundColor": "#f8f9fa",
-                "fontWeight": "bold",
-                "color": "#2c3e50",
-                "textAlign": "left" # Match cell text alignment
-            },
-            style_cell={
-                "padding": "10px 14px",
-                "fontSize": "0.85rem",
-                "fontFamily": "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-                "textAlign": "left"
-            },
+            style_header={"backgroundColor": "#f8f9fa", "fontWeight": "bold", "color": "#2c3e50", "textAlign": "left"},
+            style_cell={"padding": "10px 14px", "fontSize": "0.85rem", "fontFamily": "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", "textAlign": "left"},
             style_cell_conditional=[
                 {"if": {"column_id": "quantity"}, "textAlign": "right"},
                 {"if": {"column_id": "gross_sales_amount"}, "textAlign": "right"},
@@ -758,9 +779,7 @@ def toggle_product_modal(clickData, close_clicks, start_date, end_date, selected
                 {"if": {"column_id": "quantity"}, "textAlign": "right"},
                 {"if": {"column_id": "gross_sales_amount"}, "textAlign": "right"},
             ],
-            style_data_conditional=[
-                {"if": {"row_index": "odd"}, "backgroundColor": "#fcfcfc"}
-            ]
+            style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "#fcfcfc"}]
         )
 
         return True, f"Product Details: {product_name}", kpi_summary, detail_table
