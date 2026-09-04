@@ -21,7 +21,7 @@
 
 /* Scale up header title and subtitle slightly */
 .header-banner h2 {
-    font-size: 1.85rem !important; /* Slightly larger, prominent title */
+    font-size: 2.5rem !important; /* Slightly larger, prominent title */
     margin-bottom: 0.25rem !important;
 }
 
