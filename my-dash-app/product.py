@@ -5,7 +5,7 @@ from google.cloud import bigquery
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from dash import Dash, html, dcc, callback, Input, Output
+from dash import Dash, html, dcc, callback, Input, Output, dash_table
 import dash_bootstrap_components as dbc
 
 load_dotenv()
@@ -226,7 +226,7 @@ app.layout = html.Div(
                                     html.H6("TOTAL CUSTOMERS", className="text-muted fw-bold mb-0 small"),
                                     html.H3(id="kpi-customers-value", className="text-dark fw-bold mb-0")
                                 ],
-                                className="kpi-card kpi-customers p2"
+                                className="kpi-card kpi-customers p-2"
                             ),
                             width=3
                         )
@@ -318,6 +318,29 @@ app.layout = html.Div(
 
             ],
             fluid=False
+        ),
+
+        # Modal
+        dbc.Modal(
+            [
+                dbc.ModalHeader(
+                    dbc.ModalTitle(id="modal-product-title", className="fw-bold")
+                ),
+                dbc.ModalBody(
+                    [
+                        html.Div(id="modal-product-kpis", className="mb-3"),
+                        html.H6("Recent Transactions", className="fw-bold text-muted mb-2"),
+                        html.Div(id="modal-product-table-container")
+                    ]
+                ),
+                dbc.ModalFooter(
+                    dbc.Button("Close", id="close-modal-btn", className="ms-auto", color="secondary")
+                ),
+            ],
+            id="product-detail-modal",
+            size="xl",
+            is_open=False,
+            centered=True
         )
     ]
 )
@@ -633,6 +656,116 @@ def update_regional_sales(start_date, end_date, selected_category, selected_coun
     fig.update_yaxes(range=[0, max_val * 1.15])
 
     return fig
+
+# MODAL CALLBACK (UPDATED WITH GLOBAL FILTER STATES)
+@app.callback(
+    [
+        Output("product-detail-modal", "is_open"),
+        Output("modal-product-title", "children"),
+        Output("modal-product-kpis", "children"),
+        Output("modal-product-table-container", "children")
+    ],
+    [
+        Input("top-products-graph", "clickData"),
+        Input("close-modal-btn", "n_clicks")
+    ],
+    [
+        Input("date-picker-range", "start_date"),
+        Input("date-picker-range", "end_date"),
+        Input("category-dropdown", "value"),
+        Input("country-dropdown", "value")
+    ],
+    prevent_initial_call=True
+)
+def toggle_product_modal(clickData, close_clicks, start_date, end_date, selected_category, selected_country):
+    from dash import callback_context
+    ctx = callback_context
+    trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+    # Handle Modal Close Button Click
+    if trigger_id == "close-modal-btn":
+        return False, "", None, None
+
+    # Handle Chart Click Trigger
+    if trigger_id == "top-products-graph" and clickData:
+        # Extract product name from Plotly payload
+        product_name = clickData["points"][0]["y"]
+
+        # 1. Apply active global filters
+        mask = (df_merged["order_date"] >= pd.to_datetime(start_date)) & (
+            df_merged["order_date"] <= pd.to_datetime(end_date)
+        )
+
+        if selected_category and selected_category != "ALL":
+            mask = mask & (df_merged["category"] == selected_category)
+
+        if selected_country and selected_country != "ALL":
+            mask = mask & (df_merged["country"] == selected_country)
+
+        # 2. Filter for specific product
+        product_df = df_merged.loc[mask & (df_merged["product_name"] == product_name)].copy()
+
+        # Build Mini Modal KPIs
+        total_rev = product_df["gross_sales_amount"].sum()
+        total_qty = product_df["quantity"].sum()
+        total_orders = product_df["order_number"].nunique()
+
+        kpi_summary = dbc.Row([
+            dbc.Col(html.Div([html.Small("Revenue", className="text-muted d-block text-uppercase fw-semibold"), html.Strong(f"${total_rev:,.0f}", className="fs-5")]), width=4),
+            dbc.Col(html.Div([html.Small("Units Sold", className="text-muted d-block text-uppercase fw-semibold"), html.Strong(f"{total_qty:,}", className="fs-5")]), width=4),
+            dbc.Col(html.Div([html.Small("Total Orders", className="text-muted d-block text-uppercase fw-semibold"), html.Strong(f"{total_orders:,}", className="fs-5")]), width=4),
+        ], className="bg-light p-3 rounded mb-3 text-center border")
+
+        # Format table dataset (top 50 recent orders)
+        records_df = (
+            product_df[["order_number", "order_date", "first_name", "last_name", "country", "quantity", "gross_sales_amount"]]
+            .sort_values(by="order_date", ascending=False)
+            .head(50)
+        )
+        records_df["customer_name"] = records_df["first_name"] + " " + records_df["last_name"]
+        records_df["order_date"] = records_df["order_date"].dt.strftime("%Y-%m-%d")
+
+        # Build Granular Data Table with Clean Alignment & Typography
+        detail_table = dash_table.DataTable(
+            data=records_df.to_dict("records"),
+            columns=[
+                {"name": "Order #", "id": "order_number"},
+                {"name": "Date", "id": "order_date"},
+                {"name": "Customer", "id": "customer_name"},
+                {"name": "Country", "id": "country"},
+                {"name": "Qty", "id": "quantity", "type": "numeric"},
+                {"name": "Revenue ($)", "id": "gross_sales_amount", "type": "numeric", "format": {"specifier": "$,.0f"}},
+            ],
+            page_size=8,
+            style_table={"overflowX": "auto"},
+            style_header={
+                "backgroundColor": "#f8f9fa",
+                "fontWeight": "bold",
+                "color": "#2c3e50",
+                "textAlign": "left" # Match cell text alignment
+            },
+            style_cell={
+                "padding": "10px 14px",
+                "fontSize": "0.85rem",
+                "fontFamily": "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+                "textAlign": "left"
+            },
+            style_cell_conditional=[
+                {"if": {"column_id": "quantity"}, "textAlign": "right"},
+                {"if": {"column_id": "gross_sales_amount"}, "textAlign": "right"},
+            ],
+            style_header_conditional=[
+                {"if": {"column_id": "quantity"}, "textAlign": "right"},
+                {"if": {"column_id": "gross_sales_amount"}, "textAlign": "right"},
+            ],
+            style_data_conditional=[
+                {"if": {"row_index": "odd"}, "backgroundColor": "#fcfcfc"}
+            ]
+        )
+
+        return True, f"Product Details: {product_name}", kpi_summary, detail_table
+
+    return False, "", None, None
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -5,6 +5,8 @@
     padding: 30px;
     background-color: #b9bfc5;
     min-height: 100vh;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
 }
 
 /* Row 1: Header Banner Card */
@@ -13,6 +15,18 @@
     padding: 20px;
     border-radius: 8px;
     text-align: center;
+    margin-top: 0 !important;
+    padding: 2.5rem 1.5rem !important; 
+}
+
+/* Scale up header title and subtitle slightly */
+.header-banner h2 {
+    font-size: 1.85rem !important; /* Slightly larger, prominent title */
+    margin-bottom: 0.25rem !important;
+}
+
+.header-banner p {
+    font-size: 0.95rem !important; /* Slightly larger subtitle */
 }
 
 /* Row 2: Shared Base Styles for all KPI Highlight Cards */
@@ -57,4 +71,10 @@
     background-color: #b9bfc5; /* Matches page background so charts slide underneath smoothly */
     padding-top: 10px;
     padding-bottom: 5px;
+}
+
+/* 1. Flush Top Layout Reset */
+body, html {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
 }
