@@ -128,7 +128,7 @@ layout = html.Div(
                     className="g-2 mb-3"
                 ),
 
-                # Row 3: Visuals
+                # Row 3: Visuals Row 1
                 dbc.Row(
                     [
                         dbc.Col(
@@ -155,6 +155,36 @@ layout = html.Div(
                             ),
                             width=12, lg=5
                         ),
+                    ]
+                ),
+
+                # Row 4: Visuals Row 2 (NEW)
+                dbc.Row(
+                    [
+                        dbc.Col(
+                            dbc.Card(
+                                dbc.CardBody(
+                                    [
+                                        html.H5("Active Customer Trend", className="fw-bold text-dark mb-2"),
+                                        dcc.Graph(id="c360-cust-trend-graph", config={"displayModeBar": False})
+                                    ]
+                                ),
+                                className="shadow-sm border-0 mb-3"
+                            ),
+                            width=12, lg=7
+                        ),
+                        dbc.Col(
+                            dbc.Card(
+                                dbc.CardBody(
+                                    [
+                                        html.H5("Customer Concentration by Region", className="fw-bold text-dark mb-2"),
+                                        dcc.Graph(id="c360-cust-geo-graph", config={"displayModeBar": False})
+                                    ]
+                                ),
+                                className="shadow-sm border-0 mb-3"
+                            ),
+                            width=12, lg=5
+                        )
                     ]
                 )
             ],
@@ -338,3 +368,96 @@ def update_top_customers_table(start_date, end_date, selected_category, selected
     )
 
     return table
+
+# --- Visual 3: Active Customer Trend ---
+@callback(
+    Output("c360-cust-trend-graph", "figure"),
+    [
+        Input("c360-date-picker", "start_date"),
+        Input("c360-date-picker", "end_date"),
+        Input("c360-category-dropdown", "value"),
+        Input("c360-country-dropdown", "value"),
+    ],
+)
+def update_customer_trend(start_date, end_date, selected_category, selected_country):
+    filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
+
+    if filtered_df.empty:
+        return px.line(title="No Data")
+
+    # Group by Month & Year to get distinct active customers
+    df_trend = filtered_df.copy()
+    df_trend["year_month"] = pd.to_datetime(df_trend["order_date"]).dt.to_period("M").dt.to_timestamp()
+    
+    monthly_cust = (
+        df_trend.groupby("year_month")["customer_key"]
+        .nunique()
+        .reset_index(name="active_customers")
+    )
+
+    fig = px.line(
+        monthly_cust,
+        x="year_month",
+        y="active_customers",
+        markers=True,
+        labels={"year_month": "Month", "active_customers": "Active Customers"},
+        color_discrete_sequence=["#3498db"]
+    )
+
+    fig.update_traces(hovertemplate="<b>Date:</b> %{x|%b %Y}<br><b>Active Cust:</b> %{y:,}<extra></extra>")
+    fig.update_layout(
+        margin=dict(l=10, r=10, t=10, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        yaxis=dict(showgrid=True, gridcolor="#f0f0f0"),
+        xaxis=dict(showgrid=False),
+        height=320
+    )
+
+    return fig
+
+
+# --- Visual 4: Geographic Customer Concentration ---
+@callback(
+    Output("c360-cust-geo-graph", "figure"),
+    [
+        Input("c360-date-picker", "start_date"),
+        Input("c360-date-picker", "end_date"),
+        Input("c360-category-dropdown", "value"),
+        Input("c360-country-dropdown", "value"),
+    ],
+)
+def update_customer_geo(start_date, end_date, selected_category, selected_country):
+    filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
+
+    if filtered_df.empty:
+        return px.bar(title="No Data")
+
+    geo_summary = (
+        filtered_df.groupby("country")["customer_key"]
+        .nunique()
+        .reset_index(name="active_customers")
+        .sort_values(by="active_customers", ascending=True)
+        .tail(10)
+    )
+
+    fig = px.bar(
+        geo_summary,
+        x="active_customers",
+        y="country",
+        orientation="h",
+        labels={"active_customers": "Active Customers", "country": "Country"},
+        color_discrete_sequence=["#9b59b6"]
+    )
+
+    fig.update_traces(hovertemplate="<b>Country:</b> %{y}<br><b>Active Cust:</b> %{x:,}<extra></extra>")
+    fig.update_layout(
+        margin=dict(l=10, r=10, t=10, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(showgrid=True, gridcolor="#f0f0f0"),
+        yaxis=dict(showgrid=False),
+        height=320
+    )
+
+    return fig
