@@ -69,7 +69,7 @@ layout = html.Div(
                         ),
                         width=12
                     ),
-                    className="sticky-filter-bar"
+                    className="sticky-filter-bar p-3 mb-4 rounded-3"
                 ),
 
                 # Row 2: KPI Cards

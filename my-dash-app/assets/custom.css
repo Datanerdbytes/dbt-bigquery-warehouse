@@ -9,6 +9,17 @@
     padding-top: 0 !important;
 }
 
+.navbar {
+    background-color: #0b0f19 !important; /* Or #111827 for card match */
+    border-bottom: 1px solid #1f2937;     /* Optional subtle border line */
+}
+
+/* Ensure Brand Text Stays Bright */
+.navbar-brand {
+    color: #ffffff !important;
+    font-weight: 700;
+}
+
 /* Row 1: Header Banner Card */
 .header-banner {
     background-color: #1a252f;
@@ -68,13 +79,40 @@
     position: sticky;
     top: 0;
     z-index: 1020;
+    isolation: isolate;
+
     background-color:  #0b0f19; /* Matches page background so charts slide underneath smoothly */
+
     padding-top: 10px;
     padding-bottom: 5px;
+
+    border-bottom: 1px solid #1f2937;
 }
 
 /* 1. Flush Top Layout Reset */
 body, html {
     margin-top: 0 !important;
     padding-top: 0 !important;
+}
+
+/* Green Pill for Positive Growth */
+.badge-soft-success {
+    background-color: rgba(16, 185, 129, 0.15) !important;
+    color: #10b981 !important;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* Red Pill for Negative Growth */
+.badge-soft-danger {
+    background-color: rgba(239, 68, 68, 0.15) !important;
+    color: #ef4444 !important;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
 }

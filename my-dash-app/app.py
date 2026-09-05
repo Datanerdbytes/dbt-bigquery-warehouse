@@ -20,7 +20,7 @@ navbar = dbc.NavbarSimple(
     brand_href="/",
     color="primary",
     dark=True,
-    className="mb-3 shadow-sm",
+    className="shadow-sm"
 )
 
 # Root App Layout
