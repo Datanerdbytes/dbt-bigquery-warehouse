@@ -16,7 +16,7 @@ navbar = dbc.NavbarSimple(
         dbc.NavItem(dbc.NavLink("Product Overview", href="/", active="exact")),
         dbc.NavItem(dbc.NavLink("Customer 360", href="/customers", active="exact")),
     ],
-    brand="Product 360 Analytics",
+    brand="Enterprise Insights",
     brand_href="/",
     color="primary",
     dark=True,
@@ -26,7 +26,7 @@ navbar = dbc.NavbarSimple(
 # Root App Layout
 app.layout = html.Div([
     navbar,
-    dash.page_container  # Automatically renders the active page layout
+    html.Div(dash.page_container) # Edge-to-edge wrapper
 ])
 
 if __name__ == "__main__":

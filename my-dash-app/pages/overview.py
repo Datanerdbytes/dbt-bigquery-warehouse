@@ -14,30 +14,7 @@ layout = html.Div(
     className="dashboard-container",
     children=[
         dbc.Container(
-            [   # Row 1: Header Banner
-                dbc.Row(
-                    [   
-                        dbc.Col(
-                            [
-                                html.Div(
-                                    [
-                                        html.H2(
-                                            "Product 360 Executive Dashboard",
-                                            className="fw-bold mb-0 text-white",
-                                        ),
-                                        html.P(
-                                            "Comprehensive Performance, Health, and Customer Metrics",
-                                            className="mb-0 text-white-50 small",
-                                        )
-                                    ],
-                                    className="header-banner p-2 mb-2"
-                                )
-                            ],
-                            width=12
-                        )
-                    ]
-                ),
-
+            [  
                 # Row 2: Dedicated Filter Control Bar
                 dbc.Row(
                     dbc.Col(
