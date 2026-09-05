@@ -11,18 +11,17 @@ df_merged, min_data_date, max_data_date, category_options, country_options = loa
 dash.register_page(__name__, path="/", name="Product Overview")
 
 layout = html.Div(
-    className="dashboard-container",
+    className="dashboard-container py-3",
     children=[
         dbc.Container(
-            [  
-                # Row 2: Dedicated Filter Control Bar
+            [
+                # Row 1: Filter Control Bar
                 dbc.Row(
                     dbc.Col(
                         html.Div(
                             [
                                 dbc.Row(
                                     [
-                                        # Filter 1: Date Range
                                         dbc.Col(
                                             [
                                                 html.Label("Date Range", className="fw-bold text-muted small mb-0"),
@@ -38,7 +37,6 @@ layout = html.Div(
                                             ],
                                             width=12, md=4
                                         ),
-                                        # Filter 2: Product Category Dropdown
                                         dbc.Col(
                                             [
                                                 html.Label("Product Category", className="fw-bold text-muted small mb-0"),
@@ -51,7 +49,6 @@ layout = html.Div(
                                             ],
                                             width=12, md=4
                                         ),
-                                        # Filter 3: Region Selector
                                         dbc.Col(
                                             [
                                                 html.Label("Region", className="fw-bold text-muted small mb-0"),
@@ -72,80 +69,57 @@ layout = html.Div(
                         ),
                         width=12
                     ),
-                    className="sticky-filter-bar" # Fixed to top on scroll
+                    className="sticky-filter-bar"
                 ),
 
-                # Row 3: KPI Cards
+                # Row 2: KPI Cards
                 dbc.Row(
-                    [   # Column 1: Total Sales
+                    [
                         dbc.Col(
                             html.Div(
                                 [
                                     html.H6("TOTAL SALES", className="text-muted fw-bold mb-0 small"),
                                     html.H3(id="kpi-sales-value", className="text-dark fw-bold mb-0"),
-                                    dbc.Tooltip(
-                                        id="kpi-sales-tooltip",
-                                        target="kpi-sales-card",
-                                        placement="top",
-                                        className="shadow-sm"
-                                    )
+                                    dbc.Tooltip(id="kpi-sales-tooltip", target="kpi-sales-card", placement="top")
                                 ],
                                 id="kpi-sales-card",
-                                className="kpi-card kpi-sales p-2 cursor-pointer"
+                                className="kpi-card p-2 border-start border-4 border-info bg-white rounded shadow-sm cursor-pointer"
                             ),
                             width=3
                         ),
-                        # Column 2: Total Orders
                         dbc.Col(
                             html.Div(
                                 [
                                     html.H6("TOTAL ORDERS", className="text-muted fw-bold mb-0 small"),
                                     html.H3(id="kpi-orders-value", className="text-dark fw-bold mb-0"),
-                                    dbc.Tooltip(
-                                        id="kpi-orders-tooltip",
-                                        target="kpi-orders-card",
-                                        placement="top",
-                                        className="shadow-sm"
-                                    )
+                                    dbc.Tooltip(id="kpi-orders-tooltip", target="kpi-orders-card", placement="top")
                                 ],
                                 id="kpi-orders-card",
-                                className="kpi-card kpi-orders p-2 cursor-pointer"
+                                className="kpi-card p-2 border-start border-4 border-success bg-white rounded shadow-sm cursor-pointer"
                             ),
                             width=3
                         ),
-                        # Column 3: Total Quantity
                         dbc.Col(
                             html.Div(
                                 [
                                     html.H6("TOTAL QUANTITY", className="text-muted fw-bold mb-0 small"),
                                     html.H3(id="kpi-quantity-value", className="text-dark fw-bold mb-0"),
-                                    dbc.Tooltip(
-                                        id="kpi-quantity-tooltip",
-                                        target="kpi-quantity-card",
-                                        placement="top",
-                                        className="shadow-sm"
-                                    )
+                                    dbc.Tooltip(id="kpi-quantity-tooltip", target="kpi-quantity-card", placement="top")
                                 ],
                                 id="kpi-quantity-card",
-                                className="kpi-card kpi-quantity p-2 cursor-pointer"
+                                className="kpi-card p-2 border-start border-4 border-warning bg-white rounded shadow-sm cursor-pointer"
                             ),
                             width=3
                         ),
-                        # Column 4: Total Customers
                         dbc.Col(
                             html.Div(
                                 [
                                     html.H6("TOTAL CUSTOMERS", className="text-muted fw-bold mb-0 small"),
                                     html.H3(id="kpi-customers-value", className="text-dark fw-bold mb-0"),
-                                    dbc.Tooltip(
-                                        id="kpi-customers-tooltip",
-                                        target="kpi-customers-card",
-                                        placement="top",
-                                        className="shadow-sm"
-                                    )
+                                    dbc.Tooltip(id="kpi-customers-tooltip", target="kpi-customers-card", placement="top")
                                 ],
                                 id="kpi-customers-card",
-                                className="kpi-card kpi-customers p-2 cursor-pointer"
+                                className="kpi-card p-2 border-start border-4 border-primary bg-white rounded shadow-sm cursor-pointer"
                             ),
                             width=3
                         )
@@ -153,88 +127,69 @@ layout = html.Div(
                     className="g-2 mb-3"
                 ),
 
-                # Row 4: Interactive Charts Section
+                # Row 3: Visuals Row 1
                 dbc.Row(
                     [
-                        # Chart 1: Revenue Trend Over Time (7-Column Width)
                         dbc.Col(
                             dbc.Card(
                                 dbc.CardBody(
                                     [
-                                        html.H5("Sales Revenue Performance", className="card-title fw-bold text-dark mb-1"),
-                                        dcc.Graph(
-                                            id="sales-trend-graph",
-                                            config={"displayModeBar": False}
-                                        )
+                                        html.H5("Sales Revenue Performance", className="fw-bold text-dark mb-2"),
+                                        dcc.Graph(id="sales-trend-graph", config={"displayModeBar": False})
                                     ],
-                                    className="p-2"
+                                    className="p-3"
                                 ),
                                 className="shadow-sm border-0 mb-3"
                             ),
                             width=12, lg=7
                         ),
-
-                        # Chart 2: Product Category Distribution (5-Column Width)
                         dbc.Col(
                             dbc.Card(
                                 dbc.CardBody(
                                     [
-                                        html.H5("Revenue by Category", className="card-title fw-bold text-dark mb-1"),
-                                        dcc.Graph(
-                                            id="category-pie-graph",
-                                            config={"displayModeBar": False}
-                                        )
+                                        html.H5("Revenue by Category", className="fw-bold text-dark mb-2"),
+                                        dcc.Graph(id="category-pie-graph", config={"displayModeBar": False})
                                     ],
-                                    className="p-2"
+                                    className="p-3"
                                 ),
                                 className="shadow-sm border-0 mb-3"
                             ),
                             width=12, lg=5
                         )
-                    ],
-                    className="mt-1"
+                    ]
                 ),
 
-                # Row 5: Top Products & Regional Performance Breakdown
+                # Row 4: Visuals Row 2
                 dbc.Row(
                     [
-
-                        # Chart 3: Top 10 Products by Revenue (6 Columns)
                         dbc.Col(
                             dbc.Card(
                                 dbc.CardBody(
                                     [
-                                        html.H5("Top 10 Products by Revenue", className="card-title fw-bold text-dark mb-3"),
-                                        dcc.Graph(
-                                            id="top-products-graph",
-                                            config={"displayModeBar": False}
-                                        )
-                                    ]
+                                        html.H5("Top 10 Products by Revenue", className="fw-bold text-dark mb-2"),
+                                        dcc.Graph(id="top-products-graph", config={"displayModeBar": False})
+                                    ],
+                                    className="p-3"
                                 ),
-                                className="shadow-sm border-0 mb-4 h-100"
+                                className="shadow-sm border-0 mb-3"
                             ),
                             width=12, lg=6
                         ),
-
-                        # Chart 4: Revenue by Region / Country (6 Columns)
                         dbc.Col(
                             dbc.Card(
                                 dbc.CardBody(
                                     [
-                                        html.H5("Regional Revenue Breakdown", className="card-title fw-bold text-dark mb-3"),
-                                        dcc.Graph(
-                                            id="regional-sales-graph",
-                                            config={"displayModeBar": False}
-                                        )
-                                    ]
+                                        html.H5("Regional Revenue Breakdown", className="fw-bold text-dark mb-2"),
+                                        dcc.Graph(id="regional-sales-graph", config={"displayModeBar": False})
+                                    ],
+                                    className="p-3"
                                 ),
-                                className="shadow-sm border-0 mb-4 h-100"
+                                className="shadow-sm border-0 mb-3"
                             ),
                             width=12, lg=6
                         )
-                    ], 
-                    className="mt-2")
-
+                    ]
+                )
             ],
             fluid=False
         ),
@@ -242,9 +197,7 @@ layout = html.Div(
         # Modal
         dbc.Modal(
             [
-                dbc.ModalHeader(
-                    dbc.ModalTitle(id="modal-product-title", className="fw-bold")
-                ),
+                dbc.ModalHeader(dbc.ModalTitle(id="modal-product-title", className="fw-bold")),
                 dbc.ModalBody(
                     [
                         html.Div(id="modal-product-kpis", className="mb-3"),

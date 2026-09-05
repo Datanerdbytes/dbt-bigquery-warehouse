@@ -137,7 +137,8 @@ layout = html.Div(
                                     [
                                         html.H5("Customer Spend Distribution (CLV)", className="fw-bold text-dark mb-2"),
                                         dcc.Graph(id="c360-spend-dist-graph", config={"displayModeBar": False})
-                                    ]
+                                    ],
+                                    className="p-3"
                                 ),
                                 className="shadow-sm border-0 mb-3"
                             ),
@@ -149,7 +150,8 @@ layout = html.Div(
                                     [
                                         html.H5("Top High-Value Customers", className="fw-bold text-dark mb-2"),
                                         html.Div(id="c360-top-customers-table-container")
-                                    ]
+                                    ],
+                                    className="p-3"
                                 ),
                                 className="shadow-sm border-0 mb-3"
                             ),
@@ -158,7 +160,7 @@ layout = html.Div(
                     ]
                 ),
 
-                # Row 4: Visuals Row 2 (NEW)
+                # Row 4: Visuals Row 2
                 dbc.Row(
                     [
                         dbc.Col(
@@ -167,7 +169,8 @@ layout = html.Div(
                                     [
                                         html.H5("Active Customer Trend", className="fw-bold text-dark mb-2"),
                                         dcc.Graph(id="c360-cust-trend-graph", config={"displayModeBar": False})
-                                    ]
+                                    ],
+                                    className="p-3"
                                 ),
                                 className="shadow-sm border-0 mb-3"
                             ),
@@ -179,7 +182,8 @@ layout = html.Div(
                                     [
                                         html.H5("Customer Concentration by Region", className="fw-bold text-dark mb-2"),
                                         dcc.Graph(id="c360-cust-geo-graph", config={"displayModeBar": False})
-                                    ]
+                                    ],
+                                    className="p-3"
                                 ),
                                 className="shadow-sm border-0 mb-3"
                             ),
@@ -192,6 +196,7 @@ layout = html.Div(
         )
     ]
 )
+
 
 def filter_dataframe(df, start_date, end_date, selected_category, selected_country):
     if not start_date or not end_date:
