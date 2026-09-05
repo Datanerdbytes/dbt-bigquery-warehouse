@@ -3,7 +3,7 @@
 /* Master Page Background Wrapper */
 .dashboard-container {
     padding: 30px;
-    background-color: #b9bfc5;
+    background-color:  #0b0f19 ;
     min-height: 100vh;
     margin-top: 0 !important;
     padding-top: 0 !important;
@@ -68,7 +68,7 @@
     position: sticky;
     top: 0;
     z-index: 1020;
-    background-color: #b9bfc5; /* Matches page background so charts slide underneath smoothly */
+    background-color:  #0b0f19; /* Matches page background so charts slide underneath smoothly */
     padding-top: 10px;
     padding-bottom: 5px;
 }

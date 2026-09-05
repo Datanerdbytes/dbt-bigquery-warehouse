@@ -24,7 +24,7 @@ layout = html.Div(
                                     [
                                         dbc.Col(
                                             [
-                                                html.Label("Date Range", className="fw-bold text-muted small mb-0"),
+                                                html.Label("Date Range", className="fw-bold text-muted-dark small mb-1"),
                                                 dcc.DatePickerRange(
                                                     id="date-picker-range",
                                                     min_date_allowed=min_data_date,
@@ -39,7 +39,7 @@ layout = html.Div(
                                         ),
                                         dbc.Col(
                                             [
-                                                html.Label("Product Category", className="fw-bold text-muted small mb-0"),
+                                                html.Label("Product Category", className="fw-bold text-muted-dark small mb-1"),
                                                 dcc.Dropdown(
                                                     id="category-dropdown",
                                                     options=category_options,
@@ -51,7 +51,7 @@ layout = html.Div(
                                         ),
                                         dbc.Col(
                                             [
-                                                html.Label("Region", className="fw-bold text-muted small mb-0"),
+                                                html.Label("Region", className="fw-bold text-muted-dark small mb-1"),
                                                 dcc.Dropdown(
                                                     id="country-dropdown",
                                                     options=country_options,
@@ -65,7 +65,7 @@ layout = html.Div(
                                     className="g-2 align-items-center"
                                 )
                             ],
-                            className="bg-white p-2 rounded shadow-sm border mb-3"
+                            className="dark-card p-2 mb-3"
                         ),
                         width=12
                     ),
@@ -74,55 +74,104 @@ layout = html.Div(
 
                 # Row 2: KPI Cards
                 dbc.Row(
-                    [
+                    [   
                         dbc.Col(
                             html.Div(
                                 [
-                                    html.H6("TOTAL SALES", className="text-muted fw-bold mb-0 small"),
-                                    html.H3(id="kpi-sales-value", className="text-dark fw-bold mb-0"),
+                                    html.Div(
+                                        [
+                                            html.H6("TOTAL SALES", className="text-muted-dark fw-bold mb-1 small"),
+                                            html.Span("•••", className="text-muted-dark small cursor-pointer")
+                                        ],
+                                        className="d-flex justify-content-between align-items-center"
+                                    ),
+                                    html.Div(
+                                        [
+                                            html.H3(id="kpi-sales-value", className="text-white-heading fw-bold mb-0 me-2 d-inline-block"),
+                                            html.Span(id="kpi-sales-badge", className="d-inline-block align-middle")
+                                        ]
+                                    ),
                                     dbc.Tooltip(id="kpi-sales-tooltip", target="kpi-sales-card", placement="top")
                                 ],
                                 id="kpi-sales-card",
-                                className="kpi-card p-2 border-start border-4 border-info bg-white rounded shadow-sm cursor-pointer"
+                                className="dark-card p-3 cursor-pointer"
                             ),
                             width=3
                         ),
+
                         dbc.Col(
                             html.Div(
                                 [
-                                    html.H6("TOTAL ORDERS", className="text-muted fw-bold mb-0 small"),
-                                    html.H3(id="kpi-orders-value", className="text-dark fw-bold mb-0"),
+                                    html.Div(
+                                        [
+                                            html.H6("TOTAL ORDERS", className="text-muted-dark fw-bold mb-1 small"),
+                                            html.Span("•••", className="text-muted-dark small cursor-pointer")
+                                        ],
+                                        className="d-flex justify-content-between align-items-center"
+                                    ),
+                                    html.Div(
+                                        [
+                                            html.H3(id="kpi-orders-value", className="text-white-heading fw-bold mb-0 me-2 d-inline-block"),
+                                            html.Span(id="kpi-orders-badge", className="d-inline-block align-middle")
+                                        ]
+                                    ),
                                     dbc.Tooltip(id="kpi-orders-tooltip", target="kpi-orders-card", placement="top")
                                 ],
                                 id="kpi-orders-card",
-                                className="kpi-card p-2 border-start border-4 border-success bg-white rounded shadow-sm cursor-pointer"
+                                className="dark-card p-3 cursor-pointer"
                             ),
                             width=3
                         ),
+
                         dbc.Col(
                             html.Div(
                                 [
-                                    html.H6("TOTAL QUANTITY", className="text-muted fw-bold mb-0 small"),
-                                    html.H3(id="kpi-quantity-value", className="text-dark fw-bold mb-0"),
+                                    html.Div(
+                                        [
+                                            html.H6("TOTAL QUANTITY", className="text-muted-dark fw-bold mb-1 small"),
+                                            html.Span("•••", className="text-muted-dark small cursor-pointer")
+
+                                        ],
+                                         className="d-flex justify-content-between align-items-center"
+                                    ),
+                                    html.Div(
+                                        [   
+                                            html.H3(id="kpi-quantity-value", className="text-white-heading fw-bold mb-0 me-2 d-inline-block"),
+                                            html.Span(id="kpi-quantity-badge", className="d-inline-block align-middle")
+                                        ]
+                                    ),
                                     dbc.Tooltip(id="kpi-quantity-tooltip", target="kpi-quantity-card", placement="top")
+
                                 ],
                                 id="kpi-quantity-card",
-                                className="kpi-card p-2 border-start border-4 border-warning bg-white rounded shadow-sm cursor-pointer"
+                                className="dark-card p-3 cursor-pointer"
                             ),
                             width=3
                         ),
+
                         dbc.Col(
                             html.Div(
                                 [
-                                    html.H6("TOTAL CUSTOMERS", className="text-muted fw-bold mb-0 small"),
-                                    html.H3(id="kpi-customers-value", className="text-dark fw-bold mb-0"),
+                                    html.Div(
+                                        [
+                                            html.H6("TOTAL CUSTOMERS", className="text-muted-dark fw-bold mb-1 small"),
+                                            html.Span("•••", className="text-muted-dark small cursor-pointer")
+                                        ],
+                                        className="d-flex justify-content-between align-items-center"
+                                    ),
+                                    html.Div(
+                                        [
+                                            html.H3(id="kpi-customers-value", className="text-white-heading fw-bold mb-0 me-2 d-inline-block"),
+                                            html.Span(id="kpi-customers-badge", className="d-inline-block align-middle")
+                                        ]
+                                    ),
                                     dbc.Tooltip(id="kpi-customers-tooltip", target="kpi-customers-card", placement="top")
                                 ],
                                 id="kpi-customers-card",
-                                className="kpi-card p-2 border-start border-4 border-primary bg-white rounded shadow-sm cursor-pointer"
+                                className="dark-card p-3 cursor-pointer"
                             ),
                             width=3
-                        )
+                        ),
                     ],
                     className="g-2 mb-3"
                 ),
@@ -134,12 +183,12 @@ layout = html.Div(
                             dbc.Card(
                                 dbc.CardBody(
                                     [
-                                        html.H5("Sales Revenue Performance", className="fw-bold text-dark mb-2"),
+                                        html.H5("Sales Revenue Performance", className="fw-bold text-white-heading mb-2"),
                                         dcc.Graph(id="sales-trend-graph", config={"displayModeBar": False})
                                     ],
                                     className="p-3"
                                 ),
-                                className="shadow-sm border-0 mb-3"
+                                className="dark-card border-0 mb-3"
                             ),
                             width=12, lg=7
                         ),
@@ -147,12 +196,12 @@ layout = html.Div(
                             dbc.Card(
                                 dbc.CardBody(
                                     [
-                                        html.H5("Revenue by Category", className="fw-bold text-dark mb-2"),
+                                        html.H5("Revenue by Category", className="fw-bold text-white-heading mb-2"),
                                         dcc.Graph(id="category-pie-graph", config={"displayModeBar": False})
                                     ],
                                     className="p-3"
                                 ),
-                                className="shadow-sm border-0 mb-3"
+                                className="dark-card border-0 mb-3"
                             ),
                             width=12, lg=5
                         )
@@ -166,12 +215,12 @@ layout = html.Div(
                             dbc.Card(
                                 dbc.CardBody(
                                     [
-                                        html.H5("Top 10 Products by Revenue", className="fw-bold text-dark mb-2"),
+                                        html.H5("Top 10 Products by Revenue", className="fw-bold text-white-heading mb-2"),
                                         dcc.Graph(id="top-products-graph", config={"displayModeBar": False})
                                     ],
                                     className="p-3"
                                 ),
-                                className="shadow-sm border-0 mb-3"
+                                className="dark-card border-0 mb-3"
                             ),
                             width=12, lg=6
                         ),
@@ -179,12 +228,12 @@ layout = html.Div(
                             dbc.Card(
                                 dbc.CardBody(
                                     [
-                                        html.H5("Regional Revenue Breakdown", className="fw-bold text-dark mb-2"),
+                                        html.H5("Regional Revenue Breakdown", className="fw-bold text-white-heading mb-2"),
                                         dcc.Graph(id="regional-sales-graph", config={"displayModeBar": False})
                                     ],
                                     className="p-3"
                                 ),
-                                className="shadow-sm border-0 mb-3"
+                                className="dark-card border-0 mb-3"
                             ),
                             width=12, lg=6
                         )
@@ -217,6 +266,45 @@ layout = html.Div(
     ]
 )
 
+def calculate_pop_badge(full_df, date_col, metric_col, start_date, end_date, agg_type="sum", category=None, country=None):
+    if not start_date or not end_date or full_df.empty:
+        return html.Span("N/A", className="badge-soft-secondary")
+
+    # 1. Parse current date window
+    start = pd.to_datetime(start_date)
+    end = pd.to_datetime(end_date)
+    
+    # Calculate window length in days
+    period_days = (end - start).days + 1
+    
+    # 2. Derive prior period date range
+    prior_start = (start - pd.Timedelta(days=period_days)).strftime("%Y-%m-%d")
+    prior_end = (start - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+
+    # 3. Filter current and prior dataframes using your existing filter_dataframe function
+    curr_df = filter_dataframe(full_df, start_date, end_date, category, country)
+    prior_df = filter_dataframe(full_df, prior_start, prior_end, category, country)
+
+    # 4. Aggregations
+    if agg_type == "nunique":
+        curr_val = curr_df[metric_col].nunique() if not curr_df.empty else 0
+        prior_val = prior_df[metric_col].nunique() if not prior_df.empty else 0
+    else:
+        curr_val = curr_df[metric_col].sum() if not curr_df.empty else 0
+        prior_val = prior_df[metric_col].sum() if not prior_df.empty else 0
+
+    # Prevent division by zero
+    if prior_val == 0 or pd.isna(prior_val):
+        return html.Span("N/A", className="badge-soft-secondary")
+
+    # 5. Compute percentage change
+    pct_change = ((curr_val - prior_val) / prior_val) * 100
+
+    if pct_change >= 0:
+        return html.Span(f"+{pct_change:.1f}% ↑", className="badge-soft-success")
+    else:
+        return html.Span(f"{pct_change:.1f}% ↓", className="badge-soft-danger")
+    
 
 def filter_dataframe(df, start_date, end_date, selected_category, selected_country):
     if not start_date or not end_date:
@@ -248,6 +336,10 @@ def filter_dataframe(df, start_date, end_date, selected_category, selected_count
         Output("kpi-orders-tooltip", "children"),
         Output("kpi-quantity-tooltip", "children"),
         Output("kpi-customers-tooltip", "children"),
+        Output("kpi-sales-badge", "children"),
+        Output("kpi-orders-badge", "children"),
+        Output("kpi-quantity-badge", "children"),
+        Output("kpi-customers-badge", "children")
     ],
     [
         Input("date-picker-range", "start_date"),
@@ -259,60 +351,94 @@ def filter_dataframe(df, start_date, end_date, selected_category, selected_count
 def update_all_kpis(start_date, end_date, selected_category, selected_country):
     filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
 
+    # 1. Handle Empty DataFrame Case (Must return 12 outputs to match decorator)
     if filtered_df.empty:
-        return "$0", "0", "0", "0", "No data available"
+        empty_tooltip = [html.Div("No data available", className="text-start")]
+        empty_badge = html.Span("N/A", className="badge-soft-secondary")
+        return (
+            "$0", "0", "0", "0",
+            empty_tooltip, empty_tooltip, empty_tooltip, empty_tooltip,
+            empty_badge, empty_badge, empty_badge, empty_badge
+        )
 
+    # 2. Main KPI Aggregations
     total_sales = filtered_df["gross_sales_amount"].sum()
     total_orders = filtered_df["order_number"].nunique()
     total_quantity = filtered_df["quantity"].sum()
     total_customers = filtered_df["customer_key"].nunique()
 
-    # --- Sales Tooltip Metrics ---
-    aov = total_sales / total_orders if total_orders > 0 else 0
-    active_days = filtered_df["order_date"].dt.date.nunique()
-    daily_avg_sales = total_sales / active_days if active_days > 0 else 0
+    # Format values for display
+    sales_display = f"${total_sales:,.0f}"
+    orders_display = f"{total_orders:,}"
+    quantity_display = f"{total_quantity:,}"
+    customers_display = f"{total_customers:,}"
 
+    # 3. Compute Dynamic Period-over-Period Badges (Pass full df_merged to access prior dates)
+    sales_badge = calculate_pop_badge(
+    df_merged, "order_date", "gross_sales_amount", 
+    start_date, end_date, "sum", selected_category, selected_country
+    )
+
+    orders_badge = calculate_pop_badge(
+    df_merged, "order_date", "order_number", 
+    start_date, end_date, "nunique", selected_category, selected_country
+    )
+
+    quantity_badge = calculate_pop_badge(
+    df_merged, "order_date", "quantity", 
+    start_date, end_date, "sum", selected_category, selected_country
+    )   
+
+    customers_badge = calculate_pop_badge(
+    df_merged, "order_date", "customer_key", 
+    start_date, end_date, "nunique", selected_category, selected_country
+    )
+
+    # 4. Tooltip Metrics
+    active_days = filtered_df["order_date"].dt.date.nunique()
+    
+    aov = total_sales / total_orders if total_orders > 0 else 0
+    daily_avg_sales = total_sales / active_days if active_days > 0 else 0
     sales_tooltip_content = [
         html.Div(f"• Avg Order Value (AOV): ${aov:,.2f}", className="text-start"),
         html.Div(f"• Daily Avg Revenue: ${daily_avg_sales:,.0f}", className="text-start")
     ]
 
-    # --- Orders Tooltip Metrics ---
     daily_avg_orders = total_orders / active_days if active_days > 0 else 0
     items_per_order = total_quantity / total_orders if total_orders > 0 else 0
-
     orders_tooltip_content = [
         html.Div(f"• Daily Avg Orders: {daily_avg_orders:,.1f}", className="text-start"),
         html.Div(f"• Units Per Order: {items_per_order:,.1f}", className="text-start")
     ]
 
-    # --- Quantity Tooltip Metrics ---
     daily_avg_qty = total_quantity / active_days if active_days > 0 else 0
     avg_unit_price = total_sales / total_quantity if total_quantity > 0 else 0
-
     quantity_tooltip_content = [
         html.Div(f"• Daily Avg Units: {daily_avg_qty:,.1f}", className="text-start"),
         html.Div(f"• Effective Unit Price: ${avg_unit_price:,.2f}", className="text-start")
     ]
 
-    # --- Customers Tooltip Metrics ---
     rev_per_customer = total_sales / total_customers if total_customers > 0 else 0
     orders_per_customer = total_orders / total_customers if total_customers > 0 else 0
-
     customers_tooltip_content = [
         html.Div(f"• Revenue / Customer: ${rev_per_customer:,.2f}", className="text-start"),
         html.Div(f"• Orders / Customer: {orders_per_customer:,.2f}", className="text-start")
     ]
 
+    # 5. Exact 12 Output Return Tuple
     return (
-        f"${total_sales:,.0f}",
-        f"{total_orders:,}",
-        f"{total_quantity:,}",
-        f"{total_customers:,}",
+        sales_display,
+        orders_display,
+        quantity_display,
+        customers_display,
         sales_tooltip_content,
         orders_tooltip_content,
         quantity_tooltip_content,
         customers_tooltip_content,
+        sales_badge,
+        orders_badge,
+        quantity_badge,
+        customers_badge
     )
 
 
@@ -353,15 +479,21 @@ def update_sales_trend(start_date, end_date, selected_category, selected_country
     fig.update_traces(
         line_color="#2ecc71",
         fillcolor="rgba(46, 204, 113, 0.15)",
-        hovertemplate="<b>Date:</b> %{x|%b %d, %Y}<br><b>Revenue:</b> $%{y:,.0f}<extra></extra>"
+        hovertemplate="<b>Date:</b> %{x|%b %d, %Y}<br><b>Revenue:</b> $%{y:,.0f}<extra></extra>",
+        line=dict(
+            shape="spline",
+            color="#10b981",
+            width=3
+        )
     )
 
     fig.update_layout(
         margin=dict(l=10, r=10, t=10, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(showgrid=False),
-        yaxis=dict(showgrid=True, gridcolor="#f0f0f0", tickprefix="$"),
+        font=dict(color="#94a3b8"),
+        xaxis=dict(showgrid=False, zeroline=False, color="#94a3b8"),
+        yaxis=dict(showgrid=True, gridcolor="#1f2937", zeroline=False, color="#94a3b8"),
         height=260
     )
 
@@ -411,6 +543,9 @@ def update_category_pie(start_date, end_date, selected_category, selected_countr
         margin=dict(l=10, r=10, t=10, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#94a3b8"),
+        xaxis=dict(showgrid=False, zeroline=False, color="#94a3b8"),
+        yaxis=dict(showgrid=True, gridcolor="#1f2937", zeroline=False, color="#94a3b8"),
         height=260
     )
 
@@ -464,8 +599,9 @@ def update_top_products(start_date, end_date, selected_category, selected_countr
         margin=dict(l=10, r=20, t=10, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(showgrid=True, gridcolor="#f0f0f0", tickprefix="$"),
-        yaxis=dict(showgrid=False),
+        font=dict(color="#94a3b8"),
+        xaxis=dict(showgrid=False, zeroline=False, color="#94a3b8"),
+        yaxis=dict(showgrid=True, gridcolor="#1f2937", zeroline=False, color="#94a3b8"),
         height=350,
     )
 
@@ -521,8 +657,9 @@ def update_regional_sales(start_date, end_date, selected_category, selected_coun
         margin=dict(l=10, r=10, t=20, b=10), 
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(showgrid=False),
-        yaxis=dict(showgrid=True, gridcolor="#f0f0f0", tickprefix="$"),
+        font=dict(color="#94a3b8"),
+        xaxis=dict(showgrid=False, zeroline=False, color="#94a3b8"),
+        yaxis=dict(showgrid=True, gridcolor="#1f2937", zeroline=False, color="#94a3b8"),
         height=350
     )
 

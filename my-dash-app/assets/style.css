@@ -1,0 +1,77 @@
+/* Base Theme */
+body {
+    background-color: #0b0f19 !important;
+    color: #94a3b8 !important;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Card Wrappers */
+.dark-card {
+    background-color: #111827 !important;
+    border: 1px solid #1f2937 !important;
+    border-radius: 12px !important;
+}
+
+/* Typography Overrides */
+.text-white-heading {
+    color: #f8fafc !important;
+}
+
+.text-muted-dark {
+    color: #64748b !important;
+}
+
+/* KPI Badges */
+.badge-soft-success {
+    background-color: rgba(16, 185, 129, 0.15) !important;
+    color: #10b981 !important;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+/* --- Dark Overrides for dcc.Dropdown --- */
+.Select-control {
+    background-color: #1f2937 !important;
+    border-color: #374151 !important;
+    color: #f8fafc !important;
+    border-radius: 8px !important;
+}
+
+.Select-value-label, .Select-input input {
+    color: #f8fafc !important;
+}
+
+.Select-menu-outer {
+    background-color: #1f2937 !important;
+    border: 1px solid #374151 !important;
+    color: #f8fafc !important;
+}
+
+.VirtualizedSelectOption {
+    background-color: #1f2937 !important;
+    color: #f8fafc !important;
+}
+
+.VirtualizedSelectFocusedOption {
+    background-color: #374151 !important;
+    color: #ffffff !important;
+}
+
+/* --- Dark Overrides for dcc.DatePickerRange --- */
+.DateInput, .DateInput_input {
+    background-color: #1f2937 !important;
+    color: #f8fafc !important;
+    border-radius: 6px !important;
+}
+
+.SingleDatePickerInput__withBorder, .DateRangePickerInput__withBorder {
+    background-color: #1f2937 !important;
+    border: 1px solid #374151 !important;
+    border-radius: 8px !important;
+}
+
+.DateRangePickerInput_arrow_svg {
+    fill: #94a3b8 !important;
+}
