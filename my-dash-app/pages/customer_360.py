@@ -25,7 +25,7 @@ layout = html.Div(
                                     [
                                         dbc.Col(
                                             [
-                                                html.Label("Date Range", className="fw-bold text-muted small mb-0"),
+                                                html.Label("Date Range", className="fw-bold text-light small mb-1"),
                                                 dcc.DatePickerRange(
                                                     id="c360-date-picker",
                                                     min_date_allowed=min_data_date,
@@ -40,7 +40,7 @@ layout = html.Div(
                                         ),
                                         dbc.Col(
                                             [
-                                                html.Label("Product Category", className="fw-bold text-muted small mb-0"),
+                                                html.Label("Product Category", className="fw-bold text-light small mb-1"),
                                                 dcc.Dropdown(
                                                     id="c360-category-dropdown",
                                                     options=category_options,
@@ -52,7 +52,7 @@ layout = html.Div(
                                         ),
                                         dbc.Col(
                                             [
-                                                html.Label("Region", className="fw-bold text-muted small mb-0"),
+                                                html.Label("Region", className="fw-bold text-light small mb-1"),
                                                 dcc.Dropdown(
                                                     id="c360-country-dropdown",
                                                     options=country_options,
@@ -74,59 +74,80 @@ layout = html.Div(
                 ),
 
                 # Row 2: KPI Cards
-                dbc.Row(
-                    [
-                        dbc.Col(
-                            html.Div(
-                                [
-                                    html.H6("ACTIVE CUSTOMERS", className="text-muted fw-bold mb-0 small"),
-                                    html.H3(id="c360-kpi-active-cust", className="text-white fw-bold mb-0"),
-                                    dbc.Tooltip(id="c360-tooltip-cust", target="c360-card-cust", placement="bottom")
-                                ],
-                                id="c360-card-cust",
-                                className="dark-card p-3 border-start border-4 border-info rounded shadow-sm"
-                            ),
-                            width=12, sm=6, md=3
+                # Row 2: KPI Cards
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Div(
+                            [
+                                html.H6("ACTIVE CUSTOMERS", className="text-secondary fw-bold mb-1 small"),
+                                html.Div(
+                                    [
+                                        html.H3(id="c360-kpi-active-cust", className="text-white fw-bold mb-0 me-2 d-inline-block"),
+                                        html.Span(id="c360-badge-cust", className="d-inline-block align-middle")
+                                    ]
+                                ),
+                                dbc.Tooltip(id="c360-tooltip-cust", target="c360-card-cust", placement="bottom")
+                            ],
+                            id="c360-card-cust",
+                            className="dark-card p-3 border-start border-4 border-info rounded shadow-sm cursor-pointer"
                         ),
-                        dbc.Col(
-                            html.Div(
-                                [
-                                    html.H6("AVG SPEND / CUST (LTV)", className="text-muted fw-bold mb-0 small"),
-                                    html.H3(id="c360-kpi-avg-spend", className="text-white fw-bold mb-0"),
-                                    dbc.Tooltip(id="c360-tooltip-spend", target="c360-card-spend", placement="bottom")
-                                ],
-                                id="c360-card-spend",
-                                className="dark-card p-3 border-start border-4 border-success rounded shadow-sm"
-                            ),
-                            width=12, sm=6, md=3
+                        width=12, sm=6, md=3
+                    ),
+                    dbc.Col(
+                        html.Div(
+                            [
+                                html.H6("AVG SPEND / CUST (LTV)", className="text-secondary fw-bold mb-1 small"),
+                                html.Div(
+                                    [
+                                        html.H3(id="c360-kpi-avg-spend", className="text-white fw-bold mb-0 me-2 d-inline-block"),
+                                        html.Span(id="c360-badge-spend", className="d-inline-block align-middle")
+                                    ]
+                                ),
+                                dbc.Tooltip(id="c360-tooltip-spend", target="c360-card-spend", placement="bottom")
+                            ],
+                            id="c360-card-spend",
+                            className="dark-card p-3 border-start border-4 border-success rounded shadow-sm cursor-pointer"
                         ),
-                        dbc.Col(
-                            html.Div(
-                                [
-                                    html.H6("AVG ORDERS / CUST", className="text-muted fw-bold mb-0 small"),
-                                    html.H3(id="c360-kpi-avg-freq", className="text-white fw-bold mb-0"),
-                                    dbc.Tooltip(id="c360-tooltip-freq", target="c360-card-freq", placement="bottom")
-                                ],
-                                id="c360-card-freq",
-                                className="dark-card p-3 border-start border-4 border-warning rounded shadow-sm"
-                            ),
-                            width=12, sm=6, md=3
+                        width=12, sm=6, md=3
+                    ),
+                    dbc.Col(
+                        html.Div(
+                            [
+                                html.H6("AVG ORDERS / CUST", className="text-secondary fw-bold mb-1 small"),
+                                html.Div(
+                                    [
+                                        html.H3(id="c360-kpi-avg-freq", className="text-white fw-bold mb-0 me-2 d-inline-block"),
+                                        html.Span(id="c360-badge-freq", className="d-inline-block align-middle")
+                                    ]
+                                ),
+                                dbc.Tooltip(id="c360-tooltip-freq", target="c360-card-freq", placement="bottom")
+                            ],
+                            id="c360-card-freq",
+                            className="dark-card p-3 border-start border-4 border-warning rounded shadow-sm cursor-pointer"
                         ),
-                        dbc.Col(
-                            html.Div(
-                                [
-                                    html.H6("REPEAT RATE", className="text-muted fw-bold mb-0 small"),
-                                    html.H3(id="c360-kpi-repeat-rate", className="text-white fw-bold mb-0"),
-                                    dbc.Tooltip(id="c360-tooltip-repeat", target="c360-card-repeat", placement="bottom")
-                                ],
-                                id="c360-card-repeat",
-                                className="dark-card p-3 border-start border-4 border-primary rounded shadow-sm"
-                            ),
-                            width=12, sm=6, md=3
+                        width=12, sm=6, md=3
+                    ),
+                    dbc.Col(
+                        html.Div(
+                            [
+                                html.H6("REPEAT RATE", className="text-secondary fw-bold mb-1 small"),
+                                html.Div(
+                                    [
+                                        html.H3(id="c360-kpi-repeat-rate", className="text-white fw-bold mb-0 me-2 d-inline-block"),
+                                        html.Span(id="c360-badge-repeat", className="d-inline-block align-middle")
+                                    ]
+                                ),
+                                dbc.Tooltip(id="c360-tooltip-repeat", target="c360-card-repeat", placement="bottom")
+                            ],
+                            id="c360-card-repeat",
+                            className="dark-card p-3 border-start border-4 border-primary rounded shadow-sm cursor-pointer"
                         ),
-                    ],
-                    className="g-2 mb-3"
-                ),
+                        width=12, sm=6, md=3
+                    ),
+                ],
+                className="g-2 mb-3"
+            ),
 
                 # Row 3: RFM Segmentation & Spend Distribution
                 dbc.Row(
@@ -134,7 +155,7 @@ layout = html.Div(
                         dbc.Col(
                             html.Div(
                                 [
-                                    html.H5("Customer RFM Segmentation", className="fw-bold text-white mb-2"),
+                                    html.H5("Customer RFM Segmentation", className="text-secondary fw-bold mb-1 small"),
                                     dcc.Graph(id="c360-rfm-segment-graph", config={"displayModeBar": False})
                                 ],
                                 className="dark-card p-3 rounded shadow-sm mb-3"
@@ -203,6 +224,18 @@ def filter_dataframe(df, start_date, end_date, selected_category, selected_count
 
     return df.loc[mask]
 
+def create_trend_badge(current_val, prev_val):
+    """Generates a dynamic HTML badge using custom CSS soft badge classes."""
+    if prev_val == 0 or pd.isna(prev_val) or pd.isna(current_val):
+        return html.Span("N/A", className="badge-soft-secondary")
+    
+    pct_change = ((current_val - prev_val) / abs(prev_val)) * 100
+    
+    if pct_change >= 0:
+        return html.Span(f"+{pct_change:.1f}% ↑", className="badge-soft-success")
+    else:
+        return html.Span(f"{pct_change:.1f}% ↓", className="badge-soft-danger")
+
 
 # --- KPI Callback ---
 @callback(
@@ -211,6 +244,10 @@ def filter_dataframe(df, start_date, end_date, selected_category, selected_count
         Output("c360-kpi-avg-spend", "children"),
         Output("c360-kpi-avg-freq", "children"),
         Output("c360-kpi-repeat-rate", "children"),
+        Output("c360-badge-cust", "children"),
+        Output("c360-badge-spend", "children"),
+        Output("c360-badge-freq", "children"),
+        Output("c360-badge-repeat", "children"),
         Output("c360-tooltip-cust", "children"),
         Output("c360-tooltip-spend", "children"),
         Output("c360-tooltip-freq", "children"),
@@ -224,45 +261,80 @@ def filter_dataframe(df, start_date, end_date, selected_category, selected_count
     ],
 )
 def update_customer_kpis(start_date, end_date, selected_category, selected_country):
-    filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
+    empty_badge = dbc.Badge("N/A", color="secondary", className="small")
 
-    if filtered_df.empty:
-        return "0", "$0", "0.00", "0%", "No data", "No data", "No data", "No data"
+    if not start_date or not end_date:
+        return "0", "$0", "0.00", "0%", empty_badge, empty_badge, empty_badge, empty_badge, "", "", "", ""
 
-    cust_summary = (
-        filtered_df.groupby("customer_key")
-        .agg(
+    # Parse current period dates
+    curr_start = pd.to_datetime(start_date)
+    curr_end = pd.to_datetime(end_date)
+    date_diff = curr_end - curr_start
+
+    # Calculate previous period dates of equal length
+    prev_end = curr_start - pd.Timedelta(days=1)
+    prev_start = prev_end - date_diff
+
+    # Filter current & previous datasets
+    curr_df = filter_dataframe(df_merged, curr_start, curr_end, selected_category, selected_country)
+    prev_df = filter_dataframe(df_merged, prev_start, prev_end, selected_category, selected_country)
+
+    if curr_df.empty:
+        return "0", "$0", "0.00", "0%", empty_badge, empty_badge, empty_badge, empty_badge, "No data", "No data", "No data", "No data"
+
+    # --- Compute Current Metrics ---
+    curr_summary = curr_df.groupby("customer_key").agg(
+        total_spend=("gross_sales_amount", "sum"),
+        total_orders=("order_number", "nunique"),
+        total_units=("quantity", "sum")
+    ).reset_index()
+
+    curr_cust = len(curr_summary)
+    curr_spend = curr_summary["total_spend"].sum() / curr_cust if curr_cust > 0 else 0
+    curr_freq = curr_summary["total_orders"].sum() / curr_cust if curr_cust > 0 else 0
+    curr_repeat_cnt = (curr_summary["total_orders"] > 1).sum()
+    curr_repeat_rate = (curr_repeat_cnt / curr_cust * 100) if curr_cust > 0 else 0
+
+    # --- Compute Previous Metrics ---
+    if not prev_df.empty:
+        prev_summary = prev_df.groupby("customer_key").agg(
             total_spend=("gross_sales_amount", "sum"),
-            total_orders=("order_number", "nunique"),
-            total_units=("quantity", "sum")
-        )
-        .reset_index()
-    )
+            total_orders=("order_number", "nunique")
+        ).reset_index()
 
-    total_active_cust = len(cust_summary)
-    total_revenue = cust_summary["total_spend"].sum()
-    total_orders = cust_summary["total_orders"].sum()
+        prev_cust = len(prev_summary)
+        prev_spend = prev_summary["total_spend"].sum() / prev_cust if prev_cust > 0 else 0
+        prev_freq = prev_summary["total_orders"].sum() / prev_cust if prev_cust > 0 else 0
+        prev_repeat_cnt = (prev_summary["total_orders"] > 1).sum()
+        prev_repeat_rate = (prev_repeat_cnt / prev_cust * 100) if prev_cust > 0 else 0
+    else:
+        prev_cust = prev_spend = prev_freq = prev_repeat_rate = 0
 
-    avg_spend = total_revenue / total_active_cust if total_active_cust > 0 else 0
-    avg_freq = total_orders / total_active_cust if total_active_cust > 0 else 0
+    # Generate dynamic soft badges matching overview.py styling
+    badge_cust = create_trend_badge(curr_cust, prev_cust)
+    badge_spend = create_trend_badge(curr_spend, prev_spend)
+    badge_freq = create_trend_badge(curr_freq, prev_freq)
+    badge_repeat = create_trend_badge(curr_repeat_rate, prev_repeat_rate)
 
-    repeat_customers = (cust_summary["total_orders"] > 1).sum()
-    repeat_rate = (repeat_customers / total_active_cust * 100) if total_active_cust > 0 else 0
+    # Tooltips
+    single_order_cust = curr_cust - curr_repeat_cnt
+    max_spend = curr_summary["total_spend"].max() if not curr_summary.empty else 0
+    median_spend = curr_summary["total_spend"].median() if not curr_summary.empty else 0
 
-    single_order_cust = total_active_cust - repeat_customers
-    max_spend = cust_summary["total_spend"].max() if not cust_summary.empty else 0
-    median_spend = cust_summary["total_spend"].median() if not cust_summary.empty else 0
-
-    tt_cust = [html.Div(f"• Single-Order Cust: {single_order_cust:,}", className="text-start"), html.Div(f"• Repeat Cust: {repeat_customers:,}", className="text-start")]
+    tt_cust = [html.Div(f"• Single-Order Cust: {single_order_cust:,}", className="text-start"), html.Div(f"• Repeat Cust: {curr_repeat_cnt:,}", className="text-start")]
     tt_spend = [html.Div(f"• Max Spend: ${max_spend:,.0f}", className="text-start"), html.Div(f"• Median Spend: ${median_spend:,.0f}", className="text-start")]
-    tt_freq = [html.Div(f"• Total Orders: {total_orders:,}", className="text-start"), html.Div(f"• Units/Cust: {(cust_summary['total_units'].sum()/total_active_cust):,.1f}", className="text-start")]
-    tt_repeat = [html.Div(f"• Repeat Count: {repeat_customers:,}", className="text-start"), html.Div(f"• Single Count: {single_order_cust:,}", className="text-start")]
+    tt_freq = [html.Div(f"• Total Orders: {curr_summary['total_orders'].sum():,}", className="text-start"), html.Div(f"• Units/Cust: {(curr_summary['total_units'].sum()/curr_cust):,.1f}", className="text-start")]
+    tt_repeat = [html.Div(f"• Repeat Count: {curr_repeat_cnt:,}", className="text-start"), html.Div(f"• Single Count: {single_order_cust:,}", className="text-start")]
 
     return (
-        f"{total_active_cust:,}",
-        f"${avg_spend:,.0f}",
-        f"{avg_freq:,.2f}",
-        f"{repeat_rate:.1f}%",
+        f"{curr_cust:,}",
+        f"${curr_spend:,.0f}",
+        f"{curr_freq:,.2f}",
+        f"{curr_repeat_rate:.1f}%",
+        badge_cust,
+        badge_spend,
+        badge_freq,
+        badge_repeat,
         tt_cust,
         tt_spend,
         tt_freq,

@@ -117,3 +117,14 @@ body, html {
     font-size: 0.75rem;
     font-weight: 600;
 }
+
+/* Neutral/Secondary Pill */
+.badge-soft-secondary {
+    background-color: rgba(156, 163, 175, 0.15) !important;
+    color: #9ca3af !important;
+    border: 1px solid rgba(156, 163, 175, 0.3);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
