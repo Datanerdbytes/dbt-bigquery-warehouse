@@ -24,7 +24,7 @@ layout = html.Div(
                                     [
                                         dbc.Col(
                                             [
-                                                html.Label("Date Range", className="fw-bold text-muted-dark small mb-1"),
+                                                html.Label("Date Range", className="fw-bold text-light small mb-1"),
                                                 dcc.DatePickerRange(
                                                     id="date-picker-range",
                                                     min_date_allowed=min_data_date,
@@ -39,7 +39,7 @@ layout = html.Div(
                                         ),
                                         dbc.Col(
                                             [
-                                                html.Label("Product Category", className="fw-bold text-muted-dark small mb-1"),
+                                                html.Label("Product Category", className="fw-bold text-light small mb-1"),
                                                 dcc.Dropdown(
                                                     id="category-dropdown",
                                                     options=category_options,
@@ -51,7 +51,7 @@ layout = html.Div(
                                         ),
                                         dbc.Col(
                                             [
-                                                html.Label("Region", className="fw-bold text-muted-dark small mb-1"),
+                                                html.Label("Region", className="fw-bold text-light small mb-1"),
                                                 dcc.Dropdown(
                                                     id="country-dropdown",
                                                     options=country_options,
@@ -65,11 +65,11 @@ layout = html.Div(
                                     className="g-2 align-items-center"
                                 )
                             ],
-                            className="dark-card p-2 mb-3"
+                            className="dark-card p-3 rounded shadow-sm mb-3"
                         ),
                         width=12
                     ),
-                    className="sticky-filter-bar p-3 mb-4 rounded-3"
+                    className="sticky-filter-bar"
                 ),
 
                 # Row 2: KPI Cards
@@ -80,23 +80,23 @@ layout = html.Div(
                                 [
                                     html.Div(
                                         [
-                                            html.H6("TOTAL SALES", className="text-muted-dark fw-bold mb-1 small"),
-                                            html.Span("•••", className="text-muted-dark small cursor-pointer")
+                                            html.H6("TOTAL SALES", className="text-secondary fw-bold mb-1 small"),
+                                            html.Span("•••", className="text-muted small cursor-pointer")
                                         ],
                                         className="d-flex justify-content-between align-items-center"
                                     ),
                                     html.Div(
                                         [
-                                            html.H3(id="kpi-sales-value", className="text-white-heading fw-bold mb-0 me-2 d-inline-block"),
+                                            html.H3(id="kpi-sales-value", className="text-white fw-bold mb-0 me-2 d-inline-block"),
                                             html.Span(id="kpi-sales-badge", className="d-inline-block align-middle")
                                         ]
                                     ),
-                                    dbc.Tooltip(id="kpi-sales-tooltip", target="kpi-sales-card", placement="top")
+                                    dbc.Tooltip(id="kpi-sales-tooltip", target="kpi-sales-card", placement="bottom")
                                 ],
                                 id="kpi-sales-card",
-                                className="dark-card p-3 cursor-pointer"
+                                className="dark-card p-3 rounded shadow-sm cursor-pointer"
                             ),
-                            width=3
+                            width=12, sm=6, md=3
                         ),
 
                         dbc.Col(
@@ -104,23 +104,23 @@ layout = html.Div(
                                 [
                                     html.Div(
                                         [
-                                            html.H6("TOTAL ORDERS", className="text-muted-dark fw-bold mb-1 small"),
-                                            html.Span("•••", className="text-muted-dark small cursor-pointer")
+                                            html.H6("TOTAL ORDERS", className="text-secondary fw-bold mb-1 small"),
+                                            html.Span("•••", className="text-muted small cursor-pointer")
                                         ],
                                         className="d-flex justify-content-between align-items-center"
                                     ),
                                     html.Div(
                                         [
-                                            html.H3(id="kpi-orders-value", className="text-white-heading fw-bold mb-0 me-2 d-inline-block"),
+                                            html.H3(id="kpi-orders-value", className="text-white fw-bold mb-0 me-2 d-inline-block"),
                                             html.Span(id="kpi-orders-badge", className="d-inline-block align-middle")
                                         ]
                                     ),
-                                    dbc.Tooltip(id="kpi-orders-tooltip", target="kpi-orders-card", placement="top")
+                                    dbc.Tooltip(id="kpi-orders-tooltip", target="kpi-orders-card", placement="bottom")
                                 ],
                                 id="kpi-orders-card",
-                                className="dark-card p-3 cursor-pointer"
+                                className="dark-card p-3 rounded shadow-sm cursor-pointer"
                             ),
-                            width=3
+                            width=12, sm=6, md=3
                         ),
 
                         dbc.Col(
@@ -128,25 +128,23 @@ layout = html.Div(
                                 [
                                     html.Div(
                                         [
-                                            html.H6("TOTAL QUANTITY", className="text-muted-dark fw-bold mb-1 small"),
-                                            html.Span("•••", className="text-muted-dark small cursor-pointer")
-
+                                            html.H6("TOTAL QUANTITY", className="text-secondary fw-bold mb-1 small"),
+                                            html.Span("•••", className="text-muted small cursor-pointer")
                                         ],
-                                         className="d-flex justify-content-between align-items-center"
+                                        className="d-flex justify-content-between align-items-center"
                                     ),
                                     html.Div(
                                         [   
-                                            html.H3(id="kpi-quantity-value", className="text-white-heading fw-bold mb-0 me-2 d-inline-block"),
+                                            html.H3(id="kpi-quantity-value", className="text-white fw-bold mb-0 me-2 d-inline-block"),
                                             html.Span(id="kpi-quantity-badge", className="d-inline-block align-middle")
                                         ]
                                     ),
-                                    dbc.Tooltip(id="kpi-quantity-tooltip", target="kpi-quantity-card", placement="top")
-
+                                    dbc.Tooltip(id="kpi-quantity-tooltip", target="kpi-quantity-card", placement="bottom")
                                 ],
                                 id="kpi-quantity-card",
-                                className="dark-card p-3 cursor-pointer"
+                                className="dark-card p-3 rounded shadow-sm cursor-pointer"
                             ),
-                            width=3
+                            width=12, sm=6, md=3
                         ),
 
                         dbc.Col(
@@ -154,23 +152,23 @@ layout = html.Div(
                                 [
                                     html.Div(
                                         [
-                                            html.H6("TOTAL CUSTOMERS", className="text-muted-dark fw-bold mb-1 small"),
-                                            html.Span("•••", className="text-muted-dark small cursor-pointer")
+                                            html.H6("TOTAL CUSTOMERS", className="text-secondary fw-bold mb-1 small"),
+                                            html.Span("•••", className="text-muted small cursor-pointer")
                                         ],
                                         className="d-flex justify-content-between align-items-center"
                                     ),
                                     html.Div(
                                         [
-                                            html.H3(id="kpi-customers-value", className="text-white-heading fw-bold mb-0 me-2 d-inline-block"),
+                                            html.H3(id="kpi-customers-value", className="text-white fw-bold mb-0 me-2 d-inline-block"),
                                             html.Span(id="kpi-customers-badge", className="d-inline-block align-middle")
                                         ]
                                     ),
-                                    dbc.Tooltip(id="kpi-customers-tooltip", target="kpi-customers-card", placement="top")
+                                    dbc.Tooltip(id="kpi-customers-tooltip", target="kpi-customers-card", placement="bottom")
                                 ],
                                 id="kpi-customers-card",
-                                className="dark-card p-3 cursor-pointer"
+                                className="dark-card p-3 rounded shadow-sm cursor-pointer"
                             ),
-                            width=3
+                            width=12, sm=6, md=3
                         ),
                     ],
                     className="g-2 mb-3"
@@ -180,28 +178,22 @@ layout = html.Div(
                 dbc.Row(
                     [
                         dbc.Col(
-                            dbc.Card(
-                                dbc.CardBody(
-                                    [
-                                        html.H5("Sales Revenue Performance", className="fw-bold text-white-heading mb-2"),
-                                        dcc.Graph(id="sales-trend-graph", config={"displayModeBar": False})
-                                    ],
-                                    className="p-3"
-                                ),
-                                className="dark-card border-0 mb-3"
+                            html.Div(
+                                [
+                                    html.H5("Sales Revenue Performance", className="fw-bold text-white mb-2"),
+                                    dcc.Graph(id="sales-trend-graph", config={"displayModeBar": False})
+                                ],
+                                className="dark-card p-3 rounded shadow-sm mb-3"
                             ),
                             width=12, lg=7
                         ),
                         dbc.Col(
-                            dbc.Card(
-                                dbc.CardBody(
-                                    [
-                                        html.H5("Revenue by Category", className="fw-bold text-white-heading mb-2"),
-                                        dcc.Graph(id="category-pie-graph", config={"displayModeBar": False})
-                                    ],
-                                    className="p-3"
-                                ),
-                                className="dark-card border-0 mb-3"
+                            html.Div(
+                                [
+                                    html.H5("Revenue by Category", className="fw-bold text-white mb-2"),
+                                    dcc.Graph(id="category-pie-graph", config={"displayModeBar": False})
+                                ],
+                                className="dark-card p-3 rounded shadow-sm mb-3"
                             ),
                             width=12, lg=5
                         )
@@ -212,35 +204,29 @@ layout = html.Div(
                 dbc.Row(
                     [
                         dbc.Col(
-                            dbc.Card(
-                                dbc.CardBody(
-                                    [
-                                        html.H5("Top 10 Products by Revenue", className="fw-bold text-white-heading mb-2"),
-                                        dcc.Graph(id="top-products-graph", config={"displayModeBar": False})
-                                    ],
-                                    className="p-3"
-                                ),
-                                className="dark-card border-0 mb-3"
+                            html.Div(
+                                [
+                                    html.H5("Top 10 Products by Revenue", className="fw-bold text-white mb-2"),
+                                    dcc.Graph(id="top-products-graph", config={"displayModeBar": False})
+                                ],
+                                className="dark-card p-3 rounded shadow-sm mb-3"
                             ),
                             width=12, lg=6
                         ),
                         dbc.Col(
-                            dbc.Card(
-                                dbc.CardBody(
-                                    [
-                                        html.H5("Regional Revenue Breakdown", className="fw-bold text-white-heading mb-2"),
-                                        dcc.Graph(id="regional-sales-graph", config={"displayModeBar": False})
-                                    ],
-                                    className="p-3"
-                                ),
-                                className="dark-card border-0 mb-3"
+                            html.Div(
+                                [
+                                    html.H5("Regional Revenue Breakdown", className="fw-bold text-white mb-2"),
+                                    dcc.Graph(id="regional-sales-graph", config={"displayModeBar": False})
+                                ],
+                                className="dark-card p-3 rounded shadow-sm mb-3"
                             ),
                             width=12, lg=6
                         )
                     ]
                 )
             ],
-            fluid=False
+            fluid=True
         ),
 
         # Modal
