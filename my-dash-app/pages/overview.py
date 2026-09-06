@@ -595,7 +595,6 @@ def update_regional_sales(start_date, end_date, selected_category, selected_coun
 
     return fig
 
-
 # --- MODAL CALLBACK ---
 @callback(
     [
@@ -616,6 +615,8 @@ def update_regional_sales(start_date, end_date, selected_category, selected_coun
     ],
     prevent_initial_call=True
 )
+
+
 def toggle_product_modal(clickData, close_clicks, start_date, end_date, selected_category, selected_country):
     ctx = callback_context
     if not ctx.triggered:
@@ -629,7 +630,6 @@ def toggle_product_modal(clickData, close_clicks, start_date, end_date, selected
     if trigger_id == "top-products-graph" and clickData:
         product_name = clickData["points"][0]["y"]
 
-        # Reuse filter_dataframe and then narrow down to the target product
         filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
         product_df = filtered_df.loc[filtered_df["product_name"] == product_name].copy()
 
@@ -640,11 +640,12 @@ def toggle_product_modal(clickData, close_clicks, start_date, end_date, selected
         total_qty = product_df["quantity"].sum()
         total_orders = product_df["order_number"].nunique()
 
+        # KPI Summary Card with Dark Styling
         kpi_summary = dbc.Row([
-            dbc.Col(html.Div([html.Small("Revenue", className="text-muted d-block text-uppercase fw-semibold"), html.Strong(f"${total_rev:,.0f}", className="fs-5")]), width=4),
-            dbc.Col(html.Div([html.Small("Units Sold", className="text-muted d-block text-uppercase fw-semibold"), html.Strong(f"{total_qty:,}", className="fs-5")]), width=4),
-            dbc.Col(html.Div([html.Small("Total Orders", className="text-muted d-block text-uppercase fw-semibold"), html.Strong(f"{total_orders:,}", className="fs-5")]), width=4),
-        ], className="bg-light p-3 rounded mb-3 text-center border")
+            dbc.Col(html.Div([html.Small("Revenue", className="text-muted d-block text-uppercase fw-semibold"), html.Strong(f"${total_rev:,.0f}", className="fs-5 text-white")]), width=4),
+            dbc.Col(html.Div([html.Small("Units Sold", className="text-muted d-block text-uppercase fw-semibold"), html.Strong(f"{total_qty:,}", className="fs-5 text-white")]), width=4),
+            dbc.Col(html.Div([html.Small("Total Orders", className="text-muted d-block text-uppercase fw-semibold"), html.Strong(f"{total_orders:,}", className="fs-5 text-white")]), width=4),
+        ], className="dark-card p-3 rounded mb-3 text-center border")
 
         records_df = (
             product_df[["order_number", "order_date", "first_name", "last_name", "country", "quantity", "gross_sales_amount"]]
@@ -654,6 +655,7 @@ def toggle_product_modal(clickData, close_clicks, start_date, end_date, selected
         records_df["customer_name"] = records_df["first_name"].fillna('') + " " + records_df["last_name"].fillna('')
         records_df["order_date"] = records_df["order_date"].dt.strftime("%Y-%m-%d")
 
+        # Dark Themed DataTable
         detail_table = dash_table.DataTable(
             data=records_df.to_dict("records"),
             columns=[
@@ -666,8 +668,21 @@ def toggle_product_modal(clickData, close_clicks, start_date, end_date, selected
             ],
             page_size=8,
             style_table={"overflowX": "auto"},
-            style_header={"backgroundColor": "#f8f9fa", "fontWeight": "bold", "color": "#2c3e50", "textAlign": "left"},
-            style_cell={"padding": "10px 14px", "fontSize": "0.85rem", "fontFamily": "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", "textAlign": "left"},
+            style_header={
+                "backgroundColor": "#1f2937",
+                "fontWeight": "bold",
+                "color": "#f3f4f6",
+                "border": "1px solid #374151",
+                "textAlign": "left"
+            },
+            style_cell={
+                "backgroundColor": "#111827",
+                "color": "#9ca3af",
+                "border": "1px solid #1f2937",
+                "padding": "8px 12px",
+                "fontSize": "0.85rem",
+                "textAlign": "left"
+            },
             style_cell_conditional=[
                 {"if": {"column_id": "quantity"}, "textAlign": "right"},
                 {"if": {"column_id": "gross_sales_amount"}, "textAlign": "right"},
@@ -676,7 +691,9 @@ def toggle_product_modal(clickData, close_clicks, start_date, end_date, selected
                 {"if": {"column_id": "quantity"}, "textAlign": "right"},
                 {"if": {"column_id": "gross_sales_amount"}, "textAlign": "right"},
             ],
-            style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "#fcfcfc"}]
+            style_data_conditional=[
+                {"if": {"row_index": "odd"}, "backgroundColor": "#182232"}
+            ]
         )
 
         return True, f"Product Details: {product_name}", kpi_summary, detail_table
