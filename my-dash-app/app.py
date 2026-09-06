@@ -1,33 +1,28 @@
 import dash
 from dash import Dash, html
 import dash_bootstrap_components as dbc
+from components.sidebar import create_sidebar
 
-# Initialize the Multi-Page Dash App
 app = Dash(
     __name__,
     use_pages=True,
-    external_stylesheets=[dbc.themes.FLATLY],
+    external_stylesheets=[
+        dbc.themes.DARKLY,
+        dbc.icons.BOOTSTRAP  # Required for Bootstrap navigation icons
+    ],
     suppress_callback_exceptions=True
 )
 
-# Shared Navigation Bar
-navbar = dbc.NavbarSimple(
-    children=[
-        dbc.NavItem(dbc.NavLink("Product Overview", href="/", active="exact")),
-        dbc.NavItem(dbc.NavLink("Customer 360", href="/customers", active="exact")),
+app.layout = html.Div(
+    [
+        create_sidebar(),
+        html.Div(
+            dash.page_container,
+            className="main-content-wrapper"
+        )
     ],
-    brand="Enterprise Insights",
-    brand_href="/",
-    color="primary",
-    dark=True,
-    className="shadow-sm"
+    className="d-flex app-wrapper"
 )
-
-# Root App Layout
-app.layout = html.Div([
-    navbar,
-    html.Div(dash.page_container) # Edge-to-edge wrapper
-])
 
 if __name__ == "__main__":
     app.run(debug=True)
