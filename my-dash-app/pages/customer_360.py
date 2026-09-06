@@ -73,8 +73,6 @@ layout = html.Div(
                     ),
                     className="sticky-filter-bar"
                 ),
-
-                # Row 2: KPI Cards
                 # Row 2: KPI Cards
             dbc.Row(
                 [
@@ -156,7 +154,7 @@ layout = html.Div(
                         dbc.Col(
                             html.Div(
                                 [
-                                    html.H5("Customer RFM Segmentation", className="text-secondary fw-bold mb-1 small"),
+                                    html.H5("Customer RFM Segmentation", className="fw-bold text-light mb-2"),
                                     dcc.Graph(id="c360-rfm-segment-graph", config={"displayModeBar": False})
                                 ],
                                 className="dark-card p-3 rounded shadow-sm mb-3"
@@ -166,7 +164,7 @@ layout = html.Div(
                         dbc.Col(
                             html.Div(
                                 [
-                                    html.H5("Customer Spend Distribution (CLV)", className="fw-bold text-white mb-2"),
+                                    html.H5("Customer Spend Distribution (CLV)", className="fw-bold text-light mb-2"),
                                     dcc.Graph(id="c360-spend-dist-graph", config={"displayModeBar": False})
                                 ],
                                 className="dark-card p-3 rounded shadow-sm mb-3"
