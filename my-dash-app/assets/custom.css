@@ -86,7 +86,8 @@
     padding-top: 10px;
     padding-bottom: 5px;
 
-    border-bottom: 1px solid #1f2937;
+    /* Optional: Add a subtle bottom border to separate it from KPI cards */
+    /* border-bottom: 1px solid #1f2937; */
 }
 
 /* 1. Flush Top Layout Reset */
