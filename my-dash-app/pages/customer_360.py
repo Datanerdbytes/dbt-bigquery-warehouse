@@ -3,6 +3,7 @@ from dash import html, dcc, callback, Input, Output, dash_table
 import dash_bootstrap_components as dbc
 import plotly.express as px
 import pandas as pd
+from utils.helpers import create_trend_badge, filter_dataframe
 from data_loader import load_and_prep_data
 
 # Register Page
@@ -205,37 +206,6 @@ layout = html.Div(
         )
     ]
 )
-
-
-def filter_dataframe(df, start_date, end_date, selected_category, selected_country):
-    if not start_date or not end_date:
-        return df.iloc[0:0]
-
-    start_dt = pd.to_datetime(start_date)
-    end_dt = pd.to_datetime(end_date) + pd.Timedelta(days=1) - pd.Timedelta(nanoseconds=1)
-
-    mask = (df["order_date"] >= start_dt) & (df["order_date"] <= end_dt)
-
-    if selected_category and selected_category != "ALL":
-        mask = mask & (df["category"] == selected_category)
-
-    if selected_country and selected_country != "ALL":
-        mask = mask & (df["country"] == selected_country)
-
-    return df.loc[mask]
-
-def create_trend_badge(current_val, prev_val):
-    """Generates a dynamic HTML badge using custom CSS soft badge classes."""
-    if prev_val == 0 or pd.isna(prev_val) or pd.isna(current_val):
-        return html.Span("N/A", className="badge-soft-secondary")
-    
-    pct_change = ((current_val - prev_val) / abs(prev_val)) * 100
-    
-    if pct_change >= 0:
-        return html.Span(f"+{pct_change:.1f}% ↑", className="badge-soft-success")
-    else:
-        return html.Span(f"{pct_change:.1f}% ↓", className="badge-soft-danger")
-
 
 # --- KPI Callback ---
 @callback(

@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 from dash import Dash, html, dcc, callback, Input, Output, dash_table, State, callback_context
 import dash_bootstrap_components as dbc
+from utils.helpers import filter_dataframe, calculate_pop_badge
 from data_loader import load_and_prep_data
 
 # Unpack data and configuration variables
@@ -251,65 +252,6 @@ layout = html.Div(
         )
     ]
 )
-
-def calculate_pop_badge(full_df, date_col, metric_col, start_date, end_date, agg_type="sum", category=None, country=None):
-    if not start_date or not end_date or full_df.empty:
-        return html.Span("N/A", className="badge-soft-secondary")
-
-    # 1. Parse current date window
-    start = pd.to_datetime(start_date)
-    end = pd.to_datetime(end_date)
-    
-    # Calculate window length in days
-    period_days = (end - start).days + 1
-    
-    # 2. Derive prior period date range
-    prior_start = (start - pd.Timedelta(days=period_days)).strftime("%Y-%m-%d")
-    prior_end = (start - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-
-    # 3. Filter current and prior dataframes using your existing filter_dataframe function
-    curr_df = filter_dataframe(full_df, start_date, end_date, category, country)
-    prior_df = filter_dataframe(full_df, prior_start, prior_end, category, country)
-
-    # 4. Aggregations
-    if agg_type == "nunique":
-        curr_val = curr_df[metric_col].nunique() if not curr_df.empty else 0
-        prior_val = prior_df[metric_col].nunique() if not prior_df.empty else 0
-    else:
-        curr_val = curr_df[metric_col].sum() if not curr_df.empty else 0
-        prior_val = prior_df[metric_col].sum() if not prior_df.empty else 0
-
-    # Prevent division by zero
-    if prior_val == 0 or pd.isna(prior_val):
-        return html.Span("N/A", className="badge-soft-secondary")
-
-    # 5. Compute percentage change
-    pct_change = ((curr_val - prior_val) / prior_val) * 100
-
-    if pct_change >= 0:
-        return html.Span(f"+{pct_change:.1f}% ↑", className="badge-soft-success")
-    else:
-        return html.Span(f"{pct_change:.1f}% ↓", className="badge-soft-danger")
-    
-
-def filter_dataframe(df, start_date, end_date, selected_category, selected_country):
-    if not start_date or not end_date:
-        return df.iloc[0:0]
-
-    # Convert string inputs to Pandas Datetime with full end-of-day coverage
-    start_dt = pd.to_datetime(start_date)
-    end_dt = pd.to_datetime(end_date) + pd.Timedelta(days=1) - pd.Timedelta(nanoseconds=1)
-
-    mask = (df["order_date"] >= start_dt) & (df["order_date"] <= end_dt)
-
-    if selected_category and selected_category != "ALL":
-        mask = mask & (df["category"] == selected_category)
-
-    if selected_country and selected_country != "ALL":
-        mask = mask & (df["country"] == selected_country)
-
-    return df.loc[mask]
-
 
 # --- KPI CALLBACK ---
 @callback(
