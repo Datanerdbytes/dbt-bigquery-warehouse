@@ -1,0 +1,68 @@
+/* Base Theme & Layout Resets */
+html, body {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    background-color: #0b0f19 !important;
+    color: #94a3b8 !important;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Master App Layout Wrappers */
+.app-wrapper {
+    background-color: #0b0f19 !important;
+    min-height: 100vh;
+}
+
+.main-content-wrapper {
+    margin-left: 260px;
+    width: calc(100% - 260px);
+    max-width: calc(100% - 260px) !important;
+    min-height: 100vh;
+    background-color: #0b0f19 !important;
+    padding-top: 1.25rem !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+    overflow-x: hidden;
+}
+
+/* Dashboard Container & Grid Bleed Control */
+.dashboard-container {
+    padding: 0 !important;
+    background-color: #0b0f19;
+    min-height: 100vh;
+    margin-top: 0 !important;
+}
+
+.dashboard-container .row {
+    margin-left: -0.75rem !important;
+    margin-right: -0.75rem !important;
+}
+
+/* Strip padding from outer grid edges */
+.dashboard-container .row > [class*="col-"]:first-child {
+    padding-left: 0 !important;
+}
+
+.dashboard-container .row > [class*="col-"]:last-child {
+    padding-right: 0 !important;
+}
+
+/* Common Dark Card Base */
+.dark-card {
+    background-color: #111827 !important;
+    border: 1px solid #1f2937 !important;
+    border-radius: 12px !important;
+}
+
+/* Shared Typography Utility Classes */
+.text-white-heading {
+    color: #f8fafc !important;
+}
+
+.text-muted-dark {
+    color: #64748b !important;
+}
+
+.fs-7 {
+    font-size: 0.75rem;
+}

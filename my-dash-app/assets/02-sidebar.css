@@ -1,0 +1,62 @@
+/* Sidebar Fixed Container */
+.sidebar-container {
+    width: 260px;
+    min-width: 260px;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    background-color: #111827 !important;
+    border-right: 1px solid #1f2937 !important;
+    z-index: 1030;
+    overflow-y: auto;
+}
+
+/* Branding Icon */
+.brand-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #a855f7 0%, #6366f1 100%);
+}
+
+/* Sidebar Search Input */
+.sidebar-search-input {
+    background-color: #1f2937 !important;
+    border: 1px solid #374151 !important;
+    color: #f8fafc !important;
+    font-size: 0.85rem;
+}
+
+.sidebar-search-input::placeholder {
+    color: #64748b;
+}
+
+/* Navigation Links */
+.sidebar-link {
+    color: #94a3b8 !important;
+    text-decoration: none;
+    font-size: 0.88rem;
+    transition: all 0.2s ease-in-out;
+}
+
+.sidebar-link:hover {
+    color: #f8fafc !important;
+    background-color: #1f2937 !important;
+}
+
+.sidebar-link.active {
+    color: #ffffff !important;
+    background-color: rgba(168, 85, 247, 0.15) !important;
+    border-left: 3px solid #a855f7 !important;
+    font-weight: 600;
+}
+
+/* User Profile Avatar */
+.avatar-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 0.85rem;
+    background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%) !important;
+}

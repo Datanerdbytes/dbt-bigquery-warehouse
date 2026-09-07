@@ -1,0 +1,59 @@
+/* Sticky Filter Bar Wrapper */
+.sticky-filter-bar {
+    position: sticky;
+    top: 0;
+    z-index: 1020;
+    isolation: isolate;
+    background-color: #0b0f19;
+    padding-top: 10px;
+    padding-bottom: 5px;
+    width: 100% !important;
+}
+
+/* --- Dark Overrides for dcc.Dropdown --- */
+.Select-control {
+    background-color: #1f2937 !important;
+    border-color: #374151 !important;
+    color: #f8fafc !important;
+    border-radius: 8px !important;
+}
+
+.Select-value-label, 
+.Select-input input {
+    color: #f8fafc !important;
+}
+
+.Select-menu-outer {
+    background-color: #1f2937 !important;
+    border: 1px solid #374151 !important;
+    color: #f8fafc !important;
+}
+
+.VirtualizedSelectOption {
+    background-color: #1f2937 !important;
+    color: #f8fafc !important;
+}
+
+.VirtualizedSelectFocusedOption {
+    background-color: #374151 !important;
+    color: #ffffff !important;
+}
+
+/* --- Dark Overrides for dcc.DatePickerRange --- */
+.DateInput, 
+.DateInput_input {
+    background-color: #1f2937 !important;
+    color: #f8fafc !important;
+    border-radius: 6px !important;
+}
+
+.SingleDatePickerInput__withBorder, 
+.DateRangePickerInput__withBorder {
+    background-color: #1f2937 !important;
+    border: 1px solid #374151 !important;
+    border-radius: 8px !important;
+}
+
+.DateRangePickerInput_arrow_svg {
+    fill: #94a3b8 !important;
+}

@@ -1,0 +1,26 @@
+/* Modals Dark Theme */
+.modal-content {
+    background-color: #111827 !important;
+    border: 1px solid #1f2937 !important;
+    border-radius: 12px !important;
+}
+
+.modal-header, 
+.modal-footer {
+    border-color: #1f2937 !important;
+}
+
+.btn-close-white {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+/* Dash DataTable Pagination Controls */
+.dash-table-container .previous-page, 
+.dash-table-container .next-page,
+.dash-table-container .first-page,
+.dash-table-container .last-page {
+    background-color: #1f2937 !important;
+    color: #f8fafc !important;
+    border: 1px solid #374151 !important;
+    border-radius: 4px;
+}
