@@ -78,3 +78,26 @@ def calculate_pop_badge(full_df, date_col, metric_col, start_date, end_date, agg
         return html.Span(f"+{pct_change:.1f}% ↑", className="badge-soft-success")
     else:
         return html.Span(f"{pct_change:.1f}% ↓", className="badge-soft-danger")
+
+
+def format_compact_number(val, is_currency=False):
+    """
+    Abbreviates large numbers into readable compact formats ($1.42M, 438K, etc.)
+    """
+    if val is None or val == 0:
+        return "$0" if is_currency else "0"
+    
+    abs_val = abs(val)
+    prefix = "$" if is_currency else ""
+    sign = "-" if val < 0 else ""
+
+    if abs_val >= 1_000_000_000:
+        return f"{sign}{prefix}{abs_val / 1_000_000_000:.2f}B"
+    elif abs_val >= 1_000_000:
+        return f"{sign}{prefix}{abs_val / 1_000_000:.2f}M"
+    elif abs_val >= 100_000:
+        return f"{sign}{prefix}{abs_val / 1_000:.1f}K"
+    elif is_currency:
+        return f"{sign}{prefix}{abs_val:,.0f}"
+    else:
+        return f"{sign}{abs_val:,}"

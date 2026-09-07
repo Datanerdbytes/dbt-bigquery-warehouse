@@ -2,7 +2,7 @@ import dash
 from dash import Dash, html
 import dash_bootstrap_components as dbc
 from components.sidebar import create_sidebar
-from components.header import create_header  # <-- Import Header
+from components.header import create_header  
 
 # Initialize the Multi-Page Dash App
 app = Dash(

@@ -3,8 +3,10 @@ import pandas as pd
 import plotly.express as px
 from dash import Dash, html, dcc, callback, Input, Output, dash_table, State, callback_context
 import dash_bootstrap_components as dbc
-from utils.helpers import filter_dataframe, calculate_pop_badge
+from utils.helpers import filter_dataframe, calculate_pop_badge, format_compact_number
 from data_loader import load_and_prep_data
+from components.kpi_bar import create_kpi_bar
+from components.filter_bar import create_filter_bar
 
 # Unpack data and configuration variables
 df_merged, min_data_date, max_data_date, category_options, country_options = load_and_prep_data()
@@ -16,164 +18,16 @@ layout = html.Div(
     children=[
         dbc.Container(
             [
-                # Row 1: Filter Control Bar
-                dbc.Row(
-                    dbc.Col(
-                        html.Div(
-                            [
-                                dbc.Row(
-                                    [
-                                        dbc.Col(
-                                            [
-                                                html.Label("Date Range", className="fw-bold text-light small mb-1"),
-                                                dcc.DatePickerRange(
-                                                    id="date-picker-range",
-                                                    min_date_allowed=min_data_date,
-                                                    max_date_allowed=max_data_date,
-                                                    start_date=min_data_date,
-                                                    end_date=max_data_date,
-                                                    display_format="YYYY-MM-DD",
-                                                    className="w-100",
-                                                ),
-                                            ],
-                                            width=12, md=4
-                                        ),
-                                        dbc.Col(
-                                            [
-                                                html.Label("Product Category", className="fw-bold text-light small mb-1"),
-                                                dcc.Dropdown(
-                                                    id="category-dropdown",
-                                                    options=category_options,
-                                                    value="ALL",
-                                                    clearable=False,
-                                                ),
-                                            ],
-                                            width=12, md=4
-                                        ),
-                                        dbc.Col(
-                                            [
-                                                html.Label("Region", className="fw-bold text-light small mb-1"),
-                                                dcc.Dropdown(
-                                                    id="country-dropdown",
-                                                    options=country_options,
-                                                    value="ALL",
-                                                    clearable=False,
-                                                ),
-                                            ],
-                                            width=12, md=4
-                                        ),
-                                    ],
-                                    className="g-2 align-items-center"
-                                )
-                            ],
-                            className="dark-card p-3 rounded shadow-sm mb-3"
-                        ),
-                        width=12
-                    ),
-                    className="sticky-filter-bar"
-                ),
+                # 1. Filter Control Bar
+                create_filter_bar(df_merged),
 
-                # Row 2: KPI Cards
-                dbc.Row(
-                    [   
-                        dbc.Col(
-                            html.Div(
-                                [
-                                    html.Div(
-                                        [
-                                            html.H6("TOTAL SALES", className="text-secondary fw-bold mb-1 small"),
-                                            html.Span("•••", className="text-muted small cursor-pointer")
-                                        ],
-                                        className="d-flex justify-content-between align-items-center"
-                                    ),
-                                    html.Div(
-                                        [
-                                            html.H3(id="kpi-sales-value", className="text-white fw-bold mb-0 me-2 d-inline-block"),
-                                            html.Span(id="kpi-sales-badge", className="d-inline-block align-middle")
-                                        ]
-                                    ),
-                                    dbc.Tooltip(id="kpi-sales-tooltip", target="kpi-sales-card", placement="bottom")
-                                ],
-                                id="kpi-sales-card",
-                                className="dark-card p-3 rounded shadow-sm cursor-pointer"
-                            ),
-                            width=12, sm=6, md=3
-                        ),
-
-                        dbc.Col(
-                            html.Div(
-                                [
-                                    html.Div(
-                                        [
-                                            html.H6("TOTAL ORDERS", className="text-secondary fw-bold mb-1 small"),
-                                            html.Span("•••", className="text-muted small cursor-pointer")
-                                        ],
-                                        className="d-flex justify-content-between align-items-center"
-                                    ),
-                                    html.Div(
-                                        [
-                                            html.H3(id="kpi-orders-value", className="text-white fw-bold mb-0 me-2 d-inline-block"),
-                                            html.Span(id="kpi-orders-badge", className="d-inline-block align-middle")
-                                        ]
-                                    ),
-                                    dbc.Tooltip(id="kpi-orders-tooltip", target="kpi-orders-card", placement="bottom")
-                                ],
-                                id="kpi-orders-card",
-                                className="dark-card p-3 rounded shadow-sm cursor-pointer"
-                            ),
-                            width=12, sm=6, md=3
-                        ),
-
-                        dbc.Col(
-                            html.Div(
-                                [
-                                    html.Div(
-                                        [
-                                            html.H6("TOTAL QUANTITY", className="text-secondary fw-bold mb-1 small"),
-                                            html.Span("•••", className="text-muted small cursor-pointer")
-                                        ],
-                                        className="d-flex justify-content-between align-items-center"
-                                    ),
-                                    html.Div(
-                                        [   
-                                            html.H3(id="kpi-quantity-value", className="text-white fw-bold mb-0 me-2 d-inline-block"),
-                                            html.Span(id="kpi-quantity-badge", className="d-inline-block align-middle")
-                                        ]
-                                    ),
-                                    dbc.Tooltip(id="kpi-quantity-tooltip", target="kpi-quantity-card", placement="bottom")
-                                ],
-                                id="kpi-quantity-card",
-                                className="dark-card p-3 rounded shadow-sm cursor-pointer"
-                            ),
-                            width=12, sm=6, md=3
-                        ),
-
-                        dbc.Col(
-                            html.Div(
-                                [
-                                    html.Div(
-                                        [
-                                            html.H6("TOTAL CUSTOMERS", className="text-secondary fw-bold mb-1 small"),
-                                            html.Span("•••", className="text-muted small cursor-pointer")
-                                        ],
-                                        className="d-flex justify-content-between align-items-center"
-                                    ),
-                                    html.Div(
-                                        [
-                                            html.H3(id="kpi-customers-value", className="text-white fw-bold mb-0 me-2 d-inline-block"),
-                                            html.Span(id="kpi-customers-badge", className="d-inline-block align-middle")
-                                        ]
-                                    ),
-                                    dbc.Tooltip(id="kpi-customers-tooltip", target="kpi-customers-card", placement="bottom")
-                                ],
-                                id="kpi-customers-card",
-                                className="dark-card p-3 rounded shadow-sm cursor-pointer"
-                            ),
-                            width=12, sm=6, md=3
-                        ),
-                    ],
-                    className="g-2 mb-3"
-                ),
+                # 2. KPI Cards Bar
+                create_kpi_bar([
+                    ("TOTAL SALES", "kpi-sales"),
+                    ("TOTAL ORDERS", "kpi-orders"),
+                    ("TOTAL QUANTITY", "kpi-quantity"),
+                    ("TOTAL CUSTOMERS", "kpi-customers"),
+                ]),
 
                 # Row 3: Visuals Row 1
                 dbc.Row(
@@ -198,7 +52,8 @@ layout = html.Div(
                             ),
                             width=12, lg=5
                         )
-                    ]
+                    ],
+                    className="g-3 mb-3"
                 ),
 
                 # Row 4: Visuals Row 2
@@ -224,10 +79,10 @@ layout = html.Div(
                             ),
                             width=12, lg=6
                         )
-                    ]
+                    ],
+                    className="g-3 mb-3"
                 )
-            ],
-            fluid=True
+            ]
         ),
 
         # Modal
@@ -295,11 +150,11 @@ def update_all_kpis(start_date, end_date, selected_category, selected_country):
     total_quantity = filtered_df["quantity"].sum()
     total_customers = filtered_df["customer_key"].nunique()
 
-    # Format values for display
-    sales_display = f"${total_sales:,.0f}"
-    orders_display = f"{total_orders:,}"
-    quantity_display = f"{total_quantity:,}"
-    customers_display = f"{total_customers:,}"
+    # Format values with compact abbreviations
+    sales_display = format_compact_number(total_sales, is_currency=True)  
+    orders_display = format_compact_number(total_orders, is_currency=False) 
+    quantity_display = format_compact_number(total_quantity, is_currency=False)
+    customers_display = format_compact_number(total_customers, is_currency=False)
 
     # 3. Compute Dynamic Period-over-Period Badges (Pass full df_merged to access prior dates)
     sales_badge = calculate_pop_badge(
