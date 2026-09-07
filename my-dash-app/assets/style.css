@@ -245,8 +245,6 @@ body {
 
 .sticky-filter-bar {
     width: 100% !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
 }
 
 /* Eliminate Bootstrap Row negative margin bleed */
@@ -286,23 +284,6 @@ body {
     font-size: 0.88rem;
     box-shadow: 0 4px 12px rgba(168, 85, 247, 0.25);
     transition: all 0.2s ease-in-out;
-}
-
-/* Fix Filter Bar Wrapper if it uses an internal container */
-.sticky-filter-bar,
-.filter-bar-container {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-}
-
-/* Force filter bar's outer dark card wrapper to fill the full width */
-.sticky-filter-bar > .dark-card,
-.sticky-filter-bar .row {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    width: 100% !important;
 }
 
 .export-btn:hover {

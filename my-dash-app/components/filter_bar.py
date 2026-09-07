@@ -29,10 +29,10 @@ def create_filter_bar(df_merged):
     max_date = df_merged[date_col].max()
 
     return html.Div(
-        [
-            dbc.Row(
-                [
-                    dbc.Col(
+        dbc.Row(
+            [
+                dbc.Col(
+                    html.Div(
                         [
                             html.Label("Date Range", className="text-muted small fw-bold mb-1 d-block"),
                             dcc.DatePickerRange(
@@ -46,9 +46,12 @@ def create_filter_bar(df_merged):
                                 className="w-100"
                             )
                         ],
-                        width=12, md=4
+                        className="dark-card p-3 rounded shadow-sm h-100"
                     ),
-                    dbc.Col(
+                    width=12, md=4
+                ),
+                dbc.Col(
+                    html.Div(
                         [
                             html.Label("Product Category", className="text-muted small fw-bold mb-1 d-block"),
                             dcc.Dropdown(
@@ -56,12 +59,15 @@ def create_filter_bar(df_merged):
                                 options=category_options,
                                 value="ALL",
                                 clearable=False,
-                                className="dark-dropdown"
+                                className="dark-dropdown w-100"
                             )
                         ],
-                        width=12, md=4
+                        className="dark-card p-3 rounded shadow-sm h-100"
                     ),
-                    dbc.Col(
+                    width=12, md=4
+                ),
+                dbc.Col(
+                    html.Div(
                         [
                             html.Label("Region", className="text-muted small fw-bold mb-1 d-block"),
                             dcc.Dropdown(
@@ -69,14 +75,15 @@ def create_filter_bar(df_merged):
                                 options=country_options,
                                 value="ALL",
                                 clearable=False,
-                                className="dark-dropdown"
+                                className="dark-dropdown w-100"
                             )
                         ],
-                        width=12, md=4
-                    )
-                ],
-                className="g-3"
-            )
-        ],
-        className="dark-card p-3 rounded shadow-sm sticky-filter-bar mb-4"
+                        className="dark-card p-3 rounded shadow-sm h-100"
+                    ),
+                    width=12, md=4
+                )
+            ],
+            className="g-2 mb-4"
+        ),
+        className="sticky-filter-bar"
     )
