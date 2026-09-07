@@ -2,28 +2,26 @@ import dash
 from dash import html, dcc
 import dash_bootstrap_components as dbc
 
-def create_filter_bar(df_merged):
-    # Detect the correct category column name dynamically
+def create_filter_bar(
+    df_merged,
+    date_picker_id,
+    category_dropdown_id,
+    country_dropdown_id
+):
+    # Detect category and country columns dynamically
     cat_col = next((c for c in ["category_name", "category", "product_category", "Category"] if c in df_merged.columns), None)
     country_col = next((c for c in ["country", "region", "Country", "Region"] if c in df_merged.columns), None)
 
-    # Build Category Options safely
+    # Build options
+    category_options = [{"label": "All Categories", "value": "ALL"}]
     if cat_col:
-        category_options = [{"label": "All Categories", "value": "ALL"}] + [
-            {"label": str(cat), "value": str(cat)} for cat in sorted(df_merged[cat_col].dropna().unique())
-        ]
-    else:
-        category_options = [{"label": "All Categories", "value": "ALL"}]
+        category_options += [{"label": str(cat), "value": str(cat)} for cat in sorted(df_merged[cat_col].dropna().unique())]
 
-    # Build Region Options safely
+    country_options = [{"label": "All Countries", "value": "ALL"}]
     if country_col:
-        country_options = [{"label": "All Countries", "value": "ALL"}] + [
-            {"label": str(country), "value": str(country)} for country in sorted(df_merged[country_col].dropna().unique())
-        ]
-    else:
-        country_options = [{"label": "All Countries", "value": "ALL"}]
+        country_options += [{"label": str(country), "value": str(country)} for country in sorted(df_merged[country_col].dropna().unique())]
 
-    # Default Date Range Boundaries
+    # Date range boundaries
     date_col = next((c for c in ["order_date", "OrderDate", "date"] if c in df_merged.columns), df_merged.columns[0])
     min_date = df_merged[date_col].min()
     max_date = df_merged[date_col].max()
@@ -36,7 +34,7 @@ def create_filter_bar(df_merged):
                         [
                             html.Label("Date Range", className="text-muted small fw-bold mb-1 d-block"),
                             dcc.DatePickerRange(
-                                id="date-picker-range",
+                                id=date_picker_id,
                                 min_date_allowed=min_date,
                                 max_date_allowed=max_date,
                                 initial_visible_month=min_date,
@@ -55,7 +53,7 @@ def create_filter_bar(df_merged):
                         [
                             html.Label("Product Category", className="text-muted small fw-bold mb-1 d-block"),
                             dcc.Dropdown(
-                                id="category-dropdown",
+                                id=category_dropdown_id,
                                 options=category_options,
                                 value="ALL",
                                 clearable=False,
@@ -71,7 +69,7 @@ def create_filter_bar(df_merged):
                         [
                             html.Label("Region", className="text-muted small fw-bold mb-1 d-block"),
                             dcc.Dropdown(
-                                id="country-dropdown",
+                                id=country_dropdown_id,
                                 options=country_options,
                                 value="ALL",
                                 clearable=False,
@@ -83,7 +81,7 @@ def create_filter_bar(df_merged):
                     width=12, md=4
                 )
             ],
-            className="g-2 mb-4"
+            className="g-2 mb-4"  # Accepts negative margins from .dashboard-container .row
         ),
-        className="sticky-filter-bar"
+        className="sticky-filter-bar"  # Sticky & z-index positioning wrapper
     )

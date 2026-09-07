@@ -19,8 +19,12 @@ layout = html.Div(
         dbc.Container(
             [
                 # 1. Filter Control Bar
-                create_filter_bar(df_merged),
-
+                create_filter_bar(
+                    df_merged,
+                    date_picker_id="date-picker-range",
+                    category_dropdown_id="category-dropdown",
+                    country_dropdown_id="country-dropdown"
+                ),
                 # 2. KPI Cards Bar
                 create_kpi_bar([
                     ("TOTAL SALES", "kpi-sales"),

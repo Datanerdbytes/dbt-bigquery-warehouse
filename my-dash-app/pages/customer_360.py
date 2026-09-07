@@ -3,8 +3,10 @@ from dash import html, dcc, callback, Input, Output, dash_table
 import dash_bootstrap_components as dbc
 import plotly.express as px
 import pandas as pd
-from utils.helpers import create_trend_badge, filter_dataframe
+from utils.helpers import create_trend_badge, filter_dataframe, format_compact_number
 from data_loader import load_and_prep_data
+from components.filter_bar import create_filter_bar
+from components.kpi_bar import create_kpi_bar
 
 # Register Page
 dash.register_page(__name__, path="/customers", name="Customer 360")
@@ -18,135 +20,19 @@ layout = html.Div(
         dbc.Container(
             [
                 # Row 1: Filter Control Bar
-                dbc.Row(
-                    dbc.Col(
-                        html.Div(
-                            [
-                                dbc.Row(
-                                    [
-                                        dbc.Col(
-                                            [
-                                                html.Label("Date Range", className="fw-bold text-light small mb-1"),
-                                                dcc.DatePickerRange(
-                                                    id="c360-date-picker",
-                                                    min_date_allowed=min_data_date,
-                                                    max_date_allowed=max_data_date,
-                                                    start_date=min_data_date,
-                                                    end_date=max_data_date,
-                                                    display_format="YYYY-MM-DD",
-                                                    className="w-100",
-                                                ),
-                                            ],
-                                            width=12, md=4
-                                        ),
-                                        dbc.Col(
-                                            [
-                                                html.Label("Product Category", className="fw-bold text-light small mb-1"),
-                                                dcc.Dropdown(
-                                                    id="c360-category-dropdown",
-                                                    options=category_options,
-                                                    value="ALL",
-                                                    clearable=False,
-                                                ),
-                                            ],
-                                            width=12, md=4
-                                        ),
-                                        dbc.Col(
-                                            [
-                                                html.Label("Region", className="fw-bold text-light small mb-1"),
-                                                dcc.Dropdown(
-                                                    id="c360-country-dropdown",
-                                                    options=country_options,
-                                                    value="ALL",
-                                                    clearable=False,
-                                                ),
-                                            ],
-                                            width=12, md=4
-                                        ),
-                                    ],
-                                    className="g-2 align-items-center"
-                                )
-                            ],
-                            className="dark-card p-3 rounded shadow-sm mb-3"
-                        ),
-                        width=12
-                    ),
-                    className="sticky-filter-bar"
+                create_filter_bar(
+                    df_merged,
+                    date_picker_id="c360-date-picker",
+                    category_dropdown_id="c360-category-dropdown",
+                    country_dropdown_id="c360-country-dropdown"
                 ),
                 # Row 2: KPI Cards
-            dbc.Row(
-                [
-                    dbc.Col(
-                        html.Div(
-                            [
-                                html.H6("ACTIVE CUSTOMERS", className="text-secondary fw-bold mb-1 small"),
-                                html.Div(
-                                    [
-                                        html.H3(id="c360-kpi-active-cust", className="text-white fw-bold mb-0 me-2 d-inline-block"),
-                                        html.Span(id="c360-badge-cust", className="d-inline-block align-middle")
-                                    ]
-                                ),
-                                dbc.Tooltip(id="c360-tooltip-cust", target="c360-card-cust", placement="bottom")
-                            ],
-                            id="c360-card-cust",
-                            className="dark-card p-3 border-start border-4 border-info rounded shadow-sm cursor-pointer"
-                        ),
-                        width=12, sm=6, md=3
-                    ),
-                    dbc.Col(
-                        html.Div(
-                            [
-                                html.H6("AVG SPEND / CUST (LTV)", className="text-secondary fw-bold mb-1 small"),
-                                html.Div(
-                                    [
-                                        html.H3(id="c360-kpi-avg-spend", className="text-white fw-bold mb-0 me-2 d-inline-block"),
-                                        html.Span(id="c360-badge-spend", className="d-inline-block align-middle")
-                                    ]
-                                ),
-                                dbc.Tooltip(id="c360-tooltip-spend", target="c360-card-spend", placement="bottom")
-                            ],
-                            id="c360-card-spend",
-                            className="dark-card p-3 border-start border-4 border-success rounded shadow-sm cursor-pointer"
-                        ),
-                        width=12, sm=6, md=3
-                    ),
-                    dbc.Col(
-                        html.Div(
-                            [
-                                html.H6("AVG ORDERS / CUST", className="text-secondary fw-bold mb-1 small"),
-                                html.Div(
-                                    [
-                                        html.H3(id="c360-kpi-avg-freq", className="text-white fw-bold mb-0 me-2 d-inline-block"),
-                                        html.Span(id="c360-badge-freq", className="d-inline-block align-middle")
-                                    ]
-                                ),
-                                dbc.Tooltip(id="c360-tooltip-freq", target="c360-card-freq", placement="bottom")
-                            ],
-                            id="c360-card-freq",
-                            className="dark-card p-3 border-start border-4 border-warning rounded shadow-sm cursor-pointer"
-                        ),
-                        width=12, sm=6, md=3
-                    ),
-                    dbc.Col(
-                        html.Div(
-                            [
-                                html.H6("REPEAT RATE", className="text-secondary fw-bold mb-1 small"),
-                                html.Div(
-                                    [
-                                        html.H3(id="c360-kpi-repeat-rate", className="text-white fw-bold mb-0 me-2 d-inline-block"),
-                                        html.Span(id="c360-badge-repeat", className="d-inline-block align-middle")
-                                    ]
-                                ),
-                                dbc.Tooltip(id="c360-tooltip-repeat", target="c360-card-repeat", placement="bottom")
-                            ],
-                            id="c360-card-repeat",
-                            className="dark-card p-3 border-start border-4 border-primary rounded shadow-sm cursor-pointer"
-                        ),
-                        width=12, sm=6, md=3
-                    ),
-                ],
-                className="g-2 mb-3"
-            ),
+                create_kpi_bar([
+                    ("ACTIVE CUSTOMERS", "c360-kpi-active-cust"),
+                    ("AVG SPEND / CUST", "c360-kpi-avg-spend"),
+                    ("AVG ORDER FREQ", "c360-kpi-avg-freq"),
+                    ("REPEAT RATE", "c360-kpi-repeat-rate"),
+                ]),
 
                 # Row 3: RFM Segmentation & Spend Distribution
                 dbc.Row(
@@ -208,18 +94,21 @@ layout = html.Div(
 # --- KPI Callback ---
 @callback(
     [
-        Output("c360-kpi-active-cust", "children"),
-        Output("c360-kpi-avg-spend", "children"),
-        Output("c360-kpi-avg-freq", "children"),
-        Output("c360-kpi-repeat-rate", "children"),
-        Output("c360-badge-cust", "children"),
-        Output("c360-badge-spend", "children"),
-        Output("c360-badge-freq", "children"),
-        Output("c360-badge-repeat", "children"),
-        Output("c360-tooltip-cust", "children"),
-        Output("c360-tooltip-spend", "children"),
-        Output("c360-tooltip-freq", "children"),
-        Output("c360-tooltip-repeat", "children"),
+        # Values (Main Numbers)
+        Output("c360-kpi-active-cust-value", "children"),
+        Output("c360-kpi-avg-spend-value", "children"),
+        Output("c360-kpi-avg-freq-value", "children"),
+        Output("c360-kpi-repeat-rate-value", "children"),
+        # Badges
+        Output("c360-kpi-active-cust-badge", "children"),
+        Output("c360-kpi-avg-spend-badge", "children"),
+        Output("c360-kpi-avg-freq-badge", "children"),
+        Output("c360-kpi-repeat-rate-badge", "children"),
+        # Tooltips
+        Output("c360-kpi-active-cust-tooltip", "children"),
+        Output("c360-kpi-avg-spend-tooltip", "children"),
+        Output("c360-kpi-avg-freq-tooltip", "children"),
+        Output("c360-kpi-repeat-rate-tooltip", "children"),
     ],
     [
         Input("c360-date-picker", "start_date"),
