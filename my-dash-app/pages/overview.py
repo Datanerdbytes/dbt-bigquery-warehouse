@@ -1,7 +1,7 @@
 import dash
 import pandas as pd
 import plotly.express as px
-from dash import Dash, html, dcc, callback, Input, Output, dash_table, State, callback_context
+from dash import Dash, html, dcc, callback, Input, Output, dash_table, State, callback_context, no_update
 import dash_bootstrap_components as dbc
 from utils.helpers import filter_dataframe, calculate_pop_badge, format_compact_number
 from data_loader import load_and_prep_data
@@ -9,108 +9,130 @@ from components.kpi_bar import create_kpi_bar
 from components.filter_bar import create_filter_bar
 
 # Unpack data and configuration variables
-df_merged, min_data_date, max_data_date, category_options, country_options = load_and_prep_data()
+
 
 dash.register_page(__name__, path="/", name="Product Overview")
 
-layout = html.Div(
-    className="dashboard-container py-3",
-    children=[
-        dbc.Container(
-            [
-                # 1. Filter Control Bar
-                create_filter_bar(
-                    df_merged,
-                    date_picker_id="date-picker-range",
-                    category_dropdown_id="category-dropdown",
-                    country_dropdown_id="country-dropdown"
-                ),
-                # 2. KPI Cards Bar
-                create_kpi_bar([
-                    ("TOTAL SALES", "kpi-sales"),
-                    ("TOTAL ORDERS", "kpi-orders"),
-                    ("TOTAL QUANTITY", "kpi-quantity"),
-                    ("TOTAL CUSTOMERS", "kpi-customers"),
-                ]),
+def layout():
+    # Calling cached load function inside the layout scope
+    df_merged, min_data_date, max_data_date, category_options, country_options = load_and_prep_data()
 
-                # Row 3: Visuals Row 1
-                dbc.Row(
-                    [
-                        dbc.Col(
-                            html.Div(
-                                [
-                                    html.H5("Sales Revenue Performance", className="fw-bold text-white mb-2"),
-                                    dcc.Graph(id="sales-trend-graph", config={"displayModeBar": False})
-                                ],
-                                className="dark-card p-3 rounded shadow-sm mb-3"
-                            ),
-                            width=12, lg=7
-                        ),
-                        dbc.Col(
-                            html.Div(
-                                [
-                                    html.H5("Revenue by Category", className="fw-bold text-white mb-2"),
-                                    dcc.Graph(id="category-pie-graph", config={"displayModeBar": False})
-                                ],
-                                className="dark-card p-3 rounded shadow-sm mb-3"
-                            ),
-                            width=12, lg=5
-                        )
-                    ],
-                    className="g-3 mb-3"
-                ),
+    return html.Div(
+        className="dashboard-container py-3",
+        children=[
+            dbc.Container(
+                [
+                    # 1. Filter Control Bar
+                    create_filter_bar(
+                        df_merged,
+                        date_picker_id="date-picker-range",
+                        category_dropdown_id="category-dropdown",
+                        country_dropdown_id="country-dropdown"
+                    ),
+                    # 2. KPI Cards Bar
+                    create_kpi_bar([
+                        ("TOTAL SALES", "kpi-sales"),
+                        ("TOTAL ORDERS", "kpi-orders"),
+                        ("TOTAL QUANTITY", "kpi-quantity"),
+                        ("TOTAL CUSTOMERS", "kpi-customers"),
+                    ]),
 
-                # Row 4: Visuals Row 2
-                dbc.Row(
-                    [
-                        dbc.Col(
-                            html.Div(
-                                [
-                                    html.H5("Top 10 Products by Revenue", className="fw-bold text-white mb-2"),
-                                    dcc.Graph(id="top-products-graph", config={"displayModeBar": False})
-                                ],
-                                className="dark-card p-3 rounded shadow-sm mb-3"
+                    # Row 3: Visuals Row 1
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.H5("Sales Revenue Performance", className="fw-bold text-white mb-2"),
+                                        dcc.Graph(id="sales-trend-graph", config={"displayModeBar": False})
+                                    ],
+                                    className="dark-card p-3 rounded shadow-sm mb-3"
+                                ),
+                                width=12, lg=7
                             ),
-                            width=12, lg=6
-                        ),
-                        dbc.Col(
-                            html.Div(
-                                [
-                                    html.H5("Regional Revenue Breakdown", className="fw-bold text-white mb-2"),
-                                    dcc.Graph(id="regional-sales-graph", config={"displayModeBar": False})
-                                ],
-                                className="dark-card p-3 rounded shadow-sm mb-3"
-                            ),
-                            width=12, lg=6
-                        )
-                    ],
-                    className="g-3 mb-3"
-                )
-            ]
-        ),
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.H5("Revenue by Category", className="fw-bold text-white mb-2"),
+                                        dcc.Graph(id="category-pie-graph", config={"displayModeBar": False})
+                                    ],
+                                    className="dark-card p-3 rounded shadow-sm mb-3"
+                                ),
+                                width=12, lg=5
+                            )
+                        ],
+                        className="g-3 mb-3"
+                    ),
 
-        # Modal
-        dbc.Modal(
-            [
-                dbc.ModalHeader(dbc.ModalTitle(id="modal-product-title", className="fw-bold")),
-                dbc.ModalBody(
-                    [
-                        html.Div(id="modal-product-kpis", className="mb-3"),
-                        html.H6("Recent Transactions", className="fw-bold text-muted mb-2"),
-                        html.Div(id="modal-product-table-container")
-                    ]
-                ),
-                dbc.ModalFooter(
-                    dbc.Button("Close", id="close-modal-btn", className="ms-auto", color="secondary")
-                ),
-            ],
-            id="product-detail-modal",
-            size="xl",
-            is_open=False,
-            centered=True
-        )
+                    # Row 4: Visuals Row 2
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.H5("Top 10 Products by Revenue", className="fw-bold text-white mb-2"),
+                                        dcc.Graph(id="top-products-graph", config={"displayModeBar": False})
+                                    ],
+                                    className="dark-card p-3 rounded shadow-sm mb-3"
+                                ),
+                                width=12, lg=6
+                            ),
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.H5("Regional Revenue Breakdown", className="fw-bold text-white mb-2"),
+                                        dcc.Graph(id="regional-sales-graph", config={"displayModeBar": False})
+                                    ],
+                                    className="dark-card p-3 rounded shadow-sm mb-3"
+                                ),
+                                width=12, lg=6
+                            )
+                        ],
+                        className="g-3 mb-3"
+                    )
+                ]
+            ),
+
+            # Modal
+            dbc.Modal(
+                [
+                    dbc.ModalHeader(dbc.ModalTitle(id="modal-product-title", className="fw-bold")),
+                    dbc.ModalBody(
+                        [
+                            html.Div(id="modal-product-kpis", className="mb-3"),
+                            html.H6("Recent Transactions", className="fw-bold text-muted mb-2"),
+                            html.Div(id="modal-product-table-container")
+                        ]
+                    ),
+                    dbc.ModalFooter(
+                        dbc.Button("Close", id="close-modal-btn", className="ms-auto", color="secondary")
+                    ),
+                ],
+                id="product-detail-modal",
+                size="xl",
+                is_open=False,
+                centered=True
+            )
+        ]
+    )
+
+# --- FILTER STORE SYNC CALLBACK ---
+@callback(
+    Output("global-filter-store", "data"),
+    [
+        Input("date-picker-range", "start_date"),
+        Input("date-picker-range", "end_date"),
+        Input("category-dropdown", "value"),
+        Input("country-dropdown", "value")
     ]
 )
+def update_filter_store(start_date, end_date, category, country):
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "category": category,
+        "country": country
+    }
 
 # --- KPI CALLBACK ---
 @callback(
@@ -128,14 +150,20 @@ layout = html.Div(
         Output("kpi-quantity-badge", "children"),
         Output("kpi-customers-badge", "children")
     ],
-    [
-        Input("date-picker-range", "start_date"),
-        Input("date-picker-range", "end_date"),
-        Input("category-dropdown", "value"),
-        Input("country-dropdown", "value")
-    ],
+   Input("global-filter-store", "data")
 )
-def update_all_kpis(start_date, end_date, selected_category, selected_country):
+
+def update_all_kpis(filter_data):
+    if not filter_data:
+        return (no_update,) * 12
+
+    start_date = filter_data.get("start_date")
+    end_date = filter_data.get("end_date")
+    selected_category = filter_data.get("category")
+    selected_country = filter_data.get("country")
+
+    # Retrieve cached dataset instantly from Flask-Caching
+    df_merged, _, _, _, _ = load_and_prep_data()
     filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
 
     # 1. Handle Empty DataFrame Case (Must return 12 outputs to match decorator)
@@ -232,14 +260,18 @@ def update_all_kpis(start_date, end_date, selected_category, selected_country):
 # --- CHART 1 CALLBACK: Sales Revenue Trend ---
 @callback(
     Output("sales-trend-graph", "figure"),
-    [
-        Input("date-picker-range", "start_date"),
-        Input("date-picker-range", "end_date"),
-        Input("category-dropdown", "value"),
-        Input("country-dropdown", "value")
-    ],
+    Input("global-filter-store", "data")
 )
-def update_sales_trend(start_date, end_date, selected_category, selected_country):
+def update_sales_trend(filter_data):
+    if not filter_data:
+        return no_update
+
+    start_date = filter_data.get("start_date")
+    end_date = filter_data.get("end_date")
+    selected_category = filter_data.get("category")
+    selected_country = filter_data.get("country")
+
+    df_merged, _, _, _, _ = load_and_prep_data()
     filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
 
     if filtered_df.empty:
@@ -290,18 +322,22 @@ def update_sales_trend(start_date, end_date, selected_category, selected_country
 # --- CHART 2 CALLBACK: Revenue by Product Category ---
 @callback(
     Output("category-pie-graph", "figure"),
-    [
-        Input("date-picker-range", "start_date"),
-        Input("date-picker-range", "end_date"),
-        Input("category-dropdown", "value"),
-        Input("country-dropdown", "value")
-    ],
+    Input("global-filter-store", "data")
 )
-def update_category_pie(start_date, end_date, selected_category, selected_country):
+def update_category_pie(filter_data):
+    if not filter_data:
+        return no_update
+
+    start_date = filter_data.get("start_date")
+    end_date = filter_data.get("end_date")
+    selected_category = filter_data.get("category")
+    selected_country = filter_data.get("country")
+
+    df_merged, _, _, _, _ = load_and_prep_data()
     filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
 
     if filtered_df.empty:
-        return px.pie()
+        return px.pie(title="No data for selected period")
 
     cat_df = (
         filtered_df.groupby("category")["gross_sales_amount"]
@@ -342,18 +378,22 @@ def update_category_pie(start_date, end_date, selected_category, selected_countr
 # --- CHART 3 CALLBACK: Top 10 Products by Revenue ---
 @callback(
     Output("top-products-graph", "figure"),
-    [
-        Input("date-picker-range", "start_date"),
-        Input("date-picker-range", "end_date"),
-        Input("category-dropdown", "value"),
-        Input("country-dropdown", "value"),
-    ],
+    Input("global-filter-store", "data")
 )
-def update_top_products(start_date, end_date, selected_category, selected_country):
+def update_top_products(filter_data):
+    if not filter_data:
+        return no_update
+
+    start_date = filter_data.get("start_date")
+    end_date = filter_data.get("end_date")
+    selected_category = filter_data.get("category")
+    selected_country = filter_data.get("country")
+
+    df_merged, _, _, _, _ = load_and_prep_data()
     filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
 
     if filtered_df.empty:
-        return px.bar()
+        return px.bar(title="No data for selected period")
 
     top_products_df = (
         filtered_df.groupby("product_name")["gross_sales_amount"]
@@ -400,18 +440,22 @@ def update_top_products(start_date, end_date, selected_category, selected_countr
 # --- CHART 4 CALLBACK: Regional Revenue Breakdown ---
 @callback(
     Output("regional-sales-graph", "figure"),
-    [
-        Input("date-picker-range", "start_date"),
-        Input("date-picker-range", "end_date"),
-        Input("category-dropdown", "value"),
-        Input("country-dropdown", "value"),
-    ],
+    Input("global-filter-store", "data")
 )
-def update_regional_sales(start_date, end_date, selected_category, selected_country):
+def update_regional_sales(filter_data):
+    if not filter_data:
+        return no_update
+
+    start_date = filter_data.get("start_date")
+    end_date = filter_data.get("end_date")
+    selected_category = filter_data.get("category")
+    selected_country = filter_data.get("country")
+
+    df_merged, _, _, _, _ = load_and_prep_data()
     filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
 
     if filtered_df.empty:
-        return px.bar()
+        return px.bar(title="No data for selected period")
 
     region_df = (
         filtered_df.groupby("country")["gross_sales_amount"]
@@ -467,16 +511,13 @@ def update_regional_sales(start_date, end_date, selected_category, selected_coun
         Input("close-modal-btn", "n_clicks")
     ],
     [
-        State("date-picker-range", "start_date"),
-        State("date-picker-range", "end_date"),
-        State("category-dropdown", "value"),
-        State("country-dropdown", "value")
+        State("global-filter-store", "data")
     ],
     prevent_initial_call=True
 )
 
 
-def toggle_product_modal(clickData, close_clicks, start_date, end_date, selected_category, selected_country):
+def toggle_product_modal(clickData, close_clicks, filter_data):
     ctx = callback_context
     if not ctx.triggered:
         return False, "", None, None
@@ -489,6 +530,16 @@ def toggle_product_modal(clickData, close_clicks, start_date, end_date, selected
     if trigger_id == "top-products-graph" and clickData:
         product_name = clickData["points"][0]["y"]
 
+        # Safely unpack stored filter state
+        filter_data = filter_data or {}
+        start_date = filter_data.get("start_date")
+        end_date = filter_data.get("end_date")
+        selected_category = filter_data.get("category")
+        selected_country = filter_data.get("country")
+
+        
+        # Pull server-cached dataset and apply filter parameters
+        df_merged, _, _, _, _ = load_and_prep_data()
         filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
         product_df = filtered_df.loc[filtered_df["product_name"] == product_name].copy()
 

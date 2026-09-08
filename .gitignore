@@ -16,3 +16,6 @@ gcp-key.json
 
 # dbt target directory
 **/target/
+
+# Dash app
+cache-directory/

@@ -2,8 +2,9 @@ import os
 from dotenv import load_dotenv
 from google.cloud import bigquery
 import pandas as pd
+from utils.cache import cache
 
-
+@cache.memoize()
 def load_and_prep_data():
     load_dotenv()
 

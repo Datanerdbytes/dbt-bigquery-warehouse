@@ -11,10 +11,11 @@ from components.kpi_bar import create_kpi_bar
 # Register Page
 dash.register_page(__name__, path="/customers", name="Customer 360")
 
-# Fetch prepped data
-df_merged, min_data_date, max_data_date, category_options, country_options = load_and_prep_data()
+def layout():
+    # Load cached options inside layout function to build initial dropdowns dynamically
+    df_merged, min_data_date, max_data_date, category_options, country_options = load_and_prep_data()
 
-layout = html.Div(
+    return html.Div(
     className="dashboard-container py-3",
     children=[
         dbc.Container(
@@ -91,6 +92,25 @@ layout = html.Div(
     ]
 )
 
+# --- FILTER STORE SYNC CALLBACK ---
+@callback(
+    Output("global-filter-store", "data", allow_duplicate=True),
+    [
+        Input("c360-date-picker", "start_date"),
+        Input("c360-date-picker", "end_date"),
+        Input("c360-category-dropdown", "value"),
+        Input("c360-country-dropdown", "value"),
+    ],
+    prevent_initial_call=True
+)
+def sync_c360_filters_to_store(start_date, end_date, category, country):
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "category": category,
+        "country": country
+    }
+
 # --- KPI Callback ---
 @callback(
     [
@@ -110,18 +130,23 @@ layout = html.Div(
         Output("c360-kpi-avg-freq-tooltip", "children"),
         Output("c360-kpi-repeat-rate-tooltip", "children"),
     ],
-    [
-        Input("c360-date-picker", "start_date"),
-        Input("c360-date-picker", "end_date"),
-        Input("c360-category-dropdown", "value"),
-        Input("c360-country-dropdown", "value"),
-    ],
+    Input("global-filter-store", "data")
 )
-def update_customer_kpis(start_date, end_date, selected_category, selected_country):
+def update_customer_kpis(filter_data):
     empty_badge = dbc.Badge("N/A", color="secondary", className="small")
+
+    if not filter_data:
+        return "0", "$0", "0.00", "0%", empty_badge, empty_badge, empty_badge, empty_badge, "", "", "", ""
+
+    start_date = filter_data.get("start_date")
+    end_date = filter_data.get("end_date")
+    selected_category = filter_data.get("category")
+    selected_country = filter_data.get("country")
 
     if not start_date or not end_date:
         return "0", "$0", "0.00", "0%", empty_badge, empty_badge, empty_badge, empty_badge, "", "", "", ""
+
+    df_merged, _, _, _, _ = load_and_prep_data()
 
     # Parse current period dates
     curr_start = pd.to_datetime(start_date)
@@ -202,14 +227,18 @@ def update_customer_kpis(start_date, end_date, selected_category, selected_count
 # --- Visual 1: RFM Segmentation ---
 @callback(
     Output("c360-rfm-segment-graph", "figure"),
-    [
-        Input("c360-date-picker", "start_date"),
-        Input("c360-date-picker", "end_date"),
-        Input("c360-category-dropdown", "value"),
-        Input("c360-country-dropdown", "value"),
-    ],
+    Input("global-filter-store", "data")
 )
-def update_rfm_segments(start_date, end_date, selected_category, selected_country):
+def update_rfm_segments(filter_data):
+    if not filter_data:
+        return px.bar(title="No Data")
+
+    start_date = filter_data.get("start_date")
+    end_date = filter_data.get("end_date")
+    selected_category = filter_data.get("category")
+    selected_country = filter_data.get("country")
+
+    df_merged, _, _, _, _ = load_and_prep_data()
     filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
 
     if filtered_df.empty:
@@ -275,14 +304,18 @@ def update_rfm_segments(start_date, end_date, selected_category, selected_countr
 # --- Visual 2: Spend Distribution ---
 @callback(
     Output("c360-spend-dist-graph", "figure"),
-    [
-        Input("c360-date-picker", "start_date"),
-        Input("c360-date-picker", "end_date"),
-        Input("c360-category-dropdown", "value"),
-        Input("c360-country-dropdown", "value"),
-    ],
+    Input("global-filter-store", "data")
 )
-def update_spend_distribution(start_date, end_date, selected_category, selected_country):
+def update_spend_distribution(filter_data):
+    if not filter_data:
+        return px.histogram(title="No Data")
+
+    start_date = filter_data.get("start_date")
+    end_date = filter_data.get("end_date")
+    selected_category = filter_data.get("category")
+    selected_country = filter_data.get("country")
+
+    df_merged, _, _, _, _ = load_and_prep_data()
     filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
 
     if filtered_df.empty:
@@ -315,14 +348,18 @@ def update_spend_distribution(start_date, end_date, selected_category, selected_
 # --- Visual 3: Top High-Value Customers Table ---
 @callback(
     Output("c360-top-customers-table-container", "children"),
-    [
-        Input("c360-date-picker", "start_date"),
-        Input("c360-date-picker", "end_date"),
-        Input("c360-category-dropdown", "value"),
-        Input("c360-country-dropdown", "value"),
-    ],
+    Input("global-filter-store", "data")
 )
-def update_top_customers_table(start_date, end_date, selected_category, selected_country):
+def update_top_customers_table(filter_data):
+    if not filter_data:
+        return html.Div("No transactions found for selection.", className="text-muted p-3 text-center")
+
+    start_date = filter_data.get("start_date")
+    end_date = filter_data.get("end_date")
+    selected_category = filter_data.get("category")
+    selected_country = filter_data.get("country")
+
+    df_merged, _, _, _, _ = load_and_prep_data()
     filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
 
     if filtered_df.empty:
@@ -381,16 +418,20 @@ def update_top_customers_table(start_date, end_date, selected_category, selected
 # --- Visual 4: Active Customer Trend ---
 @callback(
     Output("c360-cust-trend-graph", "figure"),
-    [
-        Input("c360-date-picker", "start_date"),
-        Input("c360-date-picker", "end_date"),
-        Input("c360-category-dropdown", "value"),
-        Input("c360-country-dropdown", "value"),
-    ],
+    Input("global-filter-store", "data")
 )
-def update_customer_trend(start_date, end_date, selected_category, selected_country):
-    filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
+def update_customer_trend(filter_data):
+    if not filter_data:
+        return px.line(title="No Data")
 
+    start_date = filter_data.get("start_date")
+    end_date = filter_data.get("end_date")
+    selected_category = filter_data.get("category")
+    selected_country = filter_data.get("country")
+
+    df_merged, _, _, _, _ = load_and_prep_data()
+    filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
+    
     if filtered_df.empty:
         return px.line(title="No Data")
 
