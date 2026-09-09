@@ -28,60 +28,66 @@ def create_filter_bar(
 
     return html.Div(
         dbc.Row(
-            [
-                dbc.Col(
-                    html.Div(
+            dbc.Col(
+                html.Div(
+                    dbc.Row(
                         [
-                            html.Label("Date Range", className="text-muted small fw-bold mb-1 d-block"),
-                            dcc.DatePickerRange(
-                                id=date_picker_id,
-                                min_date_allowed=min_date,
-                                max_date_allowed=max_date,
-                                initial_visible_month=min_date,
-                                start_date=min_date,
-                                end_date=max_date,
-                                display_format="YYYY-MM-DD",
-                                className="w-100"
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.Label("Date Range", className="text-muted small fw-bold mb-1 d-block"),
+                                        dcc.DatePickerRange(
+                                            id=date_picker_id,
+                                            min_date_allowed=min_date,
+                                            max_date_allowed=max_date,
+                                            initial_visible_month=min_date,
+                                            start_date=min_date,
+                                            end_date=max_date,
+                                            display_format="YYYY-MM-DD",
+                                            className="w-100"
+                                        )
+                                    ]
+                                ),
+                                width=12, md=4
+                            ),
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.Label("Product Category", className="text-muted small fw-bold mb-1 d-block"),
+                                        dcc.Dropdown(
+                                            id=category_dropdown_id,
+                                            options=category_options,
+                                            value="ALL",
+                                            clearable=False,
+                                            className="dark-dropdown w-100"
+                                        )
+                                    ]
+                                ),
+                                width=12, md=4
+                            ),
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.Label("Region", className="text-muted small fw-bold mb-1 d-block"),
+                                        dcc.Dropdown(
+                                            id=country_dropdown_id,
+                                            options=country_options,
+                                            value="ALL",
+                                            clearable=False,
+                                            className="dark-dropdown w-100"
+                                        )
+                                    ]
+                                ),
+                                width=12, md=4
                             )
                         ],
-                        className="dark-card p-3 rounded shadow-sm h-100"
+                        className="g-3 align-items-center"
                     ),
-                    width=12, md=4
+                    className="dark-card px-4 py-3 rounded shadow-sm"
                 ),
-                dbc.Col(
-                    html.Div(
-                        [
-                            html.Label("Product Category", className="text-muted small fw-bold mb-1 d-block"),
-                            dcc.Dropdown(
-                                id=category_dropdown_id,
-                                options=category_options,
-                                value="ALL",
-                                clearable=False,
-                                className="dark-dropdown w-100"
-                            )
-                        ],
-                        className="dark-card p-3 rounded shadow-sm h-100"
-                    ),
-                    width=12, md=4
-                ),
-                dbc.Col(
-                    html.Div(
-                        [
-                            html.Label("Region", className="text-muted small fw-bold mb-1 d-block"),
-                            dcc.Dropdown(
-                                id=country_dropdown_id,
-                                options=country_options,
-                                value="ALL",
-                                clearable=False,
-                                className="dark-dropdown w-100"
-                            )
-                        ],
-                        className="dark-card p-3 rounded shadow-sm h-100"
-                    ),
-                    width=12, md=4
-                )
-            ],
-            className="g-2 mb-4"  # Accepts negative margins from .dashboard-container .row
+                width=12
+            ),
+            className="mb-0"
         ),
-        className="sticky-filter-bar"  # Sticky & z-index positioning wrapper
+        className="sticky-filter-bar"
     )

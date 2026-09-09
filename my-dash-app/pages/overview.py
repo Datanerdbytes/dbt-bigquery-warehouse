@@ -300,7 +300,7 @@ def update_sales_trend(filter_data):
         fillcolor="rgba(46, 204, 113, 0.15)",
         hovertemplate="<b>Date:</b> %{x|%b %d, %Y}<br><b>Revenue:</b> $%{y:,.0f}<extra></extra>",
         line=dict(
-            shape="spline",
+            shape="linear",
             color="#10b981",
             width=3
         )
@@ -362,7 +362,7 @@ def update_category_pie(filter_data):
     )
 
     fig.update_layout(
-        showlegend=False,
+        showlegend=True,
         margin=dict(l=10, r=10, t=10, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
