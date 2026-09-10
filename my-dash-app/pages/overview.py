@@ -1,4 +1,5 @@
 import dash
+import dash_ag_grid as dag
 import pandas as pd
 import plotly.express as px
 from dash import Dash, html, dcc, callback, Input, Output, dash_table, State, callback_context, no_update
@@ -515,8 +516,6 @@ def update_regional_sales(filter_data):
     ],
     prevent_initial_call=True
 )
-
-
 def toggle_product_modal(clickData, close_clicks, filter_data):
     ctx = callback_context
     if not ctx.triggered:
@@ -537,7 +536,6 @@ def toggle_product_modal(clickData, close_clicks, filter_data):
         selected_category = filter_data.get("category")
         selected_country = filter_data.get("country")
 
-        
         # Pull server-cached dataset and apply filter parameters
         df_merged, _, _, _, _ = load_and_prep_data()
         filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
@@ -565,45 +563,33 @@ def toggle_product_modal(clickData, close_clicks, filter_data):
         records_df["customer_name"] = records_df["first_name"].fillna('') + " " + records_df["last_name"].fillna('')
         records_df["order_date"] = records_df["order_date"].dt.strftime("%Y-%m-%d")
 
-        # Dark Themed DataTable
-        detail_table = dash_table.DataTable(
-            data=records_df.to_dict("records"),
-            columns=[
-                {"name": "Order #", "id": "order_number"},
-                {"name": "Date", "id": "order_date"},
-                {"name": "Customer", "id": "customer_name"},
-                {"name": "Country", "id": "country"},
-                {"name": "Qty", "id": "quantity", "type": "numeric"},
-                {"name": "Revenue ($)", "id": "gross_sales_amount", "type": "numeric", "format": {"specifier": "$,.0f"}},
-            ],
-            page_size=8,
-            style_table={"overflowX": "auto"},
-            style_header={
-                "backgroundColor": "#1f2937",
-                "fontWeight": "bold",
-                "color": "#f3f4f6",
-                "border": "1px solid #374151",
-                "textAlign": "left"
+        # --- REPLACE DASH DATATABLE WITH AG-GRID HERE ---
+        column_defs = [
+            {"field": "order_number", "headerName": "Order #"},
+            {"field": "order_date", "headerName": "Date"},
+            {"field": "customer_name", "headerName": "Customer"},
+            {"field": "country", "headerName": "Country"},
+            {"field": "quantity", "headerName": "Qty", "type": "rightAligned"},
+            {
+                "field": "gross_sales_amount", 
+                "headerName": "Revenue ($)", 
+                "type": "rightAligned",
+                "valueFormatter": {"function": "d3.format('$,.0f')(params.value)"}
             },
-            style_cell={
-                "backgroundColor": "#111827",
-                "color": "#9ca3af",
-                "border": "1px solid #1f2937",
-                "padding": "8px 12px",
-                "fontSize": "0.85rem",
-                "textAlign": "left"
+        ]
+
+        detail_table = dag.AgGrid(
+            rowData=records_df.to_dict("records"),
+            columnDefs=column_defs,
+            dashGridOptions={
+                "theme": "themeBalham", 
+                "animateRows": True, 
+                "pagination": True, 
+                "paginationPageSize": 8
             },
-            style_cell_conditional=[
-                {"if": {"column_id": "quantity"}, "textAlign": "right"},
-                {"if": {"column_id": "gross_sales_amount"}, "textAlign": "right"},
-            ],
-            style_header_conditional=[
-                {"if": {"column_id": "quantity"}, "textAlign": "right"},
-                {"if": {"column_id": "gross_sales_amount"}, "textAlign": "right"},
-            ],
-            style_data_conditional=[
-                {"if": {"row_index": "odd"}, "backgroundColor": "#182232"}
-            ]
+            columnSize="responsiveSizeToFit",
+            defaultColDef={"filter": True, "sortable": True},
+            style={"height": "300px", "width": "100%"}
         )
 
         return True, f"Product Details: {product_name}", kpi_summary, detail_table

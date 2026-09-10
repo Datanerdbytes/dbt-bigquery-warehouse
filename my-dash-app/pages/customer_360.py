@@ -1,4 +1,5 @@
 import dash
+import dash_ag_grid as dag
 from dash import html, dcc, callback, Input, Output, dash_table
 import dash_bootstrap_components as dbc
 import plotly.express as px
@@ -378,41 +379,33 @@ def update_top_customers_table(filter_data):
 
     top_cust["customer_name"] = top_cust["first_name"].fillna("") + " " + top_cust["last_name"].fillna("")
 
-    table = dash_table.DataTable(
-        data=top_cust.to_dict("records"),
-        columns=[
-            {"name": "Customer", "id": "customer_name"},
-            {"name": "Country", "id": "country"},
-            {"name": "Orders", "id": "total_orders", "type": "numeric"},
-            {"name": "Total Spend", "id": "total_spend", "type": "numeric", "format": {"specifier": "$,.0f"}},
-        ],
-        page_size=10,
-        style_table={"overflowX": "auto", 'height': '320px'},
-        style_header={
-            "backgroundColor": "#1f2937",
-            "fontWeight": "bold",
-            "color": "#f3f4f6",
-            "border": "1px solid #374151"
+    column_defs = [
+        {"field": "customer_name", "headerName": "Customer"},
+        {"field": "country", "headerName": "Country"},
+        {"field": "total_orders", "headerName": "Orders", "type": "rightAligned"},
+        {
+            "field": "total_spend", 
+            "headerName": "Total Spend", 
+            "type": "rightAligned",
+            "valueFormatter": {"function": "d3.format('$,.0f')(params.value)"}
         },
-        style_cell={
-            "backgroundColor": "#111827",
-            "color": "#9ca3af",
-            "border": "1px solid #1f2937",
-            "padding": "8px 12px",
-            "fontSize": "0.85rem",
-            "textAlign": "left"
+    ]
+
+    grid = dag.AgGrid(
+        rowData=top_cust.to_dict("records"),
+        columnDefs=column_defs,
+        dashGridOptions={
+            "theme": "themeBalham", 
+            "animateRows": True, 
+            "pagination": True, 
+            "paginationPageSize": 10
         },
-        style_cell_conditional=[
-            {"if": {"column_id": "total_orders"}, "textAlign": "right"},
-            {"if": {"column_id": "total_spend"}, "textAlign": "right"},
-        ],
-        style_header_conditional=[
-            {"if": {"column_id": "total_orders"}, "textAlign": "right"},
-            {"if": {"column_id": "total_spend"}, "textAlign": "right"},
-        ]
+        columnSize="responsiveSizeToFit",
+        defaultColDef={"filter": True, "sortable": True},
+        style={"height": "320px", "width": "100%"}
     )
 
-    return table
+    return grid
 
 
 # --- Visual 4: Active Customer Trend ---
