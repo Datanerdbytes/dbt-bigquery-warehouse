@@ -25,21 +25,53 @@ def create_header():
                         className="me-2 header-icon-btn rounded-3 border-secondary d-flex align-items-center justify-content-center p-2"
                     ),
                     
-                    # Export Data Button
+                    # Export Preview Trigger Button
                     dbc.Button(
                         [
-                            html.I(className="bi bi-download me-2"),
-                            html.Span("Export Report")
+                            html.I(className="bi bi-file-earmark-text me-2"),
+                            html.Span("Preview & Export")
                         ],
                         id="global-export-btn",
                         color="primary",
                         className="export-btn rounded-3 px-3 py-2 fw-semibold border-0"
                     ),
                     
-                    # Download component for callback attachment
+                    # Download component
                     dcc.Download(id="global-download-file")
                 ],
                 className="d-flex align-items-center"
+            ),
+
+            # Executive Summary Preview Modal
+            dbc.Modal(
+                [
+                    dbc.ModalHeader(
+                        dbc.ModalTitle("Executive Report Preview", className="fw-bold text-white"),
+                        close_button=True
+                    ),
+                    dbc.ModalBody(
+                        html.Div(id="export-modal-body-content"),
+                        style={"maxHeight": "70vh", "overflowY": "auto"}
+                    ),
+                    dbc.ModalFooter(
+                        [
+                            dbc.Button("Cancel", id="close-export-modal-btn", color="secondary", outline=True, className="me-2"),
+                            dbc.Button(
+                                [
+                                    html.I(className="bi bi-download me-2"),
+                                    html.Span("Download CSV Report")
+                                ],
+                                id="confirm-download-btn",
+                                color="success",
+                                className="fw-semibold"
+                            )
+                        ]
+                    )
+                ],
+                id="export-preview-modal",
+                size="xl",
+                is_open=False,
+                centered=True
             )
         ]
     )
