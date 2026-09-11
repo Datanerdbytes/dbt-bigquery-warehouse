@@ -106,7 +106,19 @@ def layout():
                         ]
                     ),
                     dbc.ModalFooter(
-                        dbc.Button("Close", id="close-modal-btn", className="ms-auto", color="secondary")
+                        [
+                            dbc.Button(
+                                [
+                                    html.I(className="bi bi-download me-2"),
+                                    html.Span("Export Product Data")
+                                ],
+                                id="export-product-detail-btn",
+                                color="success",
+                                className="fw-semibold me-auto"
+                            ),
+                            dcc.Download(id="product-detail-download-file"),
+                            dbc.Button("Close", id="close-modal-btn", className="ms-auto", color="secondary")
+                        ]
                     ),
                 ],
                 id="product-detail-modal",
@@ -595,3 +607,59 @@ def toggle_product_modal(clickData, close_clicks, filter_data):
         return True, f"Product Details: {product_name}", kpi_summary, detail_table
 
     return False, "", None, None
+
+# --- CALLBACK: Export Button ---
+@callback(
+    Output("product-detail-download-file", "data"),
+    Input("export-product-detail-btn", "n_clicks"),
+    [
+        State("top-products-graph", "clickData"),
+        State("global-filter-store", "data")
+    ],
+    prevent_initial_call=True
+)
+def export_selected_product_details(n_clicks, click_data, filter_data):
+    if not n_clicks or not click_data or not filter_data:
+        return no_update
+
+    # Extract clicked product name from clickData
+    product_name = click_data["points"][0]["y"]
+
+    start_date = filter_data.get("start_date")
+    end_date = filter_data.get("end_date")
+    selected_category = filter_data.get("category", "ALL")
+    selected_country = filter_data.get("country", "ALL")
+
+    # Load and filter dataset
+    df_merged, _, _, _, _ = load_and_prep_data()
+    filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
+    product_df = filtered_df[filtered_df["product_name"] == product_name].copy()
+
+    if product_df.empty:
+        return no_update
+
+    # Format table output for CSV
+    product_df["customer_name"] = product_df["first_name"].fillna("") + " " + product_df["last_name"].fillna("")
+    
+    export_df = product_df[[
+        "order_number", 
+        "order_date", 
+        "customer_name", 
+        "country", 
+        "category", 
+        "quantity", 
+        "gross_sales_amount"
+    ]].rename(columns={
+        "order_number": "Order Number",
+        "order_date": "Order Date",
+        "customer_name": "Customer",
+        "country": "Country",
+        "category": "Category",
+        "quantity": "Quantity",
+        "gross_sales_amount": "Revenue ($)"
+    })
+
+    safe_product_name = "".join([c if c.isalnum() else "_" for c in product_name])
+    filename = f"{safe_product_name}_transactions_{start_date}_to_{end_date}.csv"
+
+    return dcc.send_data_frame(export_df.to_csv, filename=filename, index=False)
