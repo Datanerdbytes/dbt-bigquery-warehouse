@@ -14,13 +14,27 @@
     filter: invert(1) grayscale(100%) brightness(200%);
 }
 
-/* Dash DataTable Pagination Controls */
-.dash-table-container .previous-page, 
-.dash-table-container .next-page,
-.dash-table-container .first-page,
-.dash-table-container .last-page {
-    background-color: #1f2937 !important;
-    color: #f8fafc !important;
-    border: 1px solid #374151 !important;
-    border-radius: 4px;
+.ag-theme-alpine-dark, 
+.ag-theme-balham-dark,
+.ag-theme-quartz-dark {
+    /* Backgrounds */
+    --ag-background-color: #111827 !important;
+    --ag-header-background-color: #1f2937 !important;
+    --ag-odd-row-background-color: #111827 !important;
+    --ag-row-hover-color: #374151 !important;
+
+    /* Text Colors */
+    --ag-foreground-color: #f3f4f6 !important;         /* Main row text color */
+    --ag-header-foreground-color: #ffffff !important;   /* Column header text color */
+    --ag-secondary-foreground-color: #9ca3af !important; /* Subtitle / secondary text */
+
+    /* Borders & Gridlines */
+    --ag-border-color: #374151 !important;
+    --ag-header-column-separator-color: #374151 !important;
+}
+
+/* Fallback for explicit row and cell text */
+.ag-theme-alpine-dark .ag-cell,
+.ag-theme-alpine-dark .ag-header-cell-text {
+    color: #f3f4f6 !important;
 }

@@ -394,6 +394,7 @@ def update_top_customers_table(filter_data):
     grid = dag.AgGrid(
         rowData=top_cust.to_dict("records"),
         columnDefs=column_defs,
+        className="ag-theme-alpine-dark",
         dashGridOptions={
             "theme": "themeBalham", 
             "animateRows": True, 

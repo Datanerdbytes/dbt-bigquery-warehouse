@@ -375,7 +375,7 @@ def update_category_pie(filter_data):
     )
 
     fig.update_layout(
-        showlegend=True,
+        showlegend=False,
         margin=dict(l=10, r=10, t=10, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -593,6 +593,7 @@ def toggle_product_modal(clickData, close_clicks, filter_data):
         detail_table = dag.AgGrid(
             rowData=records_df.to_dict("records"),
             columnDefs=column_defs,
+            # className="ag-theme-alpine-dark".
             dashGridOptions={
                 "theme": "themeBalham", 
                 "animateRows": True, 
