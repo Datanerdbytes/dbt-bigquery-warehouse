@@ -51,6 +51,15 @@ def create_sidebar():
                                 active="exact",
                                 className="sidebar-link rounded-3 px-3 py-2 mb-1 d-flex align-items-center"
                             ),
+                            dbc.NavLink(
+                                [
+                                    html.I(className="bi bi-activity me-2"),
+                                    html.Span("Pipeline Health")
+                                ],
+                                href="/pipeline-health",
+                                active="exact",
+                                className="sidebar-link rounded-3 px-3 py-2 mb-1 d-flex align-items-center"
+                            )
                         ],
                         vertical=True,
                         pills=True,

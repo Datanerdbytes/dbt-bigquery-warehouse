@@ -4,16 +4,20 @@ from google.cloud import bigquery
 import pandas as pd
 from utils.cache import cache
 
+def get_bigquery_client():
+    """Helper function to initialize the BigQuery client from environment variables."""
+    load_dotenv()
+    key_file_path = os.environ.get("GCP_KEY_PATH")
+    project_id = os.environ.get("GCP_PROJECT_ID", "quantum-echo-data-eng-prod")
+
+    if key_file_path and os.path.exists(key_file_path):
+        return bigquery.Client.from_service_account_json(key_file_path, project=project_id)
+    return bigquery.Client(project=project_id)
+
+
 @cache.memoize()
 def load_and_prep_data():
-    load_dotenv()
-
-    key_file_path = os.environ.get("GCP_KEY_PATH")
-
-    client = bigquery.Client.from_service_account_json(
-        key_file_path,
-        project="quantum-echo-data-eng-prod"
-    )
+    client = get_bigquery_client()
 
     query_sales = """
         SELECT 
@@ -78,3 +82,39 @@ def load_and_prep_data():
     ]
 
     return df_merged, min_data_date, max_data_date, category_options, country_options
+
+
+@cache.memoize()
+def load_pipeline_health_summary():
+    """Fetches high-level pipeline health summary KPIs from audit_metadata."""
+    client = get_bigquery_client()
+    query = """
+        SELECT * 
+        FROM `quantum-echo-data-eng-prod.audit_metadata.v_latest_pipeline_health`
+    """
+    df = client.query(query).to_dataframe()
+    return df
+
+
+@cache.memoize()
+def load_dbt_execution_logs(limit=200):
+    """Fetches detailed dbt test and model execution logs."""
+    client = get_bigquery_client()
+    query = f"""
+        SELECT 
+            execution_id,
+            run_timestamp,
+            resource_type,
+            node_name,
+            target_table,
+            column_name,
+            status,
+            execution_time_seconds,
+            rows_affected,
+            error_message
+        FROM `quantum-echo-data-eng-prod.audit_metadata.dbt_execution_logs`
+        ORDER BY run_timestamp DESC
+        LIMIT {limit}
+    """
+    df = client.query(query).to_dataframe()
+    return df
