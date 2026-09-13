@@ -23,6 +23,14 @@ def layout():
         children=[
             dbc.Container(
                 [
+                    # Page Title & Overview
+                    html.Div(
+                        [
+                            html.H3("Product Overview", className="text-white fw-bold mb-1"),
+                            html.P("Sales performance dashboard tracking revenue, orders, and product trends across categories and regions.", className="text-muted small mb-0"),
+                        ],
+                        className="mb-4"
+                    ),
                     # 1. Filter Control Bar
                     create_filter_bar(
                         df_merged,

@@ -21,6 +21,14 @@ def layout():
     children=[
         dbc.Container(
             [
+                # Page Title & Overview
+                html.Div(
+                    [
+                        html.H3("Customer 360", className="text-white fw-bold mb-1"),
+                        html.P("Comprehensive customer analytics including RFM segmentation, lifetime value distribution, and retention trends.", className="text-muted small mb-0"),
+                    ],
+                    className="mb-4"
+                ),
                 # Row 1: Filter Control Bar
                 create_filter_bar(
                     df_merged,
