@@ -1,3 +1,6 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import dash
 from dash import Dash, html, dcc, callback, Input, Output, State, callback_context, no_update
 import dash_bootstrap_components as dbc
@@ -9,6 +12,7 @@ from components.sidebar import create_sidebar
 from components.header import create_header  
 from utils.helpers import filter_dataframe
 from data_loader import load_and_prep_data
+
 
 # Initialize App
 app = Dash(
