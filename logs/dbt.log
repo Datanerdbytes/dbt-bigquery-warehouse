@@ -113,3 +113,19 @@ Runtime Error
 [0m21:28:37.065653 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10e298ec0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10e29a000>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10e2c1670>]}
 [0m21:28:37.065846 [debug] [MainThread]: Flushing usage events
 [0m21:28:38.748688 [debug] [MainThread]: An error was encountered while trying to flush usage events
+[0m16:34:26.207562 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10c665dc0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10dd51b20>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10dd51700>]}
+
+
+============================== 16:34:26.211785 | 1dbfdb24-d861-4dba-9951-a7daa508e0bf ==============================
+[0m16:34:26.211785 [info ] [MainThread]: Running with dbt=1.12.4
+[0m16:34:26.212159 [debug] [MainThread]: running dbt with arguments {'empty': 'False', 'warn_error_options': 'WarnErrorOptionsV2(error=[], warn=[], silence=[])', 'use_colors': 'True', 'printer_width': '80', 'target_path': 'None', 'hints_enabled': 'True', 'write_json': 'True', 'log_cache_events': 'False', 'cache_selected_only': 'False', 'indirect_selection': 'eager', 'introspect': 'True', 'send_anonymous_usage_stats': 'True', 'log_path': 'logs', 'no_print': 'None', 'log_format': 'default', 'quiet': 'False', 'invocation_command': 'dbt run --full-refresh', 'maximum_seed_size_mib': '1', 'fail_fast': 'False', 'warn_error': 'None', 'use_experimental_parser': 'False', 'debug': 'False', 'static_parser': 'True', 'version_check': 'True', 'profiles_dir': '/Users/roelsomido/.dbt', 'partial_parse': 'True'}
+[0m16:34:26.212574 [error] [MainThread]: [[31mERROR[0m]: Encountered an error:
+Runtime Error
+  No dbt_project.yml found at expected path /Users/roelsomido/demo-database/dbt_project.yml
+  Verify that each entry within packages.yml (and their transitive dependencies) contains a file named dbt_project.yml
+  
+[0m16:34:26.212949 [debug] [MainThread]: Resource report: {"command_name": "run", "command_success": false, "command_wall_clock_time": 0.08430512, "process_in_blocks": "0", "process_kernel_time": 0.173121, "process_mem_max_rss": "117374976", "process_out_blocks": "0", "process_user_time": 0.787141}
+[0m16:34:26.213240 [debug] [MainThread]: Command `dbt run` failed at 16:34:26.213188 after 0.08 seconds
+[0m16:34:26.213438 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10dd519a0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10dd51010>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10dd535f0>]}
+[0m16:34:26.213624 [debug] [MainThread]: Flushing usage events
+[0m16:34:30.074298 [debug] [MainThread]: An error was encountered while trying to flush usage events

@@ -24,6 +24,9 @@ from __future__ import annotations
 
 import os
 import sys
+import time
+import uuid
+from utils.audit_logger import log_execution_to_bigquery
 from pathlib import Path
 from typing import Iterable
 
@@ -157,13 +160,41 @@ def main(argv: list[str]) -> int:
 
     print(f"Found {len(pairs)} CSV file(s) under {source_root}")
     failures = 0
+    execution_id = str(uuid.uuid4())  # Generate a unique execution ID for this run
+
     for csv_path, table in pairs:
+        start_time = time.time()
         try:
             rows = ingest_csv(engine, csv_path, schema, table)
+            duration = time.time() - start_time
             print(f"  ok   {csv_path.name:<30} -> {schema}.{table:<25} ({rows:,} rows)")
-        except Exception as exc:  # noqa: BLE001 - log and continue
+
+            # Log success to BigQuery audit
+            log_execution_to_bigquery(
+                execution_id=execution_id,
+                resource_type="csv_ingestion",
+                node_name=csv_path.name,
+                target_table=f"{schema}.{table}",
+                status="pass",
+                duration_sec=duration,
+                rows_affected=rows
+            )
+        except Exception as exc:
+            duration = time.time() - start_time
             failures += 1
             print(f"  FAIL {csv_path.name:<30} -> {schema}.{table:<25} ({exc})")
+
+            # Log failure to BigQuery audit
+            log_execution_to_bigquery(
+                execution_id=execution_id,
+                resource_type="csv_ingestion",
+                node_name=csv_path.name,
+                target_table=f"{schema}.{table}",
+                status="fail",
+                duration_sec=duration,
+                rows_affected=0,
+                error_msg=str(exc)
+            )
 
     print(f"Done. {len(pairs) - failures} succeeded, {failures} failed.")
     return 0 if failures == 0 else 1

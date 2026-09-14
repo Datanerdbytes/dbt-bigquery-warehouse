@@ -1,5 +1,8 @@
 import os
 import pandas as pd
+import time
+import uuid
+from utils.audit_logger import log_execution_to_bigquery
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from google.cloud import bigquery
@@ -48,28 +51,59 @@ TABLES_TO_INGEST = [
 ]
 
 def extract_and_load():
+    execution_id = str(uuid.uuid4())  # Generate a unique execution ID for this run
+
     for table_name in TABLES_TO_INGEST:
         print(f"\n--- Processing table: {table_name} ---")
-        
-        query = f"SELECT * FROM bronze.{table_name}"
-        print("Reading data from SQL Server...")
-        df = pd.read_sql(query, con=db_engine)
-        print(f"Extracted {len(df)} rows.")
-
+        start_time = time.time()
         destination_table = f"{GCP_PROJECT_ID}.{TARGET_DATASET}.{table_name}"
-        
-        job_config = bigquery.LoadJobConfig(
-            write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
-            autodetect=True
-        )
 
-        print(f"Loading into BigQuery: '{destination_table}'...")
-        load_job = bq_client.load_table_from_dataframe(
-            df, destination_table, job_config=job_config
-        )
-        
-        load_job.result()
-        print(f"Successfully loaded {table_name} into BigQuery!")
+        try:
+            query = f"SELECT * FROM bronze.{table_name}"
+            print("Reading data from SQL Server...")
+            df = pd.read_sql(query, con=db_engine)
+            print(f"Extracted {len(df)} rows.")
+
+            job_config = bigquery.LoadJobConfig(
+                write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+                autodetect=True
+            )
+
+            print(f"Loading into BigQuery: '{destination_table}'...")
+            load_job = bq_client.load_table_from_dataframe(
+                df, destination_table, job_config=job_config
+            )
+            
+            load_job.result()
+            duration = time.time() - start_time
+            print(f"Successfully loaded {table_name} into BigQuery!")
+
+            # Log success to BigQuery audit
+            log_execution_to_bigquery(
+                execution_id=execution_id,
+                resource_type="sql_to_bigquery",
+                node_name=table_name,
+                target_table=destination_table,
+                status="pass",
+                duration_sec=duration,
+                rows_affected=len(df)
+            )
+
+        except Exception as exc:
+            duration = time.time() - start_time
+            print(f"❌ Failed to process {table_name}: {exc}")
+
+            # Log failure to BigQuery audit
+            log_execution_to_bigquery(
+                execution_id=execution_id,
+                resource_type="sql_to_bigquery",
+                node_name=table_name,
+                target_table=destination_table,
+                status="fail",
+                duration_sec=duration,
+                rows_affected=0,
+                error_msg=str(exc)
+            )
 
 if __name__ == '__main__':
     extract_and_load()
