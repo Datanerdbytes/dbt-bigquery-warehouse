@@ -89,8 +89,57 @@ def load_pipeline_health_summary():
     """Fetches high-level pipeline health summary KPIs from audit_metadata."""
     client = get_bigquery_client()
     query = """
-        SELECT * 
+        SELECT *
         FROM `quantum-echo-data-eng-prod.audit_metadata.v_latest_pipeline_health`
+    """
+    df = client.query(query).to_dataframe()
+    return df
+
+
+@cache.memoize()
+def load_model_coverage_details():
+    """Fetches per-model test coverage details for drill-down."""
+    client = get_bigquery_client()
+    query = """
+        SELECT
+            model_name,
+            schema,
+            model_total_columns as total_columns,
+            model_columns_with_tests as columns_with_tests,
+            model_column_coverage_pct as column_coverage_pct,
+            model_total_tests as total_tests
+        FROM `quantum-echo-data-eng-prod.audit_metadata.dbt_test_coverage`
+        WHERE DATE(calculated_at) = (
+            SELECT MAX(DATE(calculated_at))
+            FROM `quantum-echo-data-eng-prod.audit_metadata.dbt_test_coverage`
+        )
+        GROUP BY model_name, schema, model_total_columns, model_columns_with_tests, model_column_coverage_pct, model_total_tests
+        ORDER BY model_column_coverage_pct ASC, model_name
+    """
+    df = client.query(query).to_dataframe()
+    return df
+
+
+@cache.memoize()
+def load_column_coverage_details():
+    """Fetches column-level test coverage details."""
+    client = get_bigquery_client()
+    query = """
+        SELECT
+            model_name,
+            schema,
+            column_name,
+            column_description,
+            data_type,
+            test_count,
+            test_names,
+            has_tests
+        FROM `quantum-echo-data-eng-prod.audit_metadata.dbt_test_coverage`
+        WHERE DATE(calculated_at) = (
+            SELECT MAX(DATE(calculated_at))
+            FROM `quantum-echo-data-eng-prod.audit_metadata.dbt_test_coverage`
+        )
+        ORDER BY model_name, has_tests ASC, column_name
     """
     df = client.query(query).to_dataframe()
     return df
