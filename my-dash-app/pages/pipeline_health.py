@@ -4,7 +4,7 @@ import dash_bootstrap_components as dbc
 import dash_ag_grid as dag
 import plotly.express as px
 import pandas as pd
-from data_loader import load_pipeline_health_summary, load_dbt_execution_logs, load_model_coverage_details, load_column_coverage_details
+from data_loader import load_pipeline_health_summary, load_dbt_execution_logs, load_model_coverage_details, load_column_coverage_details, load_source_freshness
 
 dash.register_page(__name__, path="/pipeline-health", name="Pipeline Health")
 
@@ -34,9 +34,20 @@ def layout():
     models_poor = df_summary["models_poorly_covered"].iloc[0] if not df_summary.empty else 0
     last_run = df_summary["last_dbt_run"].iloc[0] if not df_summary.empty else None
 
+    # Load source freshness
+    df_source_freshness = load_source_freshness()
+
     # Badge styling
     status_color = "success" if status == "HEALTHY" else ("warning" if status == "WARNING" else "danger")
     coverage_color = "success" if coverage_pct >= 90 else ("warning" if coverage_pct >= 70 else "danger")
+
+    # Source freshness color logic
+    def get_freshness_color(hours):
+        if hours <= 12:
+            return "success"
+        elif hours <= 24:
+            return "warning"
+        return "danger"
 
     # Table columns for dash.AgGrid - Execution logs
     exec_column_defs = [
@@ -105,14 +116,17 @@ def layout():
                 className="mb-4"
             ),
 
-            # KPI Bar - Row 1: System Status
+            # KPI Bar - Row 1: Source Freshness
             dbc.Row(
                 [
                     dbc.Col(
                         html.Div(
                             [
-                                html.Span("System Status", className="text-muted small fw-bold d-block mb-1"),
-                                dbc.Badge(status, color=status_color, className="fs-6 px-3 py-2")
+                                html.Span("Source Freshness", className="text-muted small fw-bold d-block mb-1"),
+                                html.Div([
+                                    html.H4(f"{df_source_freshness['hours_since_load'].min():.0f}h", className="text-white fw-bold mb-0"),
+                                    html.Small(f"oldest source", className="text-muted d-block"),
+                                ]) if not df_source_freshness.empty else html.H4("N/A", className="text-muted fw-bold mb-0")
                             ],
                             className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column justify-content-center",
                             style={"minHeight": "120px"}
@@ -122,8 +136,8 @@ def layout():
                     dbc.Col(
                         html.Div(
                             [
-                                html.Span("Last dbt Run", className="text-muted small fw-bold d-block mb-1"),
-                                html.H6(f"{pd.to_datetime(last_run).strftime('%Y-%m-%d %H:%M UTC') if last_run else 'N/A'}", className="text-white fw-bold mb-0 small")
+                                html.Span("Latest Load", className="text-muted small fw-bold d-block mb-1"),
+                                html.H6(f"{pd.to_datetime(df_source_freshness['last_loaded'].max()).strftime('%Y-%m-%d %H:%M UTC') if not df_source_freshness.empty else 'N/A'}", className="text-white fw-bold mb-0 small")
                             ],
                             className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column justify-content-center",
                             style={"minHeight": "120px"}

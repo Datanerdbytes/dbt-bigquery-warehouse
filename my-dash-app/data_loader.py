@@ -146,11 +146,30 @@ def load_column_coverage_details():
 
 
 @cache.memoize()
+def load_source_freshness():
+    """Fetches source (bronze) table freshness from ingestion logs."""
+    client = get_bigquery_client()
+    query = """
+        SELECT
+            node_name as source_table,
+            target_table,
+            run_timestamp as last_loaded,
+            TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), run_timestamp, HOUR) as hours_since_load,
+            TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), run_timestamp, MINUTE) as minutes_since_load
+        FROM `quantum-echo-data-eng-prod.audit_metadata.dbt_execution_logs`
+        WHERE resource_type = 'sql_to_bigquery'
+        ORDER BY run_timestamp DESC
+    """
+    df = client.query(query).to_dataframe()
+    return df
+
+
+@cache.memoize()
 def load_dbt_execution_logs(limit=200):
     """Fetches detailed dbt test and model execution logs."""
     client = get_bigquery_client()
     query = f"""
-        SELECT 
+        SELECT
             execution_id,
             run_timestamp,
             resource_type,
