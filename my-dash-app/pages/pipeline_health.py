@@ -9,6 +9,44 @@ from data_loader import load_pipeline_health_summary, load_dbt_execution_logs, l
 dash.register_page(__name__, path="/pipeline-health", name="Pipeline Health")
 
 
+# Tooltip definitions for KPI cards
+KPI_TOOLTIPS = {
+    "source-freshness": "Time since the oldest bronze source table was loaded. Lower is fresher.",
+    "latest-load": "Timestamp of the most recent bronze layer ingestion across all sources.",
+    "passed-tests": "Number of dbt tests that passed in the latest execution run.",
+    "failed-tests": "Number of dbt tests that failed (errors) in the latest execution run.",
+    "column-coverage": "Percentage of model columns that have at least one test defined in the dbt manifest.",
+    "columns-tested": "Number of columns with tests / total columns across all dbt models.",
+    "total-tests": "Total count of all column-level tests defined across all models.",
+    "avg-duration": "Average execution time per model/test in the latest dbt run.",
+    "models-100": "Models where every column has at least one test (100% column coverage).",
+    "models-80": "Models with 80% or higher column test coverage.",
+    "models-50": "Models with less than 50% column test coverage (need attention).",
+    "warnings": "Number of dbt tests that returned warnings (typically source-level tests).",
+}
+
+
+def create_kpi_card(title, value_id, value_children, subtitle=None, card_id=None, tooltip_key=None):
+    """Create a KPI card with optional tooltip."""
+    card_content = html.Div(
+        [
+            html.Span(title, className="text-muted small fw-bold d-block mb-1"),
+            html.Div(value_children, id=value_id, className="d-flex align-items-center justify-content-center"),
+            html.Small(subtitle, className="text-muted d-block mt-1") if subtitle else None,
+        ],
+        className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column justify-content-center",
+        style={"minHeight": "120px"},
+        id=card_id,
+    )
+
+    if tooltip_key and tooltip_key in KPI_TOOLTIPS:
+        return html.Div([
+            card_content,
+            dbc.Tooltip(KPI_TOOLTIPS[tooltip_key], target=card_id, placement="top", delay={"show": 200, "hide": 100}),
+        ])
+    return card_content
+
+
 def layout():
     # Load metadata
     df_summary = load_pipeline_health_summary()
@@ -120,49 +158,45 @@ def layout():
             dbc.Row(
                 [
                     dbc.Col(
-                        html.Div(
-                            [
-                                html.Span("Source Freshness", className="text-muted small fw-bold d-block mb-1"),
-                                html.Div([
-                                    html.H4(f"{df_source_freshness['hours_since_load'].min():.0f}h", className="text-white fw-bold mb-0"),
-                                    html.Small(f"oldest source", className="text-muted d-block"),
-                                ]) if not df_source_freshness.empty else html.H4("N/A", className="text-muted fw-bold mb-0")
-                            ],
-                            className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column justify-content-center",
-                            style={"minHeight": "120px"}
+                        create_kpi_card(
+                            "Source Freshness",
+                            "kpi-source-freshness",
+                            html.Div([
+                                html.H4(f"{df_source_freshness['hours_since_load'].min():.0f}h", className="text-white fw-bold mb-0"),
+                                html.Small("oldest source", className="text-muted"),
+                            ], className="d-flex flex-column align-items-center justify-content-center") if not df_source_freshness.empty else html.H4("N/A", className="text-muted fw-bold mb-0"),
+                            card_id="card-source-freshness",
+                            tooltip_key="source-freshness",
                         ),
                         width=12, md=3
                     ),
                     dbc.Col(
-                        html.Div(
-                            [
-                                html.Span("Latest Load", className="text-muted small fw-bold d-block mb-1"),
-                                html.H6(f"{pd.to_datetime(df_source_freshness['last_loaded'].max()).strftime('%Y-%m-%d %H:%M UTC') if not df_source_freshness.empty else 'N/A'}", className="text-white fw-bold mb-0 small")
-                            ],
-                            className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column justify-content-center",
-                            style={"minHeight": "120px"}
+                        create_kpi_card(
+                            "Latest Load",
+                            "kpi-latest-load",
+                            html.H4(f"{pd.to_datetime(df_source_freshness['last_loaded'].max()).strftime('%Y-%m-%d %H:%M UTC') if not df_source_freshness.empty else 'N/A'}", className="text-white fw-bold mb-0"),
+                            card_id="card-latest-load",
+                            tooltip_key="latest-load",
                         ),
                         width=12, md=3
                     ),
                     dbc.Col(
-                        html.Div(
-                            [
-                                html.Span("Passed Tests", className="text-muted small fw-bold d-block mb-1"),
-                                html.H4(f"{passed:,}", className="text-success fw-bold mb-0")
-                            ],
-                            className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column justify-content-center",
-                            style={"minHeight": "120px"}
+                        create_kpi_card(
+                            "Passed Tests",
+                            "kpi-passed-tests",
+                            html.H4(f"{passed:,}", className="text-success fw-bold mb-0"),
+                            card_id="card-passed-tests",
+                            tooltip_key="passed-tests",
                         ),
                         width=12, md=3
                     ),
                     dbc.Col(
-                        html.Div(
-                            [
-                                html.Span("Failed / Errors", className="text-muted small fw-bold d-block mb-1"),
-                                html.H4(f"{failed:,}", className="text-danger fw-bold mb-0")
-                            ],
-                            className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column justify-content-center",
-                            style={"minHeight": "120px"}
+                        create_kpi_card(
+                            "Failed / Errors",
+                            "kpi-failed-tests",
+                            html.H4(f"{failed:,}", className="text-danger fw-bold mb-0"),
+                            card_id="card-failed-tests",
+                            tooltip_key="failed-tests",
                         ),
                         width=12, md=3
                     ),
@@ -174,46 +208,42 @@ def layout():
             dbc.Row(
                 [
                     dbc.Col(
-                        html.Div(
-                            [
-                                html.Span("Column Coverage", className="text-muted small fw-bold d-block mb-1"),
-                                html.H4(f"{coverage_pct:.1f}%", className=f"text-{coverage_color} fw-bold mb-0")
-                            ],
-                            className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column justify-content-center",
-                            style={"minHeight": "120px"}
+                        create_kpi_card(
+                            "Column Coverage",
+                            "kpi-column-coverage",
+                            html.H4(f"{coverage_pct:.1f}%", className=f"text-{coverage_color} fw-bold mb-0"),
+                            card_id="card-column-coverage",
+                            tooltip_key="column-coverage",
                         ),
                         width=12, md=3
                     ),
                     dbc.Col(
-                        html.Div(
-                            [
-                                html.Span("Columns Tested", className="text-muted small fw-bold d-block mb-1"),
-                                html.H4(f"{total_tested:,} / {total_columns:,}", className="text-white fw-bold mb-0")
-                            ],
-                            className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column justify-content-center",
-                            style={"minHeight": "120px"}
+                        create_kpi_card(
+                            "Columns Tested",
+                            "kpi-columns-tested",
+                            html.H4(f"{total_tested:,} / {total_columns:,}", className="text-white fw-bold mb-0"),
+                            card_id="card-columns-tested",
+                            tooltip_key="columns-tested",
                         ),
                         width=12, md=3
                     ),
                     dbc.Col(
-                        html.Div(
-                            [
-                                html.Span("Total Tests", className="text-muted small fw-bold d-block mb-1"),
-                                html.H4(f"{total_tests:,}", className="text-info fw-bold mb-0")
-                            ],
-                            className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column justify-content-center",
-                            style={"minHeight": "120px"}
+                        create_kpi_card(
+                            "Total Tests",
+                            "kpi-total-tests",
+                            html.H4(f"{total_tests:,}", className="text-info fw-bold mb-0"),
+                            card_id="card-total-tests",
+                            tooltip_key="total-tests",
                         ),
                         width=12, md=3
                     ),
                     dbc.Col(
-                        html.Div(
-                            [
-                                html.Span("Avg Test Duration", className="text-muted small fw-bold d-block mb-1"),
-                                html.H4(f"{avg_dur:.2f}s", className="text-white fw-bold mb-0")
-                            ],
-                            className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column justify-content-center",
-                            style={"minHeight": "120px"}
+                        create_kpi_card(
+                            "Avg Test Duration",
+                            "kpi-avg-duration",
+                            html.H4(f"{avg_dur:.2f}s", className="text-white fw-bold mb-0"),
+                            card_id="card-avg-duration",
+                            tooltip_key="avg-duration",
                         ),
                         width=12, md=3
                     ),
@@ -225,49 +255,51 @@ def layout():
             dbc.Row(
                 [
                     dbc.Col(
-                        html.Div(
+                        create_kpi_card(
+                            "Models (100%)",
+                            "kpi-models-100",
                             [
-                                html.Span("Models (100%)", className="text-muted small fw-bold d-block mb-1"),
                                 html.H4(f"{models_fully:,}", className="text-success fw-bold mb-0"),
-                                html.Span(f"of {total_models}", className="text-muted small")
+                                html.Span(f"of {total_models}", className="text-muted small"),
                             ],
-                            className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column justify-content-center",
-                            style={"minHeight": "120px"}
+                            card_id="card-models-100",
+                            tooltip_key="models-100",
                         ),
                         width=12, md=3
                     ),
                     dbc.Col(
-                        html.Div(
+                        create_kpi_card(
+                            "Models (≥80%)",
+                            "kpi-models-80",
                             [
-                                html.Span("Models (≥80%)", className="text-muted small fw-bold d-block mb-1"),
                                 html.H4(f"{models_well:,}", className="text-warning fw-bold mb-0"),
-                                html.Span(f"of {total_models}", className="text-muted small")
+                                html.Span(f"of {total_models}", className="text-muted small"),
                             ],
-                            className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column justify-content-center",
-                            style={"minHeight": "120px"}
+                            card_id="card-models-80",
+                            tooltip_key="models-80",
                         ),
                         width=12, md=3
                     ),
                     dbc.Col(
-                        html.Div(
+                        create_kpi_card(
+                            "Models (<50%)",
+                            "kpi-models-50",
                             [
-                                html.Span("Models (<50%)", className="text-muted small fw-bold d-block mb-1"),
                                 html.H4(f"{models_poor:,}", className="text-danger fw-bold mb-0"),
-                                html.Span(f"of {total_models}", className="text-muted small")
+                                html.Span(f"of {total_models}", className="text-muted small"),
                             ],
-                            className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column justify-content-center",
-                            style={"minHeight": "120px"}
+                            card_id="card-models-50",
+                            tooltip_key="models-50",
                         ),
                         width=12, md=3
                     ),
                     dbc.Col(
-                        html.Div(
-                            [
-                                html.Span("Warnings", className="text-muted small fw-bold d-block mb-1"),
-                                html.H4(f"{warnings:,}", className="text-warning fw-bold mb-0")
-                            ],
-                            className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column justify-content-center",
-                            style={"minHeight": "120px"}
+                        create_kpi_card(
+                            "Warnings",
+                            "kpi-warnings",
+                            html.H4(f"{warnings:,}", className="text-warning fw-bold mb-0"),
+                            card_id="card-warnings",
+                            tooltip_key="warnings",
                         ),
                         width=12, md=3
                     ),
