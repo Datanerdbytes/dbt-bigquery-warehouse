@@ -18,56 +18,41 @@ def create_header():
     else:
         status, failed_count, warning_count, passed_count, stale_count, last_check = "HEALTHY", 0, 0, 0, 0, "N/A"
 
-    # Notification Panel Items List
-    notification_items = [
-        # Panel Title Header
-        html.Div(
-            [
-                html.Span("Notifications", className="fw-bold text-white fs-6"),
-                html.Span(
-                    f"{failed_count + warning_count} alert(s)",
-                    className="badge bg-warning text-dark ms-2" if warning_count > 0 else "badge bg-secondary ms-2"
-                )
-            ],
-            className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom border-secondary mb-1"
-        )
-    ]
+    # Build dynamic notification menu items
+    notification_items = []
 
-    # 1. Critical Failure Notifications
     if failed_count > 0:
         notification_items.append(
             dbc.DropdownMenuItem(
                 [
-                    html.Div(f"🚨 {failed_count} dbt Test Failures Detected", className="fw-bold text-danger small mb-1"),
+                    html.Div(f"🚨 {failed_count} dbt Test Failures Detected", className="fw-bold text-danger small"),
                     html.Div("Immediate attention required in BigQuery tables.", className="text-muted fs-7"),
                 ],
-                className="px-3 py-2 border-bottom border-secondary",
+                className="py-2 border-bottom border-secondary",
                 href="/pipeline-health"
             )
         )
 
-    # 2. Warning Notifications
     if warning_count > 0 or status == "WARNING":
         notification_items.append(
             dbc.DropdownMenuItem(
                 [
-                    html.Div("⚠️ Pipeline Warning Active", className="fw-bold text-warning small mb-1"),
+                    html.Div("⚠️ Pipeline Warning Active", className="fw-bold text-warning small"),
                     html.Div(f"{warning_count} assertion warnings recorded.", className="text-muted fs-7"),
                 ],
-                className="px-3 py-2 border-bottom border-secondary",
+                className="py-2 border-bottom border-secondary",
                 href="/pipeline-health"
             )
         )
 
-    # 3. Data Freshness Status
     if stale_count > 0:
         notification_items.append(
             dbc.DropdownMenuItem(
                 [
-                    html.Div("🕒 Stale Data Tables Found", className="fw-bold text-warning small mb-1"),
+                    html.Div("🕒 Stale Data Tables Found", className="fw-bold text-warning small"),
                     html.Div(f"{stale_count} ingestion targets exceeded latency threshold.", className="text-muted fs-7"),
                 ],
-                className="px-3 py-2 border-bottom border-secondary",
+                className="py-2 border-bottom border-secondary",
                 href="/pipeline-health"
             )
         )
@@ -75,39 +60,46 @@ def create_header():
         notification_items.append(
             dbc.DropdownMenuItem(
                 [
-                    html.Div("✅ Data Ingestion Healthy", className="fw-bold text-success small mb-1"),
+                    html.Div("✅ Data Ingestion Healthy", className="fw-bold text-success small"),
                     html.Div(f"All BigQuery tables updated on schedule ({passed_count} tests passed).", className="text-muted fs-7"),
                 ],
-                className="px-3 py-2 border-bottom border-secondary"
+                className="py-2 border-bottom border-secondary"
             )
         )
 
-    # 4. General Log Info
     notification_items.append(
         dbc.DropdownMenuItem(
             [
-                html.Div("System Observability Active", className="fw-bold text-white small mb-1"),
+                html.Div("System Observability Active", className="fw-bold text-white small"),
                 html.Div(f"Last pipeline run: {last_check[:19] if len(last_check) > 19 else last_check}", className="text-muted fs-7"),
             ],
-            className="px-3 py-2"
+            className="py-2"
         )
     )
 
-    # Red notification dot visibility
     has_active_alerts = failed_count > 0 or warning_count > 0 or status != "HEALTHY"
 
+    # Configure Alert Toast details based on current health status
+    toast_header = "🚨 Critical Pipeline Failure" if failed_count > 0 else "⚠️ Pipeline Warning Alert"
+    toast_icon = "danger" if failed_count > 0 else "warning"
+    toast_message = (
+        f"Detected {failed_count} failing dbt assertion(s) in BigQuery."
+        if failed_count > 0
+        else f"Pipeline completed with {warning_count} warning assertion(s)."
+    )
+
     return html.Div(
-        className="top-header-bar d-flex align-items-center justify-content-between px-4 py-3 mb-4 rounded-3",
+        className="top-header-bar d-flex align-items-center justify-content-between px-4 py-3 mb-4 rounded-3 position-relative",
         children=[
-            # Left: Welcome Greeting & Context
+            # Left: Welcome Greeting
             html.Div(
                 [
-                    html.H4("Welcome back, John! 👋", className="text-white fw-bold mb-1 fs-5"),
+                    html.H4("Welcome back, Roel! 👋", className="text-white fw-bold mb-1 fs-5"),
                     html.P("Here's an overview of your store's latest performance and pipeline observability.", className="text-muted small mb-0 fs-7")
                 ]
             ),
 
-            # Right: Notification Dropdown & Action Button
+            # Right: Notification Bell & Action Buttons
             html.Div(
                 [
                     # Dynamic Notification Bell
@@ -124,8 +116,7 @@ def create_header():
                         children=[
                             html.Div(
                                 notification_items,
-                                className="dark-card shadow-lg border border-secondary p-2 rounded",
-                                style={"minWidth": "320px"}
+                                className="dark-card shadow-lg border border-secondary p-1 rounded"
                             )
                         ],
                         nav=False,
@@ -135,7 +126,7 @@ def create_header():
                         align_end=True
                     ),
                     
-                    # Report Modal Trigger Button
+                    # Report Modal Trigger
                     dbc.Button(
                         [
                             html.I(className="bi bi-file-earmark-text me-2"),
@@ -149,6 +140,22 @@ def create_header():
                     dcc.Download(id="global-download-file")
                 ],
                 className="d-flex align-items-center"
+            ),
+
+            # Ingestion Alert Toast Container (Positioned top-right)
+            dbc.Toast(
+                [
+                    html.P(toast_message, className="mb-1 text-white small"),
+                    html.A("View Details in Pipeline Health →", href="/pipeline-health", className="text-info small fw-bold text-decoration-none")
+                ],
+                id="pipeline-alert-toast",
+                header=toast_header,
+                icon=toast_icon,
+                is_open=has_active_alerts,  # Opens automatically if alerts exist
+                dismissable=True,
+                duration=8000,  # Auto-dismisses after 8 seconds
+                style={"position": "fixed", "top": "20px", "right": "20px", "zIndex": 9999, "minWidth": "320px"},
+                className="dark-card border border-secondary shadow-lg"
             ),
 
             # Executive Report Preview Modal
