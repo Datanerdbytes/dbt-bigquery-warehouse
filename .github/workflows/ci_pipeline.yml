@@ -27,22 +27,33 @@ jobs:
           uv python install 3.12
           uv sync
 
-      # 4. Authenticate GCP Service Account Key & Generate CI profiles.yml
+      # 4. Authenticate GCP Service Account Key & Validate JSON
       - name: Setup GCP & dbt Profile
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
-          # Save GCP key
+          # Write secret key to file
           echo "$GCP_SA_KEY" > /tmp/gcp_key.json
-          
-          # Fallback to default project ID if secret is unset
-          PROJ_ID="${GCP_PROJECT_ID:-quantum-echo-data-eng-prod}"
-          
-          # Create temporary .dbt directory in runner home
-          mkdir -p ~/.dbt
 
-          # Dynamically write profiles.yml
+          # Fail-fast check: Ensure file is not empty and is valid JSON
+          if [ ! -s /tmp/gcp_key.json ]; then
+            echo "❌ ERROR: /tmp/gcp_key.json is empty. Check GitHub Secret GCP_SA_KEY."
+            exit 1
+          fi
+
+          python -c "import json; json.load(open('/tmp/gcp_key.json'))" || {
+            echo "❌ ERROR: /tmp/gcp_key.json is not valid JSON."
+            exit 1
+          }
+
+          echo "✅ GCP Service Account Key validated successfully."
+
+          # Fallback project ID
+          PROJ_ID="${GCP_PROJECT_ID:-quantum-echo-data-eng-prod}"
+
+          # Create .dbt directory and write profiles.yml
+          mkdir -p ~/.dbt
           cat <<EOF > ~/.dbt/profiles.yml
           analytics_layer:
             target: dev
@@ -62,9 +73,6 @@ jobs:
 
       # 5. Run dbt Model Compilation & Assertion Tests
       - name: Run dbt Compile & Test
-        env:
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          GCP_KEY_PATH: /tmp/gcp_key.json
         run: |
           cd analytics_layer
           ../.venv/bin/dbt compile
