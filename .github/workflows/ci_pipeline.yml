@@ -27,27 +27,22 @@ jobs:
           uv python install 3.12
           uv sync
 
-      # 4. Authenticate GCP Service Account Key & Validate JSON
+      # 4. Authenticate GCP Service Account Key (Base64 Decoding)
       - name: Setup GCP & dbt Profile
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
-          # Write secret key to file
-          echo "$GCP_SA_KEY" > /tmp/gcp_key.json
+          # Decode Base64 string into valid JSON
+          echo "$GCP_SA_KEY" | base64 --decode > /tmp/gcp_key.json
 
-          # Fail-fast check: Ensure file is not empty and is valid JSON
-          if [ ! -s /tmp/gcp_key.json ]; then
-            echo "❌ ERROR: /tmp/gcp_key.json is empty. Check GitHub Secret GCP_SA_KEY."
-            exit 1
-          fi
-
+          # Validate JSON structure
           python -c "import json; json.load(open('/tmp/gcp_key.json'))" || {
             echo "❌ ERROR: /tmp/gcp_key.json is not valid JSON."
             exit 1
           }
 
-          echo "✅ GCP Service Account Key validated successfully."
+          echo "✅ GCP Service Account Key successfully decoded and validated."
 
           # Fallback project ID
           PROJ_ID="${GCP_PROJECT_ID:-quantum-echo-data-eng-prod}"
