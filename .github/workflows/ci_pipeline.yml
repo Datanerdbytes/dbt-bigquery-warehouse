@@ -18,19 +18,13 @@ jobs:
       # 2. Setup uv (Automatically sets PATH and installs binaries)
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
-        with:
-          version: "latest"
 
-      # 3. Install Python & Project Dependencies
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v6
-        with:
-            enable-cache: true
+      - name: Set up Python
+        run: uv python install 3.12
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: uv sync
 
-      # 4. Authenticate GCP Service Account Key
       - name: Authenticate to GCP
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
