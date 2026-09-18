@@ -27,23 +27,28 @@ KPI_TOOLTIPS = {
 
 
 def create_kpi_card(title, value_id, value_children, subtitle=None, card_id=None, tooltip_key=None):
-    """Create a KPI card with optional tooltip."""
+    """Create a KPI card with optional tooltip. Uses h-100 for consistent height across cards in a row."""
     card_content = html.Div(
         [
             html.Span(title, className="text-muted small fw-bold d-block mb-1"),
-            html.Div(value_children, id=value_id, className="d-flex align-items-center justify-content-center"),
+            html.Div(value_children, id=value_id, className="d-flex align-items-center justify-content-center flex-grow-1"),
             html.Small(subtitle, className="text-muted d-block mt-1") if subtitle else None,
         ],
-        className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column justify-content-center",
+        className="dark-card p-3 rounded shadow-sm text-center d-flex flex-column h-100",
         style={"minHeight": "120px"},
         id=card_id,
     )
 
     if tooltip_key and tooltip_key in KPI_TOOLTIPS:
-        return html.Div([
-            card_content,
-            dbc.Tooltip(KPI_TOOLTIPS[tooltip_key], target=card_id, placement="top", delay={"show": 200, "hide": 100}),
-        ])
+        # Wrap in a div with h-100 and d-flex flex-column so the card fills the column height
+        return html.Div(
+            [
+                card_content,
+                dbc.Tooltip(KPI_TOOLTIPS[tooltip_key], target=card_id, placement="top", delay={"show": 200, "hide": 100}),
+            ],
+            className="h-100 d-flex flex-column",
+            style={"minHeight": "120px"}
+        )
     return card_content
 
 
@@ -164,7 +169,7 @@ def layout():
                             html.Div([
                                 html.H4(f"{df_source_freshness['hours_since_load'].min():.0f}h", className="text-white fw-bold mb-0"),
                                 html.Small("oldest source", className="text-muted"),
-                            ], className="d-flex flex-column align-items-center justify-content-center") if not df_source_freshness.empty else html.H4("N/A", className="text-muted fw-bold mb-0"),
+                            ], className="d-flex flex-column align-items-center justify-content-center flex-grow-1 w-100") if not df_source_freshness.empty else html.H4("N/A", className="text-muted fw-bold mb-0"),
                             card_id="card-source-freshness",
                             tooltip_key="source-freshness",
                         ),
