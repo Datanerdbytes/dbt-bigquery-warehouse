@@ -11,19 +11,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout repository code
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. Setup uv (Automatically sets PATH and installs binaries)
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
 
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install Dependencies
-        run: uv sync
+      - name: Install dependencies
+        run: |
+          uv python install 3.12
+          uv sync
 
       - name: Authenticate to GCP
         env:
@@ -31,7 +30,6 @@ jobs:
         run: |
           echo "$GCP_SA_KEY" > /tmp/gcp_key.json
 
-      # 5. Run dbt Model Compilation & Assertion Tests
       - name: Run dbt Compile & Test
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -41,7 +39,6 @@ jobs:
           ../.venv/bin/dbt compile
           ../.venv/bin/dbt test
 
-      # 6. Clean up Credentials
       - name: Cleanup Service Account Key
         if: always()
         run: rm -f /tmp/gcp_key.json
