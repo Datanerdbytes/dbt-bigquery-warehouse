@@ -11,29 +11,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout repository code
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. Setup uv
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
 
-      # 3. Install Dependencies
       - name: Install dependencies
         run: |
           uv python install 3.12
           uv sync
 
-      # 4. Authenticate GCP Service Account Key safely via Python
       - name: Setup GCP & dbt Profile
         env:
           GCP_SA_KEY: ${{ secrets.GCP }}
           GCP_PROJECT_ID: quantum-echo-data-eng-prod
         run: |
-          # Diagnostics: Check if GitHub Actions injected secret string length
           echo "Secret length check: ${#GCP_SA_KEY} characters"
 
           if [ -z "$GCP_SA_KEY" ]; then
@@ -42,7 +37,6 @@ jobs:
             exit 1
           fi
 
-          # Use Python to write the environment secret string directly to JSON
           python3 -c "
           import os, json
           key_str = os.environ.get('GCP_SA_KEY', '')
@@ -52,10 +46,8 @@ jobs:
           print('✅ GCP Service Account Key written and validated successfully.')
           "
 
-          # Fallback project ID
           PROJ_ID="${GCP_PROJECT_ID:-quantum-echo-data-eng-prod}"
 
-          # Create .dbt directory and write profiles.yml
           mkdir -p ~/.dbt
           cat <<EOF > ~/.dbt/profiles.yml
           analytics_layer:
@@ -74,16 +66,53 @@ jobs:
                 priority: interactive
           EOF
 
-      # 5. Run dbt Model Compilation & Assertion Tests
       - name: Run dbt Compile & Test
         run: |
           cd analytics_layer
           ../.venv/bin/dbt compile
           ../.venv/bin/dbt test
 
-      # 6. Clean up Credentials
       - name: Cleanup Service Account Key & Profile
         if: always()
         run: |
           rm -f /tmp/gcp_key.json
           rm -rf ~/.dbt
+
+  deploy-cloud-run:
+    needs: validate-and-test
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Google Auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker Auth
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build and Push Docker Image
+        run: |
+          IMAGE_TAG="us-central1-docker.pkg.dev/quantum-echo-data-eng-prod/dash-repo/dash-observability-app:${{ github.sha }}"
+          docker build -t $IMAGE_TAG .
+          docker push $IMAGE_TAG
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: dash-observability-app
+          region: us-central1
+          image: us-central1-docker.pkg.dev/quantum-echo-data-eng-prod/dash-repo/dash-observability-app:${{ github.sha }}
+          flags: |
+            --memory=512Mi
+            --cpu=1
+            --min-instances=0
+            --max-instances=2
+            --allow-unauthenticated
