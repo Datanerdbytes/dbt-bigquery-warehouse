@@ -1,44 +1,22 @@
-name: CI/CD Data & Analytics Pipeline
-
-on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-
-jobs:
-  validate-and-test:
-    runs-on: ubuntu-latest
-
-    steps:
-      # 1. Checkout repository code
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      # 2. Setup uv
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          version: "latest"
-
-      # 3. Install Dependencies
-      - name: Install dependencies
-        run: |
-          uv python install 3.12
-          uv sync
-
-      # 4. Authenticate GCP Service Account Key safely via Python
+# 4. Authenticate GCP Service Account Key safely via Python
       - name: Setup GCP & dbt Profile
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
+          # Diagnostics: Check if GitHub Actions injected the secret string length
+          echo "Secret length check: ${#GCP_SA_KEY} characters"
+
+          if [ -z "$GCP_SA_KEY" ]; then
+            echo "❌ ERROR: secrets.GCP_SA_KEY is empty or unavailable in this runner context."
+            echo "Ensure the secret 'GCP_SA_KEY' is created under Settings -> Secrets and variables -> Actions -> Repository secrets."
+            exit 1
+          fi
+
           # Use Python to safely write the environment secret string to JSON
           python3 -c "
           import os, json
           key_str = os.environ.get('GCP_SA_KEY', '')
-          if not key_str:
-              raise ValueError('GCP_SA_KEY environment variable is empty!')
           data = json.loads(key_str)
           with open('/tmp/gcp_key.json', 'w') as f:
               json.dump(data, f)
@@ -66,17 +44,3 @@ jobs:
                 job_retries: 1
                 priority: interactive
           EOF
-
-      # 5. Run dbt Model Compilation & Assertion Tests
-      - name: Run dbt Compile & Test
-        run: |
-          cd analytics_layer
-          ../.venv/bin/dbt compile
-          ../.venv/bin/dbt test
-
-      # 6. Clean up Credentials
-      - name: Cleanup Service Account Key & Profile
-        if: always()
-        run: |
-          rm -f /tmp/gcp_key.json
-          rm -rf ~/.dbt
