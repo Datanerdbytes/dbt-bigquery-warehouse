@@ -15,17 +15,16 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. Set up Python environment
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      # 2. Setup uv (Handles Python installation & PATH automatically)
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.12'
+          enable-cache: true
 
-      # 3. Install dependencies using uv
-      - name: Install uv and Dependencies
+      # 3. Install Dependencies
+      - name: Install Project Dependencies
         run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          source $HOME/.local/bin/env
+          uv python install 3.12
           uv sync
 
       # 4. Authenticate GCP Service Account Key
@@ -42,8 +41,8 @@ jobs:
           GCP_KEY_PATH: /tmp/gcp_key.json
         run: |
           cd analytics_layer
-          ../.venv/bin/dbt compile
-          ../.venv/bin/dbt test
+          uv run dbt compile
+          uv run dbt test
 
       # 6. Clean up Credentials
       - name: Cleanup Service Account Key
