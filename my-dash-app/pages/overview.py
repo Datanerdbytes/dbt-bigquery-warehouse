@@ -39,12 +39,19 @@ def layout():
                         country_dropdown_id="country-dropdown"
                     ),
                     # 2. KPI Cards Bar
-                    create_kpi_bar([
-                        ("TOTAL SALES", "kpi-sales"),
-                        ("TOTAL ORDERS", "kpi-orders"),
-                        ("TOTAL QUANTITY", "kpi-quantity"),
-                        ("TOTAL CUSTOMERS", "kpi-customers"),
-                    ]),
+                    dcc.Loading(
+                        id="kpi-loading",
+                        type="circle",
+                        color="#10b981",
+                        children=create_kpi_bar([
+                            ("TOTAL SALES", "kpi-sales"),
+                            ("TOTAL ORDERS", "kpi-orders"),
+                            ("TOTAL QUANTITY", "kpi-quantity"),
+                            ("TOTAL CUSTOMERS", "kpi-customers"),
+                        ]),
+                        fullscreen=False,
+                        className="mb-3"
+                    ),
 
                     # Row 3: Visuals Row 1
                     dbc.Row(
@@ -53,7 +60,13 @@ def layout():
                                 html.Div(
                                     [
                                         html.H5("Sales Revenue Performance", className="fw-bold text-white mb-2"),
-                                        dcc.Graph(id="sales-trend-graph", config={"displayModeBar": False})
+                                        dcc.Loading(
+                                            id="sales-trend-loading",
+                                            type="circle",
+                                            color="#10b981",
+                                            children=dcc.Graph(id="sales-trend-graph", config={"displayModeBar": False}),
+                                            fullscreen=False
+                                        )
                                     ],
                                     className="dark-card p-3 rounded shadow-sm mb-3"
                                 ),
@@ -63,7 +76,13 @@ def layout():
                                 html.Div(
                                     [
                                         html.H5("Revenue by Category", className="fw-bold text-white mb-2"),
-                                        dcc.Graph(id="category-pie-graph", config={"displayModeBar": False})
+                                        dcc.Loading(
+                                            id="category-pie-loading",
+                                            type="circle",
+                                            color="#10b981",
+                                            children=dcc.Graph(id="category-pie-graph", config={"displayModeBar": False}),
+                                            fullscreen=False
+                                        )
                                     ],
                                     className="dark-card p-3 rounded shadow-sm mb-3"
                                 ),
@@ -80,7 +99,13 @@ def layout():
                                 html.Div(
                                     [
                                         html.H5("Top 10 Products by Revenue", className="fw-bold text-white mb-2"),
-                                        dcc.Graph(id="top-products-graph", config={"displayModeBar": False})
+                                        dcc.Loading(
+                                            id="top-products-loading",
+                                            type="circle",
+                                            color="#10b981",
+                                            children=dcc.Graph(id="top-products-graph", config={"displayModeBar": False}),
+                                            fullscreen=False
+                                        )
                                     ],
                                     className="dark-card p-3 rounded shadow-sm mb-3"
                                 ),
@@ -90,7 +115,13 @@ def layout():
                                 html.Div(
                                     [
                                         html.H5("Regional Revenue Breakdown", className="fw-bold text-white mb-2"),
-                                        dcc.Graph(id="regional-sales-graph", config={"displayModeBar": False})
+                                        dcc.Loading(
+                                            id="regional-sales-loading",
+                                            type="circle",
+                                            color="#10b981",
+                                            children=dcc.Graph(id="regional-sales-graph", config={"displayModeBar": False}),
+                                            fullscreen=False
+                                        )
                                     ],
                                     className="dark-card p-3 rounded shadow-sm mb-3"
                                 ),
@@ -110,7 +141,13 @@ def layout():
                         [
                             html.Div(id="modal-product-kpis", className="mb-3"),
                             html.H6("Recent Transactions", className="fw-bold text-muted mb-2"),
-                            html.Div(id="modal-product-table-container")
+                            dcc.Loading(
+                                id="modal-table-loading",
+                                type="circle",
+                                color="#10b981",
+                                children=html.Div(id="modal-product-table-container"),
+                                fullscreen=False
+                            )
                         ]
                     ),
                     dbc.ModalFooter(
