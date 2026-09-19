@@ -159,157 +159,167 @@ def layout():
                 className="mb-4"
             ),
 
-            # KPI Bar - Row 1: Source Freshness
-            dbc.Row(
-                [
-                    dbc.Col(
-                        create_kpi_card(
-                            "Source Freshness",
-                            "kpi-source-freshness",
-                            html.Div([
-                                html.H4(f"{df_source_freshness['hours_since_load'].min():.0f}h", className="text-white fw-bold mb-0"),
-                                html.Small("oldest source", className="text-muted"),
-                            ], className="d-flex flex-column align-items-center justify-content-center flex-grow-1 w-100") if not df_source_freshness.empty else html.H4("N/A", className="text-muted fw-bold mb-0"),
-                            card_id="card-source-freshness",
-                            tooltip_key="source-freshness",
-                        ),
-                        width=12, md=3
+            # KPI Cards Bar
+            dcc.Loading(
+                id="pipeline-kpi-loading",
+                type="circle",
+                color="#10b981",
+                children=[
+                    # KPI Bar - Row 1: Source Freshness
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                create_kpi_card(
+                                    "Source Freshness",
+                                    "kpi-source-freshness",
+                                    html.Div([
+                                        html.H4(f"{df_source_freshness['hours_since_load'].min():.0f}h", className="text-white fw-bold mb-0"),
+                                        html.Small("oldest source", className="text-muted"),
+                                    ], className="d-flex flex-column align-items-center justify-content-center flex-grow-1 w-100") if not df_source_freshness.empty else html.H4("N/A", className="text-muted fw-bold mb-0"),
+                                    card_id="card-source-freshness",
+                                    tooltip_key="source-freshness",
+                                ),
+                                width=12, md=3
+                            ),
+                            dbc.Col(
+                                create_kpi_card(
+                                    "Latest Load",
+                                    "kpi-latest-load",
+                                    html.H4(f"{pd.to_datetime(df_source_freshness['last_loaded'].max()).strftime('%Y-%m-%d %H:%M UTC') if not df_source_freshness.empty else 'N/A'}", className="text-white fw-bold mb-0"),
+                                    card_id="card-latest-load",
+                                    tooltip_key="latest-load",
+                                ),
+                                width=12, md=3
+                            ),
+                            dbc.Col(
+                                create_kpi_card(
+                                    "Passed Tests",
+                                    "kpi-passed-tests",
+                                    html.H4(f"{passed:,}", className="text-success fw-bold mb-0"),
+                                    card_id="card-passed-tests",
+                                    tooltip_key="passed-tests",
+                                ),
+                                width=12, md=3
+                            ),
+                            dbc.Col(
+                                create_kpi_card(
+                                    "Failed / Errors",
+                                    "kpi-failed-tests",
+                                    html.H4(f"{failed:,}", className="text-danger fw-bold mb-0"),
+                                    card_id="card-failed-tests",
+                                    tooltip_key="failed-tests",
+                                ),
+                                width=12, md=3
+                            ),
+                        ],
+                        className="g-3 mb-3"
                     ),
-                    dbc.Col(
-                        create_kpi_card(
-                            "Latest Load",
-                            "kpi-latest-load",
-                            html.H4(f"{pd.to_datetime(df_source_freshness['last_loaded'].max()).strftime('%Y-%m-%d %H:%M UTC') if not df_source_freshness.empty else 'N/A'}", className="text-white fw-bold mb-0"),
-                            card_id="card-latest-load",
-                            tooltip_key="latest-load",
-                        ),
-                        width=12, md=3
-                    ),
-                    dbc.Col(
-                        create_kpi_card(
-                            "Passed Tests",
-                            "kpi-passed-tests",
-                            html.H4(f"{passed:,}", className="text-success fw-bold mb-0"),
-                            card_id="card-passed-tests",
-                            tooltip_key="passed-tests",
-                        ),
-                        width=12, md=3
-                    ),
-                    dbc.Col(
-                        create_kpi_card(
-                            "Failed / Errors",
-                            "kpi-failed-tests",
-                            html.H4(f"{failed:,}", className="text-danger fw-bold mb-0"),
-                            card_id="card-failed-tests",
-                            tooltip_key="failed-tests",
-                        ),
-                        width=12, md=3
-                    ),
-                ],
-                className="g-3 mb-3"
-            ),
 
-            # KPI Bar - Row 2: Coverage Metrics
-            dbc.Row(
-                [
-                    dbc.Col(
-                        create_kpi_card(
-                            "Column Coverage",
-                            "kpi-column-coverage",
-                            html.H4(f"{coverage_pct:.1f}%", className=f"text-{coverage_color} fw-bold mb-0"),
-                            card_id="card-column-coverage",
-                            tooltip_key="column-coverage",
-                        ),
-                        width=12, md=3
+                    # KPI Bar - Row 2: Coverage Metrics
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                create_kpi_card(
+                                    "Column Coverage",
+                                    "kpi-column-coverage",
+                                    html.H4(f"{coverage_pct:.1f}%", className=f"text-{coverage_color} fw-bold mb-0"),
+                                    card_id="card-column-coverage",
+                                    tooltip_key="column-coverage",
+                                ),
+                                width=12, md=3
+                            ),
+                            dbc.Col(
+                                create_kpi_card(
+                                    "Columns Tested",
+                                    "kpi-columns-tested",
+                                    html.H4(f"{total_tested:,} / {total_columns:,}", className="text-white fw-bold mb-0"),
+                                    card_id="card-columns-tested",
+                                    tooltip_key="columns-tested",
+                                ),
+                                width=12, md=3
+                            ),
+                            dbc.Col(
+                                create_kpi_card(
+                                    "Total Tests",
+                                    "kpi-total-tests",
+                                    html.H4(f"{total_tests:,}", className="text-info fw-bold mb-0"),
+                                    card_id="card-total-tests",
+                                    tooltip_key="total-tests",
+                                ),
+                                width=12, md=3
+                            ),
+                            dbc.Col(
+                                create_kpi_card(
+                                    "Avg Test Duration",
+                                    "kpi-avg-duration",
+                                    html.H4(f"{avg_dur:.2f}s", className="text-white fw-bold mb-0"),
+                                    card_id="card-avg-duration",
+                                    tooltip_key="avg-duration",
+                                ),
+                                width=12, md=3
+                            ),
+                        ],
+                        className="g-3 mb-3"
                     ),
-                    dbc.Col(
-                        create_kpi_card(
-                            "Columns Tested",
-                            "kpi-columns-tested",
-                            html.H4(f"{total_tested:,} / {total_columns:,}", className="text-white fw-bold mb-0"),
-                            card_id="card-columns-tested",
-                            tooltip_key="columns-tested",
-                        ),
-                        width=12, md=3
-                    ),
-                    dbc.Col(
-                        create_kpi_card(
-                            "Total Tests",
-                            "kpi-total-tests",
-                            html.H4(f"{total_tests:,}", className="text-info fw-bold mb-0"),
-                            card_id="card-total-tests",
-                            tooltip_key="total-tests",
-                        ),
-                        width=12, md=3
-                    ),
-                    dbc.Col(
-                        create_kpi_card(
-                            "Avg Test Duration",
-                            "kpi-avg-duration",
-                            html.H4(f"{avg_dur:.2f}s", className="text-white fw-bold mb-0"),
-                            card_id="card-avg-duration",
-                            tooltip_key="avg-duration",
-                        ),
-                        width=12, md=3
-                    ),
-                ],
-                className="g-3 mb-3"
-            ),
 
-            # KPI Bar - Row 3: Model Coverage Summary
-            dbc.Row(
-                [
-                    dbc.Col(
-                        create_kpi_card(
-                            "Models (100%)",
-                            "kpi-models-100",
-                            [
-                                html.H4(f"{models_fully:,}", className="text-success fw-bold mb-0"),
-                                html.Span(f"of {total_models}", className="text-muted small"),
-                            ],
-                            card_id="card-models-100",
-                            tooltip_key="models-100",
-                        ),
-                        width=12, md=3
-                    ),
-                    dbc.Col(
-                        create_kpi_card(
-                            "Models (≥80%)",
-                            "kpi-models-80",
-                            [
-                                html.H4(f"{models_well:,}", className="text-warning fw-bold mb-0"),
-                                html.Span(f"of {total_models}", className="text-muted small"),
-                            ],
-                            card_id="card-models-80",
-                            tooltip_key="models-80",
-                        ),
-                        width=12, md=3
-                    ),
-                    dbc.Col(
-                        create_kpi_card(
-                            "Models (<50%)",
-                            "kpi-models-50",
-                            [
-                                html.H4(f"{models_poor:,}", className="text-danger fw-bold mb-0"),
-                                html.Span(f"of {total_models}", className="text-muted small"),
-                            ],
-                            card_id="card-models-50",
-                            tooltip_key="models-50",
-                        ),
-                        width=12, md=3
-                    ),
-                    dbc.Col(
-                        create_kpi_card(
-                            "Warnings",
-                            "kpi-warnings",
-                            html.H4(f"{warnings:,}", className="text-warning fw-bold mb-0"),
-                            card_id="card-warnings",
-                            tooltip_key="warnings",
-                        ),
-                        width=12, md=3
+                    # KPI Bar - Row 3: Model Coverage Summary
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                create_kpi_card(
+                                    "Models (100%)",
+                                    "kpi-models-100",
+                                    [
+                                        html.H4(f"{models_fully:,}", className="text-success fw-bold mb-0"),
+                                        html.Span(f"of {total_models}", className="text-muted small"),
+                                    ],
+                                    card_id="card-models-100",
+                                    tooltip_key="models-100",
+                                ),
+                                width=12, md=3
+                            ),
+                            dbc.Col(
+                                create_kpi_card(
+                                    "Models (≥80%)",
+                                    "kpi-models-80",
+                                    [
+                                        html.H4(f"{models_well:,}", className="text-warning fw-bold mb-0"),
+                                        html.Span(f"of {total_models}", className="text-muted small"),
+                                    ],
+                                    card_id="card-models-80",
+                                    tooltip_key="models-80",
+                                ),
+                                width=12, md=3
+                            ),
+                            dbc.Col(
+                                create_kpi_card(
+                                    "Models (<50%)",
+                                    "kpi-models-50",
+                                    [
+                                        html.H4(f"{models_poor:,}", className="text-danger fw-bold mb-0"),
+                                        html.Span(f"of {total_models}", className="text-muted small"),
+                                    ],
+                                    card_id="card-models-50",
+                                    tooltip_key="models-50",
+                                ),
+                                width=12, md=3
+                            ),
+                            dbc.Col(
+                                create_kpi_card(
+                                    "Warnings",
+                                    "kpi-warnings",
+                                    html.H4(f"{warnings:,}", className="text-warning fw-bold mb-0"),
+                                    card_id="card-warnings",
+                                    tooltip_key="warnings",
+                                ),
+                                width=12, md=3
+                            ),
+                        ],
+                        className="g-3 mb-4"
                     ),
                 ],
-                className="g-3 mb-4"
+                fullscreen=False,
+                className="mb-3"
             ),
 
             # Tabs for different views
@@ -321,14 +331,20 @@ def layout():
                             html.Div(
                                 [
                                     html.H5("Execution & Test History", className="text-white fw-bold mb-3"),
-                                    dag.AgGrid(
-                                        id="pipeline-execution-grid",
-                                        rowData=df_logs.to_dict("records"),
-                                        columnDefs=exec_column_defs,
-                                        defaultColDef={"resizable": True, "sortable": True, "filter": True},
-                                        dashGridOptions={"pagination": True, "paginationPageSize": 15},
-                                        className="ag-theme-alpine-dark",
-                                        style={"height": "500px", "width": "100%"}
+                                    dcc.Loading(
+                                        id="pipeline-execution-loading",
+                                        type="circle",
+                                        color="#10b981",
+                                        children=dag.AgGrid(
+                                            id="pipeline-execution-grid",
+                                            rowData=df_logs.to_dict("records"),
+                                            columnDefs=exec_column_defs,
+                                            defaultColDef={"resizable": True, "sortable": True, "filter": True},
+                                            dashGridOptions={"pagination": True, "paginationPageSize": 15},
+                                            className="ag-theme-alpine-dark",
+                                            style={"height": "500px", "width": "100%"}
+                                        ),
+                                        fullscreen=False
                                     )
                                 ],
                                 className="dark-card p-4 rounded shadow-sm mt-3"
@@ -343,14 +359,20 @@ def layout():
                             html.Div(
                                 [
                                     html.H5("Model Test Coverage", className="text-white fw-bold mb-3"),
-                                    dag.AgGrid(
-                                        id="model-coverage-grid",
-                                        rowData=df_model_coverage.to_dict("records"),
-                                        columnDefs=model_cov_column_defs,
-                                        defaultColDef={"resizable": True, "sortable": True, "filter": True},
-                                        dashGridOptions={"pagination": True, "paginationPageSize": 20, "domLayout": "autoHeight"},
-                                        className="ag-theme-alpine-dark",
-                                        style={"height": "400px", "width": "100%"}
+                                    dcc.Loading(
+                                        id="pipeline-model-coverage-loading",
+                                        type="circle",
+                                        color="#10b981",
+                                        children=dag.AgGrid(
+                                            id="model-coverage-grid",
+                                            rowData=df_model_coverage.to_dict("records"),
+                                            columnDefs=model_cov_column_defs,
+                                            defaultColDef={"resizable": True, "sortable": True, "filter": True},
+                                            dashGridOptions={"pagination": True, "paginationPageSize": 20, "domLayout": "autoHeight"},
+                                            className="ag-theme-alpine-dark",
+                                            style={"height": "400px", "width": "100%"}
+                                        ),
+                                        fullscreen=False
                                     )
                                 ],
                                 className="dark-card p-4 rounded shadow-sm mt-3"
@@ -366,14 +388,20 @@ def layout():
                                 [
                                     html.H5("Column-Level Test Coverage", className="text-white fw-bold mb-3"),
                                     html.P("Columns without tests highlighted in red. Click column headers to sort/filter.", className="text-muted small mb-3"),
-                                    dag.AgGrid(
-                                        id="column-coverage-grid",
-                                        rowData=df_column_coverage.to_dict("records"),
-                                        columnDefs=col_cov_column_defs,
-                                        defaultColDef={"resizable": True, "sortable": True, "filter": True},
-                                        dashGridOptions={"pagination": True, "paginationPageSize": 25},
-                                        className="ag-theme-alpine-dark",
-                                        style={"height": "500px", "width": "100%"}
+                                    dcc.Loading(
+                                        id="pipeline-column-coverage-loading",
+                                        type="circle",
+                                        color="#10b981",
+                                        children=dag.AgGrid(
+                                            id="column-coverage-grid",
+                                            rowData=df_column_coverage.to_dict("records"),
+                                            columnDefs=col_cov_column_defs,
+                                            defaultColDef={"resizable": True, "sortable": True, "filter": True},
+                                            dashGridOptions={"pagination": True, "paginationPageSize": 25},
+                                            className="ag-theme-alpine-dark",
+                                            style={"height": "500px", "width": "100%"}
+                                        ),
+                                        fullscreen=False
                                     )
                                 ],
                                 className="dark-card p-4 rounded shadow-sm mt-3"

@@ -21,7 +21,9 @@
 - **Observability Data Flow:** Pipeline observability telemetry is evaluated by loading and processing metadata from `analytics_layer/target/manifest.json`. Raw contents must be transformed into a memory-efficient flat schema during application execution or layout building to ensure stable page responsiveness.
 - **Directory Layout:**
 
-```
+# Directory Structure: demo-database
+
+```text
 demo-database/
 ├── .venv/                      # Python virtual environment
 ├── Scripts/                    # Data ingestion & DDL scripts
@@ -30,37 +32,12 @@ demo-database/
 │   ├── ingest_dbt_artifacts.py # dbt artifact ingestion (manifest.json, run_results.json)
 │   └── ddl_create_bronze_*.sql # DDL for bronze tables
 ├── analytics_layer/            # dbt project (analytics_layer profile)
-│   ├── analyses/               # dbt analyses (SQL files for reporting)
-│   │   ├── v_latest_pipeline_health.sql  # Pipeline health view
-│   │   └── *.sql               # Other analytical queries
-│   ├── macros/                 # Custom dbt macros
 │   ├── models/                 # dbt models (staging → marts)
-│   │   ├── _sources/           # Source definitions
-│   │   │   └── _sources.yml    # Bronze layer source configs with tests
 │   │   ├── staging/            # Silver layer (cleaned/transformed)
-│   │   │   ├── _staging__models.yml  # Staging model configs with column tests
-│   │   │   └── stg_*.sql       # Staging models
 │   │   └── marts/              # Gold layer (business-ready)
-│   │       ├── _marts_models.yml     # Mart model configs with column tests
-│   │       └── *.sql           # dim_*, fct_*, product_360.sql
-│   ├── scripts/                # Python scripts for dbt artifacts
-│   │   ├── calculate_coverage.py     # Parse manifest.json → test coverage
-│   │   └── load_coverage_to_bq.py    # Load coverage to BigQuery
-│   ├── seeds/                  # dbt seed files (static reference data)
-│   ├── snapshots/              # dbt snapshots (SCD Type 2)
-│   ├── src/                    # dbt project source (if any)
-│   ├── tests/                  # dbt test definitions (generic tests)
-│   ├── dbt_project.yml         # dbt project configuration
-│   ├── packages.yml            # dbt package dependencies
-│   └── target/                 # dbt compile artifacts (manifest.json, run_results.json)
+│   └── target/                 # dbt compile artifacts (manifest.json)
 ├── my-dash-app/                # Plotly Dash application
 │   ├── assets/                 # Custom CSS styling sheets (auto-loaded by Dash)
-│   │   ├── 01-base.css
-│   │   ├── 02-sidebar.css
-│   │   ├── 03-header.css
-│   │   ├── 04-filters.css
-│   │   ├── 05-kpi-cards.css
-│   │   └── 06-components.css
 │   ├── components/             # Reusable UI component modules
 │   │   ├── filter_bar.py
 │   │   ├── header.py
@@ -73,17 +50,14 @@ demo-database/
 │   ├── utils/                  # Utility modules (cache config, helpers)
 │   │   ├── cache.py            # Flask-Caching configuration
 │   │   └── helpers.py          # DataFrame filtering helpers
-│   ├── AGENTS.md               # Agent-specific instructions
-│   ├── CLAUDE.md               # This comprehensive context, rule, and instruction file
 │   ├── app.py                  # Main entry point: Dash init, cache, layout shell
 │   ├── app_observability.py    # Standalone observability app (manifest parsing, lineage)
 │   ├── data_loader.py          # BigQuery data fetchers with @cache.memoize
 │   └── requirements.txt        # Pinned Python dependencies
-├── src/                        # Additional Python packages
-│   └── demo_database/          # Package root
+├── AGENTS.md                   # This file (Global agent-specific rules)
+├── CLAUDE.md                   # Comprehensive instruction file
 └── Notebooks/                  # Jupyter notebooks for exploration
 ```
-
 ## 4. General Architecture & Standards
 - **Global Variables**: Never use global variables to store user-specific state. All mutable state must live in the client browser using `dcc.Store` or URL parameters to maintain thread safety.
 - **Server Variable**: Make sure the app file always exposes a server variable: `server = app.server`
@@ -100,38 +74,9 @@ demo-database/
 - **Observability State Efficiency**: Always look up cached manifest dictionaries inside a `dcc.Store` module. Never programmatically trigger file read tasks to `analytics_layer/target/manifest.json` from within a dynamic layout update or loop callback.
 - **Input IDs**: Every `Input`, `Output`, and `State` ID referenced in a callback must be present in the layout when the callback fires. Set `suppress_callback_exceptions = True` on app initialization for multi-page routing layout safety.
 - **Prevent Callback Firing**: Apply `prevent_initial_call=True` in callback decorators that should not run on page load (e.g., actions triggered only by a button click).
-- **Prevent Unnecessary Updates**: When a callback should leave an output unchanged, return `dash.no_update` instead of re-fetching or re-computing data. Use `raise PreventUpdate` to skip updating the entire callback.
-- **Keep Callbacks Focused**: One callback per user interaction when possible. Split large callbacks into smaller, composable ones rather than updating many outputs from a single function.
-- **Loading Spinners**: Show a spinner while data is loading by wrapping components that may be slow to update with `dcc.Loading`.
-- **Background Callbacks**: Use background callbacks for long-running work. For tasks that take more than a few seconds, use `background=True` in the callback decorator.
+- **Prevent Unnecessary Updates**: When a callback should leave an output unchanged, return `dash.no_update` instead of raising a `PreventUpdate` exception, unless halting the entire chain is explicitly desired.
 
-## 6. Layout, Styling & Components
-- **Custom Style Sheets**: Keep modular presentation layers organized inside files within the `assets/` directory.
-- **Inline Styles**: Use inline Python dictionaries (`style={"marginRight": "10px"}`) only for highly dynamic, runtime-computed values. Avoid static inline styling blocks.
-- **Graphing Library**: Use `plotly.express` for charts first—it is simpler and covers most use cases. Switch to `plotly.graph_objects` (`go`) only when you need fine-grained control, such as implementing dual-axis or combo charts.
-- **Data Tables**: Do not use `dash.datatable`; use `dash.AgGrid` instead.
-- **AgGrid Configs**: When instantiating `dag.AgGrid`, always set the following properties:
-  - `dashGridOptions={"theme": "themeBalham", "animateRows": True, "pagination": True, "paginationPageSize": 10}`
-  - `columnSize="responsiveSizeToFit"`
-  - `defaultColDef={"filter": True, "sortable": True}`
-- **Observability Controls**: Interface adjustments made to `pages/pipeline_health.py` must leverage `dash_bootstrap_components` elements (`dbc.Row`, `dbc.Col`, `dbc.Card`) rather than raw `html` constructs. Ensure text lineage diagnostic structures render cleanly via standard monospaced layout panels.
-
-## 7. Avoid Hallucinations (Crucial)
-- Never use `app.run_server`; only use `app.run`.
-- Never use obsolete patterns like `app.validation_layout`. Modern Dash handles dynamic layouts smoothly via `suppress_callback_exceptions=True`.
-- Never import `dash.dependencies` items individually. Always use the modern syntax: `from dash import Input, Output, State, callback, clientside_callback, no_update, ALL, MATCH`.
-- Never write blocking `time.sleep` loops inside a callback in production contexts; use `dcc.Interval` or asynchronous background tasks.
-- Never assign to callback `Input` values or mutate callback arguments in place.
-- Never use `dash_table.DataTable`; use `dash.AgGrid()` instead.
-- Never put secrets, API keys, or credentials in layout code or `dcc.Store`. Use environment variables and server-side logic only.
-
-## 8. Specific Page Instructions: Pipeline Observability Maintenance
-- When prompted to extend, rewrite, or debug pipeline status or lineage features, focus actions exclusively within `pages/pipeline_health.py` (main app) or `app_observability.py` (standalone).
-- Verify that metadata parsing architectures correctly match dbt core terminologies (e.g., nodes, sources, exposures, seeds, dependencies).
-- When altering data capture routines, ensure that the file mapping safely targets `analytics_layer/target/manifest.json`.
-- Before closing out a tracking adjustment task, execute a verification validation call against `python app_observability.py` to rule out compilation crashes or structural callback errors.
-
-## 9. Output Guidelines
-- Do not apologize or include verbose introductory or concluding remarks.
-- Provide clean, functional Python code blocks with clear inline comments for complex layout or callback logic.
-- If a proposed solution requires installing a new pip package, explicitly state it at the top of your response.
+## 6. Antigravity CLI Operations & Safety
+- **Production Safety Guidelines**: The active workspace is connected to a production Google Cloud environment (`quantum-echo-data-eng-prod`). The agent must NEVER run destructive commands (e.g., `bq rm`, `dbt clean`, or dropping production datasets) without explicit, multi-turn user confirmation.
+- **Resource Constraints**: When writing BigQuery SQL queries inside Python callbacks or scripts, the agent must enforce maximum optimization. Always include a `LIMIT` clause during structural testing to control data processing scan bills.
+- **Progressive Skill Delegation**: For specialized UI component additions, the agent should search the `.agents/skills/` directory for dedicated task capsules (like `/loading-spinner`) rather than trying to build raw script logic directly into the global app space.
