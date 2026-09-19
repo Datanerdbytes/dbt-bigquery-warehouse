@@ -37,12 +37,19 @@ def layout():
                     country_dropdown_id="c360-country-dropdown"
                 ),
                 # Row 2: KPI Cards
-                create_kpi_bar([
-                    ("ACTIVE CUSTOMERS", "c360-kpi-active-cust"),
-                    ("AVG SPEND / CUST", "c360-kpi-avg-spend"),
-                    ("AVG ORDER FREQ", "c360-kpi-avg-freq"),
-                    ("REPEAT RATE", "c360-kpi-repeat-rate"),
-                ]),
+                dcc.Loading(
+                    id="c360-kpi-loading",
+                    type="circle",
+                    color="#10b981",
+                    children=create_kpi_bar([
+                        ("ACTIVE CUSTOMERS", "c360-kpi-active-cust"),
+                        ("AVG SPEND / CUST", "c360-kpi-avg-spend"),
+                        ("AVG ORDER FREQ", "c360-kpi-avg-freq"),
+                        ("REPEAT RATE", "c360-kpi-repeat-rate"),
+                    ]),
+                    fullscreen=False,
+                    className="mb-3"
+                ),
 
                 # Row 3: RFM Segmentation & Spend Distribution
                 dbc.Row(
@@ -51,7 +58,13 @@ def layout():
                             html.Div(
                                 [
                                     html.H5("Customer RFM Segmentation", className="fw-bold text-light mb-2"),
-                                    dcc.Graph(id="c360-rfm-segment-graph", config={"displayModeBar": False})
+                                    dcc.Loading(
+                                        id="c360-rfm-loading",
+                                        type="circle",
+                                        color="#10b981",
+                                        children=dcc.Graph(id="c360-rfm-segment-graph", config={"displayModeBar": False}),
+                                        fullscreen=False
+                                    )
                                 ],
                                 className="dark-card p-3 rounded shadow-sm mb-3"
                             ),
@@ -61,7 +74,13 @@ def layout():
                             html.Div(
                                 [
                                     html.H5("Customer Spend Distribution (CLV)", className="fw-bold text-light mb-2"),
-                                    dcc.Graph(id="c360-spend-dist-graph", config={"displayModeBar": False})
+                                    dcc.Loading(
+                                        id="c360-spend-loading",
+                                        type="circle",
+                                        color="#10b981",
+                                        children=dcc.Graph(id="c360-spend-dist-graph", config={"displayModeBar": False}),
+                                        fullscreen=False
+                                    )
                                 ],
                                 className="dark-card p-3 rounded shadow-sm mb-3"
                             ),
@@ -77,7 +96,13 @@ def layout():
                             html.Div(
                                 [
                                     html.H5("Top High-Value Champions", className="fw-bold text-white mb-2"),
-                                    html.Div(id="c360-top-customers-table-container")
+                                    dcc.Loading(
+                                        id="c360-table-loading",
+                                        type="circle",
+                                        color="#10b981",
+                                        children=html.Div(id="c360-top-customers-table-container"),
+                                        fullscreen=False
+                                    )
                                 ],
                                 className="dark-card p-3 rounded shadow-sm mb-3"
                             ),
@@ -87,7 +112,13 @@ def layout():
                             html.Div(
                                 [
                                     html.H5("Active Customer Trend", className="fw-bold text-white mb-2"),
-                                    dcc.Graph(id="c360-cust-trend-graph", config={"displayModeBar": False})
+                                    dcc.Loading(
+                                        id="c360-trend-loading",
+                                        type="circle",
+                                        color="#10b981",
+                                        children=dcc.Graph(id="c360-cust-trend-graph", config={"displayModeBar": False}),
+                                        fullscreen=False
+                                    )
                                 ],
                                 className="dark-card p-3 rounded shadow-sm mb-3"
                             ),
