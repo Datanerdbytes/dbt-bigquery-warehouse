@@ -250,8 +250,6 @@ Built using Plotly Dash's native `dash.register_page` architecture, styled with 
 
 ## 🖼️ Screenshots & Dashboards
 
-> *Screenshots can be added below. Place dashboard images in the `assets/` or `docs/images/` directory.*
-
 ### Product Overview Dashboard
 <!-- Screenshot Placeholder: Product Overview Dashboard -->
 ```text
@@ -267,7 +265,8 @@ Built using Plotly Dash's native `dash.register_page` architecture, styled with 
 |  [ ============================== ]                   |  [ =================================== ]   |
 +----------------------------------------------------------------------------------------------------+
 ```
-*(Placeholder for Product Overview screenshot: `docs/images/product_overview.png`)*
+
+![Product Overview Dashboard](docs/images/product_overview.png)
 
 ---
 
@@ -284,7 +283,8 @@ Built using Plotly Dash's native `dash.register_page` architecture, styled with 
 |  [ Jordan Turner | $14,200 | 8 Orders | United States ] |  [ --------------------------------- ]   |
 +----------------------------------------------------------------------------------------------------+
 ```
-*(Placeholder for Customer 360 screenshot: `docs/images/customer_360.png`)*
+
+![Customer 360 Dashboard](docs/images/customer_360.png)
 
 ---
 
@@ -302,7 +302,8 @@ Built using Plotly Dash's native `dash.register_page` architecture, styled with 
 | AG Grid View: Status Pills, Durations, Failure Tracebacks, Model Granularity                       |
 +----------------------------------------------------------------------------------------------------+
 ```
-*(Placeholder for Pipeline Health screenshot: `docs/images/pipeline_health.png`)*
+
+![Data Pipeline Health & Observability](docs/images/pipeline_health.png)
 
 ---
 
@@ -319,7 +320,8 @@ Built using Plotly Dash's native `dash.register_page` architecture, styled with 
 |                                                          [ Close ]   [ Download Formatted CSV ]    |
 +----------------------------------------------------------------------------------------------------+
 ```
-*(Placeholder for Executive Export Modal screenshot: `docs/images/export_modal.png`)*
+
+![Executive Report Preview](docs/images/export_modal.png)
 
 ---
 
