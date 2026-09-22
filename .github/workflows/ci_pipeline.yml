@@ -3,9 +3,22 @@ name: CI/CD Data & Analytics Pipeline
 on:
   push:
     branches: [ main, master ]
+    paths-ignore:
+      - 'README.md'
+      - 'CLAUDE.md'
+      - 'AGENTS.md'
+      - 'SKILL.md'
+      - 'docs/**'
+      - 'Notebooks/**'
   pull_request:
     branches: [ main, master ]
-
+    paths-ignore:
+      - 'README.md'
+      - 'CLAUDE.md'
+      - 'AGENTS.md'
+      - 'SKILL.md'
+      - 'docs/**'
+      - 'Notebooks/**'
 jobs:
   validate-and-test:
     runs-on: ubuntu-latest
@@ -85,7 +98,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.1
 
       - name: Google Auth
         uses: google-github-actions/auth@v2
