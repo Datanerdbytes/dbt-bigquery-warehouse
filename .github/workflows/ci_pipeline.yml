@@ -83,6 +83,7 @@ jobs:
       - name: Run dbt Compile & Test
         run: |
           cd analytics_layer
+          ../.venv/bin/dbt deps
           ../.venv/bin/dbt compile
           ../.venv/bin/dbt test
 
