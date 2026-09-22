@@ -1,7 +1,5 @@
 # 🚀 Enterprise Data Warehouse, Pipeline Observability & Analytics Platform
 
-[![Live App](https://img.shields.io/badge/Live%20Demo-Google%20Cloud%20Run-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)](https://dash-observability-app-1022429033383.us-central1.run.app/)
-
 > 🌐 **Live Interactive App:** [https://dash-observability-app-1022429033383.us-central1.run.app/](https://dash-observability-app-1022429033383.us-central1.run.app/)
 
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
@@ -12,6 +10,7 @@
 [![Google Cloud Run](https://img.shields.io/badge/Cloud%20Run-Serverless%20Deploy-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)](https://cloud.google.com/run)
 [![GitHub Actions](https://img.shields.io/badge/CI%2FCD-Automated%20Pipeline-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/features/actions)
 [![uv](https://img.shields.io/badge/Package%20Manager-uv-DE5FE9?style=for-the-badge&logo=astral&logoColor=white)](https://github.com/astral-sh/uv)
+[![Live App](https://img.shields.io/badge/Live%20Demo-Google%20Cloud%20Run-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)](https://dash-observability-app-1022429033383.us-central1.run.app/)
 
 
 An end-to-end, production-grade enterprise data engineering and business intelligence platform. The system ingests raw multi-source enterprise data (CRM & ERP), transforms it through a Medallion Architecture (Bronze &rarr; Silver &rarr; Gold) in **Google BigQuery** using **dbt**, captures and logs data quality test telemetry, and visualizes live metrics via an interactive, containerized **Plotly Dash** application deployed serverless on **Google Cloud Run**.
