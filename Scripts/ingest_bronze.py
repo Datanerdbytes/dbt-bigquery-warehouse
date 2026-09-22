@@ -29,10 +29,11 @@ import uuid
 from utils.audit_logger import log_execution_to_bigquery
 from pathlib import Path
 from typing import Iterable
+import urllib.parse
 
 import pandas as pd
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, URL
 
 
 # ----- Configuration --------------------------------------------------------
@@ -84,12 +85,27 @@ def build_engine() -> Engine:
     password = require_env("DB_PASSWORD")
     driver = os.environ.get("DB_DRIVER", DEFAULT_DRIVER)
 
-    connection_string = (
-        f"mssql+pyodbc://{username}:{password}@{server}/{database}?"
-        f"driver={driver}&TrustServerCertificate=yes"
-    )
-    return create_engine(connection_string, pool_pre_ping=True, fast_executemany=True)
+    # Clean up server string if port is included
+    host = server.split(",")[0].split(":")[0]
+    port = 1433
 
+    # Build ODBC connection query string safely
+    odbc_str = (
+        f"DRIVER={{{driver}}};"
+        f"SERVER={host},{port};"
+        f"DATABASE={database};"
+        f"UID={username};"
+        f"PWD={password};"
+        f"Encrypt=yes;"
+        f"TrustServerCertificate=yes;"
+    )
+
+    connection_url = URL.create(
+        "mssql+pyodbc",
+        query={"odbc_connect": odbc_str}
+    )
+
+    return create_engine(connection_url, pool_pre_ping=True, fast_executemany=True)
 
 def verify_connection(engine: Engine) -> None:
     with engine.connect() as conn:

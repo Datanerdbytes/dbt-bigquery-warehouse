@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import time
 import uuid
+from urllib.parse import quote_plus
 from utils.audit_logger import log_execution_to_bigquery
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
@@ -12,11 +13,13 @@ from google.oauth2 import service_account
 load_dotenv()
 
 # 2. Retrieve variables from environment
-SERVER = os.getenv('DB_SERVER', 'localhost')
-DATABASE = os.getenv('DB_NAME', 'Demo_Database')
-USERNAME = os.getenv('DB_USERNAME')
+SERVER = os.getenv('DB_SERVER', '127.0.0.1')
+DATABASE = os.getenv('DB_DATABASE', 'Demo_Database')
+USERNAME = os.getenv('DB_USERNAME', 'sa')
 PASSWORD = os.getenv('DB_PASSWORD')
 DRIVER = os.getenv('DB_DRIVER', 'ODBC Driver 18 for SQL Server')
+
+encoded_password = quote_plus(PASSWORD) if PASSWORD else ""
 
 GCP_PROJECT_ID = os.getenv('GCP_PROJECT_ID')
 KEY_PATH = os.getenv('GCP_KEY_PATH')
@@ -35,10 +38,10 @@ bq_client = bigquery.Client(
 )
 
 sql_conn_str = (
-    f"mssql+pyodbc://{USERNAME}:{PASSWORD}@{SERVER}/{DATABASE}?"
+    f"mssql+pyodbc://{USERNAME}:{encoded_password}@{SERVER}/{DATABASE}?"
     f"driver={DRIVER}&TrustServerCertificate=yes"
 )
-db_engine = create_engine(sql_conn_str)
+db_engine = create_engine(sql_conn_str, pool_pre_ping=True)
 
 # 4. Tables to Ingest
 TABLES_TO_INGEST = [
@@ -61,7 +64,8 @@ def extract_and_load():
         try:
             query = f"SELECT * FROM bronze.{table_name}"
             print("Reading data from SQL Server...")
-            df = pd.read_sql(query, con=db_engine)
+            with db_engine.connect() as conn:
+                df = pd.read_sql(query, con=conn)
             print(f"Extracted {len(df)} rows.")
 
             job_config = bigquery.LoadJobConfig(
