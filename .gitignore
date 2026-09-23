@@ -19,3 +19,7 @@ gcp-key.json
 
 # Dash app
 cache-directory/
+
+#system create file
+.DS_Store
+docs/.DS_Store
