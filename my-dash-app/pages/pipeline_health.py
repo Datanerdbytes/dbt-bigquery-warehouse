@@ -3,6 +3,7 @@ from dash import html, dcc, callback, Input, Output, dash_table
 import dash_bootstrap_components as dbc
 import dash_ag_grid as dag
 import plotly.express as px
+import plotly.graph_objects as go
 import pandas as pd
 from data_loader import (
     load_pipeline_health_summary, 
@@ -11,6 +12,8 @@ from data_loader import (
     load_column_coverage_details, 
     load_source_freshness,
     load_table_ingestion_logs,
+    load_expensive_queries,
+    load_bigquery_cost_metrics
 )
 
 dash.register_page(__name__, path="/pipeline-health", name="Pipeline Health")
@@ -64,7 +67,8 @@ def layout():
     df_logs = load_dbt_execution_logs()
     df_model_coverage = load_model_coverage_details()
     df_column_coverage = load_column_coverage_details()
-    df_ingestion = load_table_ingestion_logs()   
+    df_ingestion = load_table_ingestion_logs()
+    df_expensive_queries = load_expensive_queries()   
     
     # Fallback default values
     status = df_summary["overall_system_status"].iloc[0] if not df_summary.empty else "UNKNOWN"
@@ -164,6 +168,18 @@ def layout():
              ]
          }},
     ]
+
+    # Column definitions for expensive queries audit table
+    bq_cost_column_defs = [
+        {"field": "creation_time", "headerName": "Timestamp", "sort": "desc", "width": 180},
+        {"field": "user_email", "headerName": "User / Service Account", "width": 220, "filter": True},
+        {"field": "gb_processed", "headerName": "GB Processed", "width": 140, "type": "numericColumn"},
+        {"field": "slot_seconds", "headerName": "Slot Seconds", "width": 130, "type": "numericColumn"},
+        {"field": "duration_seconds", "headerName": "Duration (s)", "width": 120},
+        {"field": "query", "headerName": "Query Text", "flex": 2, "filter": True},
+    ]
+
+    
 
     return html.Div(
         [
@@ -424,6 +440,7 @@ def layout():
                         label="Column Coverage",
                         tab_id="tab-column-coverage"
                     ),
+
                     dbc.Tab(
                         [
                             html.Div(
@@ -452,6 +469,49 @@ def layout():
                         label="Table Ingestion Counts",
                         tab_id="tab-table-ingestion"
                     ),
+
+                    dbc.Tab(
+                        [
+                            html.Div(
+                                [
+                                    html.H5("BigQuery Cost & Query Performance", className="text-white fw-bold mb-1"),
+                                    html.P("Monitor daily query volume, slot utilization, and heavy queries from INFORMATION_SCHEMA.", className="text-muted small mb-3"),
+
+                                    # BigQuery Cost / Query Volume Chart
+                                    dcc.Loading(
+                                        id="loading-bq-chart",
+                                        type="circle",
+                                        color="#10b981",
+                                        children=dcc.Graph(id="bq-daily-cost-graph", style={"height": "350px"})
+                                    ),
+
+                                    html.Hr(className="my-4 border-secondary"),
+
+                                    html.H6("Top Expensive Queries (Last 7 Days)", className="text-white fw-bold mb-3"),
+
+                                    # Expensive Queries AG Grid Table
+                                    dcc.Loading(
+                                        id="loading-bq-grid",
+                                        type="circle",
+                                        color="#10b981",
+                                        children=dag.AgGrid(
+                                            id="bq-expensive-queries-grid",
+                                            columnDefs=bq_cost_column_defs,
+                                            defaultColDef={"resizable": True, "sortable": True, "filter": True},
+                                            dashGridOptions={"pagination": True, "paginationPageSize": 15},
+                                            className="ag-theme-alpine-dark",
+                                            style={"height": "450px", "width": "100%"}
+                                        ),
+                                        fullscreen=False
+                                    )
+
+                                ],
+                                className="dark-card p-4 rounded shadow-sm mt-3"
+                            )
+                        ],
+                        label="BigQuery Costs",
+                        tab_id="tab-bq-costs"
+                    )
                 ],
                 id="pipeline-tabs",
                 active_tab="tab-execution",
@@ -459,3 +519,53 @@ def layout():
             ),
         ]
     )
+
+@callback(
+    [
+        Output("bq-daily-cost-graph", "figure"),
+        Output("bq-expensive-queries-grid", "rowData")
+    ],
+    [Input("pipeline-tabs", "active_tab")]  # Fixed ID here
+)
+def update_bq_cost_monitoring(active_tab):
+    # 1. Fetch data using your loaders (pointing to region-us-central1)
+    df_costs = load_bigquery_cost_metrics(days_back=30)
+    df_expensive = load_expensive_queries(limit=25)
+    
+    # 2. Build safe fallback figure if empty
+    if df_costs.empty:
+        fig = go.Figure()
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis={"visible": False},
+            yaxis={"visible": False},
+            annotations=[{
+                "text": "No BigQuery job history found in region-us-central1.",
+                "xref": "paper", "yref": "paper",
+                "showarrow": False,
+                "font": {"size": 14, "color": "#9ca3af"}
+            }]
+        )
+    else:
+        fig = px.bar(
+            df_costs, 
+            x="execution_date", 
+            y="total_queries", 
+            color="job_type",
+            barmode="stack",
+            template="plotly_dark",
+            labels={"execution_date": "Execution Date", "total_queries": "Total Queries", "job_type": "Job Type"}
+        )
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(t=10, b=30, l=40, r=10),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        
+    # 3. Format grid rows
+    grid_data = df_expensive.to_dict("records") if not df_expensive.empty else []
+    
+    return fig, grid_data

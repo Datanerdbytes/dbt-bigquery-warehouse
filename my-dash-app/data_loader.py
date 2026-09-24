@@ -206,3 +206,48 @@ def load_table_ingestion_logs(limit: int = 500) -> pd.DataFrame:
         LIMIT {limit}
     """
     return client.query(query).to_dataframe()
+
+# BigQuery Cost & Query Monitoring
+@cache.memoize(timeout=3600)
+def load_bigquery_cost_metrics(days_back: int = 30) -> pd.DataFrame:
+    client = get_bigquery_client()
+    query = f"""
+        SELECT
+            DATE(creation_time) AS execution_date,
+            user_email,
+            job_type,
+            COUNT(1) AS total_queries,
+            SUM(total_bytes_billed) AS total_bytes_billed,
+            SUM(total_bytes_processed) AS total_bytes_processed,
+            ROUND(SUM(total_slot_ms) / 1000 / 60, 2) AS total_slot_minutes,
+            ROUND(AVG(total_slot_ms) / 1000, 2) AS avg_slot_seconds,
+            ROUND(AVG(TIMESTAMP_DIFF(end_time, start_time, SECOND)), 2) AS avg_duration_seconds
+        FROM `region-us-central1`.INFORMATION_SCHEMA.JOBS_BY_PROJECT
+        WHERE creation_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days_back} DAY)
+          AND state = 'DONE'
+        GROUP BY 1, 2, 3
+        ORDER BY execution_date DESC
+    """
+    return client.query(query).to_dataframe()
+
+
+@cache.memoize(timeout=1800)
+def load_expensive_queries(limit: int = 25) -> pd.DataFrame:
+    client = get_bigquery_client()
+    query = f"""
+        SELECT
+            creation_time,
+            user_email,
+            query,
+            total_bytes_billed,
+            ROUND(total_bytes_processed / 1024 / 1024 / 1024, 2) AS gb_processed,
+            ROUND(total_slot_ms / 1000, 2) as slot_seconds,
+            TIMESTAMP_DIFF(end_time, start_time, SECOND) AS duration_seconds
+        FROM `region-us-central1`.INFORMATION_SCHEMA.JOBS_BY_PROJECT
+        WHERE creation_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
+          AND state = 'DONE'
+          AND job_type = 'QUERY'
+        ORDER BY total_bytes_billed DESC
+        LIMIT {limit}
+    """
+    return client.query(query).to_dataframe()
