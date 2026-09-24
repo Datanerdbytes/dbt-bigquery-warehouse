@@ -186,3 +186,23 @@ def load_dbt_execution_logs(limit=200):
     """
     df = client.query(query).to_dataframe()
     return df
+
+def load_table_ingestion_logs(limit: int = 500) -> pd.DataFrame:
+    """Fetch row ingestion counts per table for database and BigQuery ingestion runs."""
+    client = get_bigquery_client()
+    query = f"""
+        SELECT 
+            run_timestamp,
+            execution_id,
+            resource_type,
+            node_name AS table_name,
+            target_table,
+            rows_affected AS rows_inserted,
+            status,
+            execution_time_seconds AS duration_seconds
+        FROM `quantum-echo-data-eng-prod.audit_metadata.dbt_execution_logs`
+        WHERE resource_type IN ('csv_ingestion', 'sql_to_bigquery')
+        ORDER BY run_timestamp DESC
+        LIMIT {limit}
+    """
+    return client.query(query).to_dataframe()
