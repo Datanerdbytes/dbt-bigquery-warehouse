@@ -1,8 +1,13 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from google.cloud import bigquery
 import pandas as pd
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine, URL
 from utils.cache import cache
+
+DEFAULT_DRIVER = "ODBC Driver 18 for SQL Server"
 
 def get_bigquery_client():
     """Helper function to initialize the BigQuery client from environment variables."""
@@ -48,12 +53,10 @@ def load_and_prep_data():
         FROM `quantum-echo-data-eng-prod.gold.dim_customers`
     """
 
-    # Query BigQuery
     df_sales = client.query(query_sales).to_dataframe()
     df_products = client.query(query_products).to_dataframe()
     df_customers = client.query(query_customers).to_dataframe()
 
-    # Data transformation and merge
     df_sales['order_date'] = pd.to_datetime(df_sales['order_date'], errors='coerce')
 
     df_merged = (
@@ -65,17 +68,14 @@ def load_and_prep_data():
     df_merged['order_date'] = pd.to_datetime(df_merged['order_date'], errors='coerce')
     df_merged = df_merged[df_merged["order_date"].dt.year >= 2010].copy()
 
-    # Compute Datepicker bounds
     min_data_date = df_merged["order_date"].min().strftime("%Y-%m-%d")
     max_data_date = df_merged["order_date"].max().strftime("%Y-%m-%d")
 
-    # Compute Category dropdown options
     unique_categories = sorted(df_merged["category"].dropna().unique())
     category_options = [{"label": "All Categories", "value": "ALL"}] + [
         {"label": str(cat).title(), "value": cat} for cat in unique_categories
     ]
 
-    # Compute Region/Country dropdown options
     unique_countries = sorted(df_merged["country"].dropna().unique())
     country_options = [{"label": "All Countries", "value": "ALL"}] + [
         {"label": str(cntry).title(), "value": cntry} for cntry in unique_countries
@@ -92,8 +92,7 @@ def load_pipeline_health_summary():
         SELECT *
         FROM `quantum-echo-data-eng-prod.audit_metadata.v_latest_pipeline_health`
     """
-    df = client.query(query).to_dataframe()
-    return df
+    return client.query(query).to_dataframe()
 
 
 @cache.memoize()
@@ -116,8 +115,7 @@ def load_model_coverage_details():
         GROUP BY model_name, schema, model_total_columns, model_columns_with_tests, model_column_coverage_pct, model_total_tests
         ORDER BY model_column_coverage_pct ASC, model_name
     """
-    df = client.query(query).to_dataframe()
-    return df
+    return client.query(query).to_dataframe()
 
 
 @cache.memoize()
@@ -141,8 +139,7 @@ def load_column_coverage_details():
         )
         ORDER BY model_name, has_tests ASC, column_name
     """
-    df = client.query(query).to_dataframe()
-    return df
+    return client.query(query).to_dataframe()
 
 
 @cache.memoize()
@@ -160,8 +157,7 @@ def load_source_freshness():
         WHERE resource_type = 'sql_to_bigquery'
         ORDER BY run_timestamp DESC
     """
-    df = client.query(query).to_dataframe()
-    return df
+    return client.query(query).to_dataframe()
 
 
 @cache.memoize()
@@ -184,28 +180,8 @@ def load_dbt_execution_logs(limit=200):
         ORDER BY run_timestamp DESC
         LIMIT {limit}
     """
-    df = client.query(query).to_dataframe()
-    return df
-
-def load_table_ingestion_logs(limit: int = 500) -> pd.DataFrame:
-    """Fetch row ingestion counts per table for database and BigQuery ingestion runs."""
-    client = get_bigquery_client()
-    query = f"""
-        SELECT 
-            run_timestamp,
-            execution_id,
-            resource_type,
-            node_name AS table_name,
-            target_table,
-            rows_affected AS rows_inserted,
-            status,
-            execution_time_seconds AS duration_seconds
-        FROM `quantum-echo-data-eng-prod.audit_metadata.dbt_execution_logs`
-        WHERE resource_type IN ('csv_ingestion', 'sql_to_bigquery')
-        ORDER BY run_timestamp DESC
-        LIMIT {limit}
-    """
     return client.query(query).to_dataframe()
+
 
 # BigQuery Cost & Query Monitoring
 @cache.memoize(timeout=3600)
@@ -251,3 +227,97 @@ def load_expensive_queries(limit: int = 25) -> pd.DataFrame:
         LIMIT {limit}
     """
     return client.query(query).to_dataframe()
+
+
+def load_env(env_file: Path | None = None) -> None:
+    """Best-effort .env loader."""
+    candidate = env_file or (Path.cwd() / ".env")
+    if not candidate.exists():
+        return
+    for raw in candidate.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
+
+
+def require_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+
+def build_engine() -> Engine:
+    server = require_env("DB_SERVER")
+    database = require_env("DB_DATABASE")
+    username = require_env("DB_USERNAME")
+    password = require_env("DB_PASSWORD")
+    driver = os.environ.get("DB_DRIVER", DEFAULT_DRIVER)
+
+    host = server.split(",")[0].split(":")[0]
+    port = 1433
+
+    odbc_str = (
+        f"DRIVER={{{driver}}};"
+        f"SERVER={host},{port};"
+        f"DATABASE={database};"
+        f"UID={username};"
+        f"PWD={password};"
+        f"Encrypt=yes;"
+        f"TrustServerCertificate=yes;"
+    )
+
+    connection_url = URL.create(
+        "mssql+pyodbc",
+        query={"odbc_connect": odbc_str}
+    )
+
+    return create_engine(connection_url, pool_pre_ping=True, fast_executemany=True)
+
+
+def verify_connection(engine: Engine) -> None:
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT DB_NAME() AS db, SUSER_SNAME() AS usr")
+        ).fetchone()
+    print(f"Connected to '{row.db}' as '{row.usr}'")
+
+
+def load_table_ingestion_logs() -> pd.DataFrame:
+    """Load table ingestion logs and row count parity metrics from SQL Server audit table."""
+    try:
+        engine = build_engine()
+        query = text("""
+            SELECT 
+                log_id,
+                run_timestamp,
+                resource_type,
+                table_name,
+                target_table,
+                source_rows,
+                destination_rows,
+                destination_rows AS rows_inserted,  -- Added alias for AG Grid
+                duration_seconds,
+                status,
+                error_message
+            FROM audit_metadata.table_ingestion_logs
+            ORDER BY run_timestamp DESC
+        """)
+        with engine.connect() as conn:
+            df = pd.read_sql(query, con=conn)
+        
+        if not df.empty and "run_timestamp" in df.columns:
+            df["run_timestamp"] = pd.to_datetime(df["run_timestamp"])
+            
+        return df
+    except Exception as e:
+        print(f"Warning: Could not load table ingestion logs: {e}")
+        return pd.DataFrame(columns=[
+            "log_id", "run_timestamp", "resource_type", "table_name", 
+            "target_table", "source_rows", "destination_rows", "rows_inserted",
+            "duration_seconds", "status", "error_message"
+        ])

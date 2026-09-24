@@ -14,7 +14,8 @@ from data_loader import (
     load_source_freshness,
     load_table_ingestion_logs,
     load_expensive_queries,
-    load_bigquery_cost_metrics
+    load_bigquery_cost_metrics,
+    
 )
 
 dash.register_page(__name__, path="/pipeline-health", name="Pipeline Health")
@@ -69,7 +70,49 @@ def layout():
     df_model_coverage = load_model_coverage_details()
     df_column_coverage = load_column_coverage_details()
     df_ingestion = load_table_ingestion_logs()
-    df_expensive_queries = load_expensive_queries()   
+    df_expensive_queries = load_expensive_queries()
+
+    # Prepare data for side-by-side comparison chart (take latest run per table)
+    if not df_ingestion.empty:
+        df_latest = df_ingestion.sort_values("run_timestamp").groupby("table_name", as_index=False).last()
+        df_melted = df_latest.melt(
+            id_vars=["table_name"],
+            value_vars=["source_rows", "destination_rows"],
+            var_name="metric_type",
+            value_name="row_count"
+        )
+        df_melted["metric_type"] = df_melted["metric_type"].replace({
+            "source_rows": "SQL Server (Source)",
+            "destination_rows": "BigQuery (Destination)"
+        })
+        
+        fig_ingestion = px.bar(
+            df_melted,
+            x="table_name",
+            y="row_count",
+            color="metric_type",
+            barmode="group",
+            template="plotly_dark",
+            labels={"table_name": "Table Name", "row_count": "Row Count", "metric_type": "System Layer"},
+            color_discrete_map={"SQL Server (Source)": "#3b82f6", "BigQuery (Destination)": "#10b981"}
+        )
+        fig_ingestion.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(t=10, b=30, l=40, r=10),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            hoverlabel=dict(bgcolor="#1f2937", font_color="#ffffff", bordercolor="#374151")
+        )
+    else:
+        fig_ingestion = go.Figure()
+        fig_ingestion.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis={"visible": False},
+            yaxis={"visible": False},
+            annotations=[{"text": "No ingestion logs found.", "xref": "paper", "yref": "paper", "showarrow": False, "font": {"color": "#9ca3af"}}]
+        )   
     
     # Fallback default values
     status = df_summary["overall_system_status"].iloc[0] if not df_summary.empty else "UNKNOWN"
@@ -446,8 +489,22 @@ def layout():
                         [
                             html.Div(
                                 [
-                                    html.H5("Table Ingestion & Row Counts", className="text-white fw-bold mb-1"),
-                                    html.P("Number of rows inserted to SQL Database and BigQuery per table per orchestrator run.", className="text-muted small mb-3"),
+                                    html.H5("Table Ingestion Parity & Row Counts", className="text-white fw-bold mb-1"),
+                                    html.P("Side-by-side comparison of row counts between SQL Server source ingestion and BigQuery destination.", className="text-muted small mb-3"),
+                                    
+                                    # Side-by-Side Comparison Chart
+                                    dcc.Loading(
+                                        id="pipeline-ingestion-chart-loading",
+                                        type="circle",
+                                        color="#10b981",
+                                        children=dcc.Graph(figure=fig_ingestion, style={"height": "350px"})
+                                    ),
+                                    
+                                    html.Hr(className="my-4 border-secondary"),
+                                    
+                                    html.H6("Detailed Ingestion Audit Logs", className="text-white fw-bold mb-3"),
+                                    
+                                    # Ingestion AG Grid Table
                                     dcc.Loading(
                                         id="pipeline-ingestion-loading",
                                         type="circle",
@@ -459,7 +516,7 @@ def layout():
                                             defaultColDef={"resizable": True, "sortable": True, "filter": True},
                                             dashGridOptions={"pagination": True, "paginationPageSize": 20},
                                             className="ag-theme-alpine-dark",
-                                            style={"height": "500px", "width": "100%"}
+                                            style={"height": "400px", "width": "100%"}
                                         ),
                                         fullscreen=False
                                     )
