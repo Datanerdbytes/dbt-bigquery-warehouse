@@ -4,6 +4,7 @@ import dash_bootstrap_components as dbc
 import dash_ag_grid as dag
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import pandas as pd
 from data_loader import (
     load_pipeline_health_summary, 
@@ -525,14 +526,12 @@ def layout():
         Output("bq-daily-cost-graph", "figure"),
         Output("bq-expensive-queries-grid", "rowData")
     ],
-    [Input("pipeline-tabs", "active_tab")]  # Fixed ID here
+    [Input("pipeline-tabs", "active_tab")]
 )
 def update_bq_cost_monitoring(active_tab):
-    # 1. Fetch data using your loaders (pointing to region-us-central1)
     df_costs = load_bigquery_cost_metrics(days_back=30)
     df_expensive = load_expensive_queries(limit=25)
     
-    # 2. Build safe fallback figure if empty
     if df_costs.empty:
         fig = go.Figure()
         fig.update_layout(
@@ -549,23 +548,62 @@ def update_bq_cost_monitoring(active_tab):
             }]
         )
     else:
-        fig = px.bar(
-            df_costs, 
-            x="execution_date", 
-            y="total_queries", 
-            color="job_type",
-            barmode="stack",
-            template="plotly_dark",
-            labels={"execution_date": "Execution Date", "total_queries": "Total Queries", "job_type": "Job Type"}
+        # Create dual-axis subplot (Secondary Y-axis for the trend line)
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        
+        # 1. Add Stacked Bars for Query Volume (grouped by job_type)
+        for job_type in df_costs["job_type"].unique():
+            df_subset = df_costs[df_costs["job_type"] == job_type]
+            fig.add_trace(
+                go.Bar(
+                    x=df_subset["execution_date"],
+                    y=df_subset["total_queries"],
+                    name=f"Queries ({job_type})",
+                    marker_color="#3b82f6" if job_type == "QUERY" else "#8b5cf6"
+                ),
+                secondary_y=False,
+            )
+
+        # 2. Add Line Trace for Trend (e.g., Average Duration in Seconds or Slot Minutes)
+        # Group by date first if there are multiple job types per day for a clean single trend line
+        df_trend = df_costs.groupby("execution_date", as_index=False).agg({
+            "avg_duration_seconds": "mean",
+            "total_slot_minutes": "sum"
+        })
+        
+        fig.add_trace(
+            go.Scatter(
+                x=df_trend["execution_date"],
+                y=df_trend["avg_duration_seconds"],
+                name="Avg Duration (s)",
+                mode="lines+markers",
+                line=dict(color="#10b981", width=3)
+            ),
+            secondary_y=True,
         )
+
+        # Update layout for dark theme and dual axes
         fig.update_layout(
+            template="plotly_dark",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            margin=dict(t=10, b=30, l=40, r=10),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            barmode="stack",
+            margin=dict(t=30, b=30, l=40, r=40),
+            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
+            hovermode="x unified",
+            # --- Add this block to style tooltips for dark mode ---
+            hoverlabel=dict(
+                bgcolor="#1f2937",    # Dark gray background matching your cards
+                font_color="#ffffff", # Crisp white text
+                bordercolor="#374151" # Subtle border
+            )
         )
         
-    # 3. Format grid rows
+        # Configure axis titles
+        fig.update_yaxes(title_text="Total Queries", secondary_y=False, showgrid=True, gridcolor="#374151")
+        fig.update_yaxes(title_text="Avg Duration (s)", secondary_y=True, showgrid=False)
+        fig.update_xaxes(showgrid=False)
+
     grid_data = df_expensive.to_dict("records") if not df_expensive.empty else []
     
     return fig, grid_data
