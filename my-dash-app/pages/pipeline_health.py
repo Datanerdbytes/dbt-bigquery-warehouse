@@ -4,7 +4,14 @@ import dash_bootstrap_components as dbc
 import dash_ag_grid as dag
 import plotly.express as px
 import pandas as pd
-from data_loader import load_pipeline_health_summary, load_dbt_execution_logs, load_model_coverage_details, load_column_coverage_details, load_source_freshness
+from data_loader import (
+    load_pipeline_health_summary, 
+    load_dbt_execution_logs, 
+    load_model_coverage_details, 
+    load_column_coverage_details, 
+    load_source_freshness,
+    load_table_ingestion_logs,
+)
 
 dash.register_page(__name__, path="/pipeline-health", name="Pipeline Health")
 
@@ -40,7 +47,6 @@ def create_kpi_card(title, value_id, value_children, subtitle=None, card_id=None
     )
 
     if tooltip_key and tooltip_key in KPI_TOOLTIPS:
-        # Wrap in a div with h-100 and d-flex flex-column so the card fills the column height
         return html.Div(
             [
                 card_content,
@@ -58,7 +64,8 @@ def layout():
     df_logs = load_dbt_execution_logs()
     df_model_coverage = load_model_coverage_details()
     df_column_coverage = load_column_coverage_details()
-
+    df_ingestion = load_table_ingestion_logs()   
+    
     # Fallback default values
     status = df_summary["overall_system_status"].iloc[0] if not df_summary.empty else "UNKNOWN"
     passed = df_summary["passed_tests"].iloc[0] if not df_summary.empty else 0
@@ -83,14 +90,6 @@ def layout():
     # Badge styling
     status_color = "success" if status == "HEALTHY" else ("warning" if status == "WARNING" else "danger")
     coverage_color = "success" if coverage_pct >= 90 else ("warning" if coverage_pct >= 70 else "danger")
-
-    # Source freshness color logic
-    def get_freshness_color(hours):
-        if hours <= 12:
-            return "success"
-        elif hours <= 24:
-            return "warning"
-        return "danger"
 
     # Table columns for dash.AgGrid - Execution logs
     exec_column_defs = [
@@ -129,7 +128,7 @@ def layout():
         {"field": "total_tests", "headerName": "Total Tests", "width": 110},
     ]
 
-    # Column coverage table (for drill-down)
+    # Column coverage table
     col_cov_column_defs = [
         {"field": "model_name", "headerName": "Model", "width": 180, "filter": True},
         {"field": "schema", "headerName": "Schema", "width": 90, "filter": True},
@@ -144,6 +143,24 @@ def layout():
              "styleConditions": [
                  {"condition": "params.value == true", "style": {"color": "#2ea043", "textAlign": "center"}},
                  {"condition": "params.value == false", "style": {"color": "#da3633", "textAlign": "center", "fontWeight": "bold"}}
+             ]
+         }},
+    ]
+
+    # Ingestion table column definitions
+    ingestion_column_defs = [
+        {"field": "run_timestamp", "headerName": "Timestamp", "sort": "desc", "width": 180},
+        {"field": "resource_type", "headerName": "Ingestion Type", "width": 160, "filter": True},
+        {"field": "table_name", "headerName": "Source / Table Name", "width": 200, "filter": True},
+        {"field": "target_table", "headerName": "Destination Table", "flex": 1, "filter": True},
+        {"field": "rows_inserted", "headerName": "Rows Inserted", "width": 150, "type": "numericColumn",
+         "cellStyle": {"fontWeight": "bold"}},
+        {"field": "duration_seconds", "headerName": "Duration (s)", "width": 130},
+        {"field": "status", "headerName": "Status", "width": 110,
+         "cellStyle": {
+             "styleConditions": [
+                 {"condition": "params.value == 'pass' || params.value == 'success'", "style": {"color": "#2ea043", "fontWeight": "bold"}},
+                 {"condition": "params.value == 'fail' || params.value == 'error'", "style": {"color": "#da3633", "fontWeight": "bold"}}
              ]
          }},
     ]
@@ -322,12 +339,11 @@ def layout():
                 className="mb-3"
             ),
 
-            # Tabs for different views
+            # Main View Tabs
             dbc.Tabs(
                 [
                     dbc.Tab(
                         [
-                            # AgGrid Detailed Execution Logs
                             html.Div(
                                 [
                                     html.H5("Execution & Test History", className="text-white fw-bold mb-3"),
@@ -355,7 +371,6 @@ def layout():
                     ),
                     dbc.Tab(
                         [
-                            # Model Coverage Grid
                             html.Div(
                                 [
                                     html.H5("Model Test Coverage", className="text-white fw-bold mb-3"),
@@ -383,7 +398,6 @@ def layout():
                     ),
                     dbc.Tab(
                         [
-                            # Column Coverage Grid (drill-down)
                             html.Div(
                                 [
                                     html.H5("Column-Level Test Coverage", className="text-white fw-bold mb-3"),
@@ -409,6 +423,34 @@ def layout():
                         ],
                         label="Column Coverage",
                         tab_id="tab-column-coverage"
+                    ),
+                    dbc.Tab(
+                        [
+                            html.Div(
+                                [
+                                    html.H5("Table Ingestion & Row Counts", className="text-white fw-bold mb-1"),
+                                    html.P("Number of rows inserted to SQL Database and BigQuery per table per orchestrator run.", className="text-muted small mb-3"),
+                                    dcc.Loading(
+                                        id="pipeline-ingestion-loading",
+                                        type="circle",
+                                        color="#10b981",
+                                        children=dag.AgGrid(
+                                            id="table-ingestion-grid",
+                                            rowData=df_ingestion.to_dict("records"),
+                                            columnDefs=ingestion_column_defs,
+                                            defaultColDef={"resizable": True, "sortable": True, "filter": True},
+                                            dashGridOptions={"pagination": True, "paginationPageSize": 20},
+                                            className="ag-theme-alpine-dark",
+                                            style={"height": "500px", "width": "100%"}
+                                        ),
+                                        fullscreen=False
+                                    )
+                                ],
+                                className="dark-card p-4 rounded shadow-sm mt-3"
+                            )
+                        ],
+                        label="Table Ingestion Counts",
+                        tab_id="tab-table-ingestion"
                     ),
                 ],
                 id="pipeline-tabs",
