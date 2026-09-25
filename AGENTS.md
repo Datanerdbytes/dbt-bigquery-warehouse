@@ -80,3 +80,9 @@ demo-database/
 - **Production Safety Guidelines**: The active workspace is connected to a production Google Cloud environment (`quantum-echo-data-eng-prod`). The agent must NEVER run destructive commands (e.g., `bq rm`, `dbt clean`, or dropping production datasets) without explicit, multi-turn user confirmation.
 - **Resource Constraints**: When writing BigQuery SQL queries inside Python callbacks or scripts, the agent must enforce maximum optimization. Always include a `LIMIT` clause during structural testing to control data processing scan bills.
 - **Progressive Skill Delegation**: For specialized UI component additions, the agent should search the `.agents/skills/` directory for dedicated task capsules (like `/loading-spinner`) rather than trying to build raw script logic directly into the global app space.
+
+## 7. New Page Architectural Pattern & Optimization
+- **Asynchronous Layout Rendering:** Never call database queries or intensive data loaders directly inside a page's `layout()` function. The layout must return instantly with placeholder elements or empty grids to guarantee fast initial page delivery.
+- **Lazy Loading via Callbacks:** Fetch data inside callbacks triggered by tab selections (`active_tab`) or initial component mounting. 
+- **Safe Empty Data Handling:** Components and custom UI widgets (such as filter bars and charts) must gracefully handle `None` or empty DataFrames (`df.empty`) on initial load without raising `IndexError` or column lookup failures.
+- **Conditional Fetching:** When building multi-tab pages, ensure data fetching functions are only executed when the active tab is selected, returning `dash.no_update` for unselected tab grids/graphs to conserve memory and database read costs.
