@@ -310,8 +310,6 @@ def load_table_ingestion_logs() -> pd.DataFrame:
         """
         df = client.query(query).to_dataframe()
         
-        print("DEBUG: Loaded ingestion logs count ->", len(df)) # Check your terminal output!
-        
         if not df.empty and "run_timestamp" in df.columns:
             df["run_timestamp"] = pd.to_datetime(df["run_timestamp"])
             

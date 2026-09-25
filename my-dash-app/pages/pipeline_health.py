@@ -197,14 +197,21 @@ def layout():
                             html.Div(
                                 [
                                     html.H5("Execution & Test History", className="text-white fw-bold mb-3"),
-                                    dag.AgGrid(
-                                        id="pipeline-execution-grid",
-                                        rowData=[],
-                                        columnDefs=exec_column_defs,
-                                        defaultColDef={"resizable": True, "sortable": True, "filter": True},
-                                        dashGridOptions={"pagination": True, "paginationPageSize": 15},
-                                        className="ag-theme-alpine-dark",
-                                        style={"height": "500px", "width": "100%"}
+                                    dcc.Loading(
+                                        id="pipeline-execution-loading",
+                                        type="circle",
+                                        color="#10b981",
+                                        children=[
+                                            dag.AgGrid(
+                                                id="pipeline-execution-grid",
+                                                rowData=[],
+                                                columnDefs=exec_column_defs,
+                                                defaultColDef={"resizable": True, "sortable": True, "filter": True},
+                                                dashGridOptions={"pagination": True, "paginationPageSize": 15},
+                                                className="ag-theme-alpine-dark",
+                                                style={"height": "500px", "width": "100%"}
+                                            )
+                                        ]
                                     )
                                 ],
                                 className="dark-card p-4 rounded shadow-sm mt-3"
@@ -213,19 +220,27 @@ def layout():
                         label="Execution Logs",
                         tab_id="tab-execution"
                     ),
+
                     dbc.Tab(
                         [
                             html.Div(
                                 [
                                     html.H5("Model Test Coverage", className="text-white fw-bold mb-3"),
-                                    dag.AgGrid(
-                                        id="model-coverage-grid",
-                                        rowData=[],
-                                        columnDefs=model_cov_column_defs,
-                                        defaultColDef={"resizable": True, "sortable": True, "filter": True},
-                                        dashGridOptions={"pagination": True, "paginationPageSize": 20, "domLayout": "autoHeight"},
-                                        className="ag-theme-alpine-dark",
-                                        style={"height": "400px", "width": "100%"}
+                                    dcc.Loading(
+                                        id="model-coverage-loading",
+                                        type="circle",
+                                        color="#10b981",
+                                        children=[
+                                            dag.AgGrid(
+                                                id="model-coverage-grid",
+                                                rowData=[],
+                                                columnDefs=model_cov_column_defs,
+                                                defaultColDef={"resizable": True, "sortable": True, "filter": True},
+                                                dashGridOptions={"pagination": True, "paginationPageSize": 20, "domLayout": "autoHeight"},
+                                                className="ag-theme-alpine-dark",
+                                                style={"height": "400px", "width": "100%"}
+                                            )
+                                        ]
                                     )
                                 ],
                                 className="dark-card p-4 rounded shadow-sm mt-3"
@@ -234,20 +249,28 @@ def layout():
                         label="Model Coverage",
                         tab_id="tab-model-coverage"
                     ),
+
                     dbc.Tab(
                         [
                             html.Div(
                                 [
                                     html.H5("Column-Level Test Coverage", className="text-white fw-bold mb-3"),
                                     html.P("Columns without tests highlighted in red. Click column headers to sort/filter.", className="text-muted small mb-3"),
-                                    dag.AgGrid(
-                                        id="column-coverage-grid",
-                                        rowData=[],
-                                        columnDefs=col_cov_column_defs,
-                                        defaultColDef={"resizable": True, "sortable": True, "filter": True},
-                                        dashGridOptions={"pagination": True, "paginationPageSize": 25},
-                                        className="ag-theme-alpine-dark",
-                                        style={"height": "500px", "width": "100%"}
+                                    dcc.Loading(
+                                        id="column-coverage-loading",
+                                        type="circle",
+                                        color="#10b981",
+                                        children=[
+                                            dag.AgGrid(
+                                                id="column-coverage-grid",
+                                                rowData=[],
+                                                columnDefs=col_cov_column_defs,
+                                                defaultColDef={"resizable": True, "sortable": True, "filter": True},
+                                                dashGridOptions={"pagination": True, "paginationPageSize": 25},
+                                                className="ag-theme-alpine-dark",
+                                                style={"height": "500px", "width": "100%"}
+                                            )
+                                        ]
                                     )
                                 ],
                                 className="dark-card p-4 rounded shadow-sm mt-3"
@@ -256,6 +279,7 @@ def layout():
                         label="Column Coverage",
                         tab_id="tab-column-coverage"
                     ),
+
                     dbc.Tab(
                         [
                             html.Div(
@@ -265,14 +289,21 @@ def layout():
                                     dcc.Graph(id="pipeline-ingestion-chart", style={"height": "350px"}),
                                     html.Hr(className="my-4 border-secondary"),
                                     html.H6("Detailed Ingestion Audit Logs", className="text-white fw-bold mb-3"),
-                                    dag.AgGrid(
-                                        id="table-ingestion-grid",
-                                        rowData=[],
-                                        columnDefs=ingestion_column_defs,
-                                        defaultColDef={"resizable": True, "sortable": True, "filter": True},
-                                        dashGridOptions={"pagination": True, "paginationPageSize": 20},
-                                        className="ag-theme-alpine-dark",
-                                        style={"height": "400px", "width": "100%"}
+                                    dcc.Loading(
+                                        id="table-ingestion-loading",
+                                        type="circle",
+                                        color="#10b981",
+                                        children=[
+                                            dag.AgGrid(
+                                                id="table-ingestion-grid",
+                                                rowData=[],
+                                                columnDefs=ingestion_column_defs,
+                                                defaultColDef={"resizable": True, "sortable": True, "filter": True},
+                                                dashGridOptions={"pagination": True, "paginationPageSize": 20},
+                                                className="ag-theme-alpine-dark",
+                                                style={"height": "400px", "width": "100%"}
+                                            )
+                                        ]
                                     )
                                 ],
                                 className="dark-card p-4 rounded shadow-sm mt-3"
@@ -281,6 +312,7 @@ def layout():
                         label="Table Ingestion Counts",
                         tab_id="tab-table-ingestion"
                     ),
+
                     dbc.Tab(
                         [
                             html.Div(
@@ -290,13 +322,20 @@ def layout():
                                     dcc.Graph(id="bq-daily-cost-graph", style={"height": "350px"}),
                                     html.Hr(className="my-4 border-secondary"),
                                     html.H6("Top Expensive Queries (Last 7 Days)", className="text-white fw-bold mb-3"),
-                                    dag.AgGrid(
-                                        id="bq-expensive-queries-grid",
-                                        columnDefs=bq_cost_column_defs,
-                                        defaultColDef={"resizable": True, "sortable": True, "filter": True},
-                                        dashGridOptions={"pagination": True, "paginationPageSize": 15},
-                                        className="ag-theme-alpine-dark",
-                                        style={"height": "450px", "width": "100%"}
+                                    dcc.Loading(
+                                        id="bq-expensive-queries-loading",
+                                        type="circle",
+                                        color="#10b981",
+                                        children=[
+                                            dag.AgGrid(
+                                                id="bq-expensive-queries-grid",
+                                                columnDefs=bq_cost_column_defs,
+                                                defaultColDef={"resizable": True, "sortable": True, "filter": True},
+                                                dashGridOptions={"pagination": True, "paginationPageSize": 15},
+                                                className="ag-theme-alpine-dark",
+                                                style={"height": "450px", "width": "100%"}
+                                            )
+                                        ]
                                     )
                                 ],
                                 className="dark-card p-4 rounded shadow-sm mt-3"
