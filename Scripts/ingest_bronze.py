@@ -26,6 +26,7 @@ import os
 import sys
 import time
 import uuid
+from datetime import datetime, timezone
 from utils.audit_logger import log_execution_to_bigquery
 from pathlib import Path
 from typing import Iterable
@@ -115,6 +116,59 @@ def verify_connection(engine: Engine) -> None:
     print(f"Connected to '{row.db}' as '{row.usr}'")
 
 
+def init_audit_table(engine: Engine) -> None:
+    """Ensure audit schema and ingestion logs table exist in SQL Server."""
+    with engine.begin() as conn:
+        conn.execute(text("IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'audit_metadata') EXEC('CREATE SCHEMA audit_metadata')"))
+        conn.execute(text("""
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'table_ingestion_logs' AND schema_id = SCHEMA_ID('audit_metadata'))
+            CREATE TABLE audit_metadata.table_ingestion_logs (
+                log_id INT IDENTITY(1,1) PRIMARY KEY,
+                run_timestamp DATETIME2 NOT NULL DEFAULT GETDATE(),
+                resource_type VARCHAR(50) NOT NULL,
+                table_name VARCHAR(150) NOT NULL,
+                target_table VARCHAR(150) NOT NULL,
+                source_rows INT NOT NULL DEFAULT 0,
+                destination_rows INT NOT NULL DEFAULT 0,
+                duration_seconds FLOAT,
+                status VARCHAR(20) NOT NULL,
+                error_message VARCHAR(MAX)
+            )
+        """))
+
+
+def log_table_ingestion_to_sql(
+    engine: Engine,
+    run_timestamp: datetime,
+    resource_type: str,
+    table_name: str,
+    target_table: str,
+    source_rows: int,
+    destination_rows: int,
+    duration_seconds: float,
+    status: str,
+    error_message: str | None = None
+) -> None:
+    """Record table ingestion metrics into SQL Server audit table."""
+    query = text("""
+        INSERT INTO audit_metadata.table_ingestion_logs 
+        (run_timestamp, resource_type, table_name, target_table, source_rows, destination_rows, duration_seconds, status, error_message)
+        VALUES (:run_time, :res_type, :tbl_name, :tgt_tbl, :src_rows, :dst_rows, :dur, :stat, :err)
+    """)
+    with engine.begin() as conn:
+        conn.execute(query, {
+            "run_time": run_timestamp,
+            "res_type": resource_type,
+            "tbl_name": table_name,
+            "tgt_tbl": target_table,
+            "src_rows": source_rows,
+            "dst_rows": destination_rows,
+            "dur": duration_seconds,
+            "stat": status,
+            "err": error_message
+        })
+
+
 def schema_prefix_for(folder_name: str) -> str:
     """Return the bronze table prefix for a given source folder name."""
     return SCHEMA_PREFIX_MAP.get(folder_name, folder_name)
@@ -168,6 +222,9 @@ def main(argv: list[str]) -> int:
     schema = "bronze"
     engine = build_engine()
     verify_connection(engine)
+    
+    # Initialize the audit schema and log table if they don't exist yet
+    init_audit_table(engine)
 
     pairs = list(discover_csvs(source_root))
     if not pairs:
@@ -180,17 +237,34 @@ def main(argv: list[str]) -> int:
 
     for csv_path, table in pairs:
         start_time = time.time()
+        run_timestamp = datetime.now(timezone.utc)
+        target_table_name = f"{schema}.{table}"
+        source_name = csv_path.name
+
         try:
             rows = ingest_csv(engine, csv_path, schema, table)
             duration = time.time() - start_time
-            print(f"  ok   {csv_path.name:<30} -> {schema}.{table:<25} ({rows:,} rows)")
+            print(f"  ok   {source_name:<30} -> {target_table_name:<25} ({rows:,} rows)")
 
-            # Log success to BigQuery audit
+            # 1. Log success to SQL Server table ingestion logs
+            log_table_ingestion_to_sql(
+                engine=engine,
+                run_timestamp=run_timestamp,
+                resource_type="csv_ingestion",
+                table_name=source_name,
+                target_table=target_table_name,
+                source_rows=rows,
+                destination_rows=rows,
+                duration_seconds=duration,
+                status="success"
+            )
+
+            # 2. Log success to BigQuery audit
             log_execution_to_bigquery(
                 execution_id=execution_id,
                 resource_type="csv_ingestion",
-                node_name=csv_path.name,
-                target_table=f"{schema}.{table}",
+                node_name=source_name,
+                target_table=target_table_name,
                 status="pass",
                 duration_sec=duration,
                 rows_affected=rows
@@ -198,14 +272,28 @@ def main(argv: list[str]) -> int:
         except Exception as exc:
             duration = time.time() - start_time
             failures += 1
-            print(f"  FAIL {csv_path.name:<30} -> {schema}.{table:<25} ({exc})")
+            print(f"  FAIL {source_name:<30} -> {target_table_name:<25} ({exc})")
 
-            # Log failure to BigQuery audit
+            # 1. Log failure to SQL Server table ingestion logs
+            log_table_ingestion_to_sql(
+                engine=engine,
+                run_timestamp=run_timestamp,
+                resource_type="csv_ingestion",
+                table_name=source_name,
+                target_table=target_table_name,
+                source_rows=0,
+                destination_rows=0,
+                duration_seconds=duration,
+                status="fail",
+                error_message=str(exc)
+            )
+
+            # 2. Log failure to BigQuery audit
             log_execution_to_bigquery(
                 execution_id=execution_id,
                 resource_type="csv_ingestion",
-                node_name=csv_path.name,
-                target_table=f"{schema}.{table}",
+                node_name=source_name,
+                target_table=target_table_name,
                 status="fail",
                 duration_sec=duration,
                 rows_affected=0,
