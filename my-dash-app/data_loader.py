@@ -267,7 +267,7 @@ def build_engine() -> Engine:
         f"DATABASE={database};"
         f"UID={username};"
         f"PWD={password};"
-        f"Encrypt=yes;"
+        f"Encrypt=no;"
         f"TrustServerCertificate=yes;"
     )
 
@@ -287,35 +287,37 @@ def verify_connection(engine: Engine) -> None:
     print(f"Connected to '{row.db}' as '{row.usr}'")
 
 
+@cache.memoize()
 def load_table_ingestion_logs() -> pd.DataFrame:
-    """Load table ingestion logs and row count parity metrics from SQL Server audit table."""
+    """Load table ingestion logs and row count parity metrics from BigQuery audit table."""
     try:
-        engine = build_engine()
-        query = text("""
+        client = get_bigquery_client()
+        query = """
             SELECT 
-                log_id,
+                CAST(log_id AS STRING) AS log_id,
                 run_timestamp,
                 resource_type,
                 table_name,
                 target_table,
                 source_rows,
                 destination_rows,
-                destination_rows AS rows_inserted,  -- Added alias for AG Grid
+                destination_rows AS rows_inserted,
                 duration_seconds,
                 status,
                 error_message
-            FROM audit_metadata.table_ingestion_logs
+            FROM `quantum-echo-data-eng-prod.audit_metadata.table_ingestion_logs`
             ORDER BY run_timestamp DESC
-        """)
-        with engine.connect() as conn:
-            df = pd.read_sql(query, con=conn)
+        """
+        df = client.query(query).to_dataframe()
+        
+        print("DEBUG: Loaded ingestion logs count ->", len(df)) # Check your terminal output!
         
         if not df.empty and "run_timestamp" in df.columns:
             df["run_timestamp"] = pd.to_datetime(df["run_timestamp"])
             
         return df
     except Exception as e:
-        print(f"Warning: Could not load table ingestion logs: {e}")
+        print(f"Warning: Could not load table ingestion logs from BigQuery: {e}")
         return pd.DataFrame(columns=[
             "log_id", "run_timestamp", "resource_type", "table_name", 
             "target_table", "source_rows", "destination_rows", "rows_inserted",
