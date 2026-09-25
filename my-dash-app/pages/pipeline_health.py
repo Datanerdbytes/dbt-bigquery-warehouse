@@ -225,7 +225,11 @@ def layout():
                         [
                             html.Div(
                                 [
-                                    html.H5("Model Test Coverage", className="text-white fw-bold mb-3"),
+                                    html.H5("Model Test Coverage Overview", className="text-white fw-bold mb-3"),
+                                    html.P("Percentage of columns tested per data model.", className="text-muted small mb-3"),
+                                    dcc.Graph(id="model-coverage-chart", style={"height": "380px"}),
+                                    html.Hr(className="my-4 border-secondary"),
+                                    html.H6("Detailed Model Records", className="text-white fw-bold mb-3"),
                                     dcc.Loading(
                                         id="model-coverage-loading",
                                         type="circle",
@@ -234,11 +238,11 @@ def layout():
                                             dag.AgGrid(
                                                 id="model-coverage-grid",
                                                 rowData=[],
-                                                columnDefs=model_cov_column_defs,
+                                                columnDefs=model_cov_column_defs, # (or your existing column defs)
                                                 defaultColDef={"resizable": True, "sortable": True, "filter": True},
-                                                dashGridOptions={"pagination": True, "paginationPageSize": 20, "domLayout": "autoHeight"},
+                                                dashGridOptions={"pagination": True, "paginationPageSize": 25},
                                                 className="ag-theme-alpine-dark",
-                                                style={"height": "400px", "width": "100%"}
+                                                style={"height": "500px", "width": "100%"}
                                             )
                                         ]
                                     )
@@ -250,12 +254,15 @@ def layout():
                         tab_id="tab-model-coverage"
                     ),
 
-                    dbc.Tab(
+                   dbc.Tab(
                         [
                             html.Div(
                                 [
                                     html.H5("Column-Level Test Coverage", className="text-white fw-bold mb-3"),
                                     html.P("Columns without tests highlighted in red. Click column headers to sort/filter.", className="text-muted small mb-3"),
+                                    dcc.Graph(id="column-coverage-chart", style={"height": "350px"}),
+                                    html.Hr(className="my-4 border-secondary"),
+                                    html.H6("Detailed Column Test Records", className="text-white fw-bold mb-3"),
                                     dcc.Loading(
                                         id="column-coverage-loading",
                                         type="circle",
@@ -368,7 +375,9 @@ def layout():
         Output("kpi-models-50-val", "children"),
         Output("kpi-warnings-val", "children"),
         Output("pipeline-execution-grid", "rowData"),
+        Output("model-coverage-chart", "figure"),
         Output("model-coverage-grid", "rowData"),
+        Output("column-coverage-chart", "figure"),  
         Output("column-coverage-grid", "rowData"),
         Output("pipeline-ingestion-chart", "figure"),
         Output("table-ingestion-grid", "rowData"),
@@ -416,9 +425,88 @@ def update_pipeline_data(active_tab):
 
     # Fetch data conditionally based on active tab to optimize performance
     exec_logs = load_dbt_execution_logs().to_dict("records") if active_tab == "tab-execution" else dash.no_update
-    model_cov = load_model_coverage_details().to_dict("records") if active_tab == "tab-model-coverage" else dash.no_update
-    col_cov = load_column_coverage_details().to_dict("records") if active_tab == "tab-column-coverage" else dash.no_update
-    
+
+    # Model Coverage Tab Processing & Chart Generation
+    if active_tab == "tab-model-coverage":
+        df_model_cov = load_model_coverage_details()
+        model_cov = df_model_cov.to_dict("records") if not df_model_cov.empty else []
+        
+        if not df_model_cov.empty:
+            # Explicitly calculate coverage percentage to ensure it matches the table
+            if "tested_columns" in df_model_cov.columns and "total_columns" in df_model_cov.columns:
+                df_model_cov["calc_coverage_pct"] = (df_model_cov["tested_columns"] / df_model_cov["total_columns"].replace(0, 1)) * 100
+                cov_col = "calc_coverage_pct"
+            else:
+                # Fallback search for any existing percentage/coverage column
+                cov_col = next((col for col in df_model_cov.columns if any(k in col.lower() for k in ["cov", "pct", "percent"])), None)
+                if cov_col and df_model_cov[cov_col].max() <= 1.0:
+                    df_model_cov[cov_col] = df_model_cov[cov_col] * 100
+
+            df_sorted = df_model_cov.sort_values(cov_col, ascending=True)
+            
+            fig_model_cov = px.bar(
+                df_sorted, x=cov_col, y="model_name", orientation="h",
+                template="plotly_dark",
+                text=df_sorted[cov_col].apply(lambda x: f"{x:.2f}%"),
+                labels={cov_col: "Coverage Percentage (%)", "model_name": "Model Name"},
+                color=cov_col,
+                color_continuous_scale=["#da3633", "#f59e0b", "#10b981"],
+                range_color=[0, 100]  # <--- Fixes the scale from absolute 0% to 100%
+            )
+            
+            fig_model_cov.update_traces(textposition='outside')
+            fig_model_cov.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(t=30, b=30, l=120, r=40),
+                coloraxis_showscale=False,
+                xaxis=dict(range=[0, 115], showgrid=True, gridcolor="#374151"),
+                yaxis=dict(showgrid=False),
+                hoverlabel=dict(bgcolor="#1f2937", font_color="#ffffff", bordercolor="#374151")
+            )
+        else:
+            fig_model_cov = go.Figure()
+            fig_model_cov.update_layout(
+                template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                xaxis={"visible": False}, yaxis={"visible": False},
+                annotations=[{"text": "No model coverage records found.", "xref": "paper", "yref": "paper", "showarrow": False, "font": {"color": "#9ca3af"}}]
+            )
+    else:
+        fig_model_cov = dash.no_update
+        model_cov = dash.no_update
+
+    # Column Coverage Tab Processing
+    if active_tab == "tab-column-coverage":
+        df_col_cov = load_column_coverage_details()
+        col_cov = df_col_cov.to_dict("records") if not df_col_cov.empty else []
+        
+        if not df_col_cov.empty:
+            df_grouped = df_col_cov.groupby(["model_name", "has_tests"], as_index=False).size()
+            df_grouped["status"] = df_grouped["has_tests"].map({True: "Tested Columns", False: "Untested Columns"})
+            
+            fig_col_cov = px.bar(
+                df_grouped, x="model_name", y="size", color="status", barmode="stack",
+                template="plotly_dark",
+                labels={"model_name": "Model Name", "size": "Column Count", "status": "Coverage Status"},
+                color_discrete_map={"Tested Columns": "#10b981", "Untested Columns": "#da3633"}
+            )
+            fig_col_cov.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(t=30, b=30, l=40, r=10),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                hoverlabel=dict(bgcolor="#1f2937", font_color="#ffffff", bordercolor="#374151")
+            )
+        else:
+            fig_col_cov = go.Figure()
+            fig_col_cov.update_layout(
+                template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                xaxis={"visible": False}, yaxis={"visible": False},
+                annotations=[{"text": "No column coverage records found.", "xref": "paper", "yref": "paper", "showarrow": False, "font": {"color": "#9ca3af"}}]
+            )
+    else:
+        fig_col_cov = dash.no_update
+        col_cov = dash.no_update
+
+    # Table Ingestion Tab Processing
     if active_tab == "tab-table-ingestion":
         df_ingestion = load_table_ingestion_logs()
         ingestion_grid = df_ingestion.to_dict("records") if not df_ingestion.empty else []
@@ -460,10 +548,14 @@ def update_pipeline_data(active_tab):
         fig_ingestion = dash.no_update
         ingestion_grid = dash.no_update
 
+    # Final Return matching the exact 19 outputs order
     return (
         kpi_source, kpi_latest, kpi_passed, kpi_failed, kpi_cov, kpi_tested_cols, 
         kpi_tot_tests, kpi_avg_dur, kpi_m100, kpi_m80, kpi_m50, kpi_warn,
-        exec_logs, model_cov, col_cov, fig_ingestion, ingestion_grid
+        exec_logs, 
+        fig_model_cov, model_cov, 
+        fig_col_cov, col_cov, 
+        fig_ingestion, ingestion_grid
     )
 
 # Existing BQ Cost callback remains independent and lazy-loaded
