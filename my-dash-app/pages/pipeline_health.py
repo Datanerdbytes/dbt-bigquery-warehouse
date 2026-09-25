@@ -92,14 +92,21 @@ def layout():
             y="row_count",
             color="metric_type",
             barmode="group",
+            text="row_count",
             template="plotly_dark",
             labels={"table_name": "Table Name", "row_count": "Row Count", "metric_type": "System Layer"},
             color_discrete_map={"SQL Server (Source)": "#3b82f6", "BigQuery (Destination)": "#10b981"}
         )
+
+        fig_ingestion.update_traces(
+            texttemplate='%{text:,}',  # Formats numbers with commas (e.g., 60,398)
+            textposition='outside'     # Places the label right on top of the bar
+        )
+
         fig_ingestion.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            margin=dict(t=10, b=30, l=40, r=10),
+            margin=dict(t=30, b=30, l=40, r=10),  # Increased top margin to give labels breathing room
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             hoverlabel=dict(bgcolor="#1f2937", font_color="#ffffff", bordercolor="#374151")
         )
