@@ -13,124 +13,142 @@ from components.kpi_bar import create_kpi_bar
 dash.register_page(__name__, path="/customers", name="Customer 360")
 
 def layout():
-    # Load cached options inside layout function to build initial dropdowns dynamically
-    df_merged, min_data_date, max_data_date, category_options, country_options = load_and_prep_data()
-
+    # LIGHTWEIGHT LAYOUT: No heavy data processing during initial page render.
+    # Dropdowns and initial metrics load asynchronously via callbacks.
     return html.Div(
-    className="dashboard-container py-3",
-    children=[
-        dbc.Container(
-            [
-                # Page Title & Overview
-                html.Div(
-                    [
-                        html.H3("Customer 360", className="text-white fw-bold mb-1"),
-                        html.P("Comprehensive customer analytics including RFM segmentation, lifetime value distribution, and retention trends.", className="text-muted small mb-0"),
-                    ],
-                    className="mb-4"
-                ),
-                # Row 1: Filter Control Bar
-                create_filter_bar(
-                    df_merged,
-                    date_picker_id="c360-date-picker",
-                    category_dropdown_id="c360-category-dropdown",
-                    country_dropdown_id="c360-country-dropdown"
-                ),
-                # Row 2: KPI Cards
-                dcc.Loading(
-                    id="c360-kpi-loading",
-                    type="circle",
-                    color="#10b981",
-                    children=create_kpi_bar([
-                        ("ACTIVE CUSTOMERS", "c360-kpi-active-cust"),
-                        ("AVG SPEND / CUST", "c360-kpi-avg-spend"),
-                        ("AVG ORDER FREQ", "c360-kpi-avg-freq"),
-                        ("REPEAT RATE", "c360-kpi-repeat-rate"),
+        className="dashboard-container py-3",
+        children=[
+            # Hidden dummy div to trigger initial asynchronous load on page mount
+            html.Div(id="c360-page-loaded", style={"display": "none"}),
+            dbc.Container(
+                [
+                    # Page Title & Overview
+                    html.Div(
+                        [
+                            html.H3("Customer 360", className="text-white fw-bold mb-1"),
+                            html.P("Comprehensive customer analytics including RFM segmentation, lifetime value distribution, and retention trends.", className="text-muted small mb-0"),
+                        ],
+                        className="mb-4"
+                    ),
+                    # Row 1: Filter Control Bar
+                    html.Div(id="c360-filter-bar-container", children=[
+                        create_filter_bar(
+                            pd.DataFrame(), # Empty placeholder frame for instant render
+                            date_picker_id="c360-date-picker",
+                            category_dropdown_id="c360-category-dropdown",
+                            country_dropdown_id="c360-country-dropdown"
+                        )
                     ]),
-                    fullscreen=False,
-                    className="mb-3"
-                ),
+                    # Row 2: KPI Cards
+                    dcc.Loading(
+                        id="c360-kpi-loading",
+                        type="circle",
+                        color="#10b981",
+                        children=create_kpi_bar([
+                            ("ACTIVE CUSTOMERS", "c360-kpi-active-cust"),
+                            ("AVG SPEND / CUST", "c360-kpi-avg-spend"),
+                            ("AVG ORDER FREQ", "c360-kpi-avg-freq"),
+                            ("REPEAT RATE", "c360-kpi-repeat-rate"),
+                        ]),
+                        fullscreen=False,
+                        className="mb-3"
+                    ),
 
-                # Row 3: RFM Segmentation & Spend Distribution
-                dbc.Row(
-                    [
-                        dbc.Col(
-                            html.Div(
-                                [
-                                    html.H5("Customer RFM Segmentation", className="fw-bold text-light mb-2"),
-                                    dcc.Loading(
-                                        id="c360-rfm-loading",
-                                        type="circle",
-                                        color="#10b981",
-                                        children=dcc.Graph(id="c360-rfm-segment-graph", config={"displayModeBar": False}),
-                                        fullscreen=False
-                                    )
-                                ],
-                                className="dark-card p-3 rounded shadow-sm mb-3"
+                    # Row 3: RFM Segmentation & Spend Distribution
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.H5("Customer RFM Segmentation", className="fw-bold text-light mb-2"),
+                                        dcc.Loading(
+                                            id="c360-rfm-loading",
+                                            type="circle",
+                                            color="#10b981",
+                                            children=dcc.Graph(id="c360-rfm-segment-graph", config={"displayModeBar": False}),
+                                            fullscreen=False
+                                        )
+                                    ],
+                                    className="dark-card p-3 rounded shadow-sm mb-3"
+                                ),
+                                width=12, lg=6
                             ),
-                            width=12, lg=6
-                        ),
-                        dbc.Col(
-                            html.Div(
-                                [
-                                    html.H5("Customer Spend Distribution (CLV)", className="fw-bold text-light mb-2"),
-                                    dcc.Loading(
-                                        id="c360-spend-loading",
-                                        type="circle",
-                                        color="#10b981",
-                                        children=dcc.Graph(id="c360-spend-dist-graph", config={"displayModeBar": False}),
-                                        fullscreen=False
-                                    )
-                                ],
-                                className="dark-card p-3 rounded shadow-sm mb-3"
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.H5("Customer Spend Distribution (CLV)", className="fw-bold text-light mb-2"),
+                                        dcc.Loading(
+                                            id="c360-spend-loading",
+                                            type="circle",
+                                            color="#10b981",
+                                            children=dcc.Graph(id="c360-spend-dist-graph", config={"displayModeBar": False}),
+                                            fullscreen=False
+                                        )
+                                    ],
+                                    className="dark-card p-3 rounded shadow-sm mb-3"
+                                ),
+                                width=12, lg=6
                             ),
-                            width=12, lg=6
-                        ),
-                    ]
-                ),
+                        ]
+                    ),
 
-                # Row 4: High Value Table & Active Customer Trend
-                dbc.Row(
-                    [
-                        dbc.Col(
-                            html.Div(
-                                [
-                                    html.H5("Top High-Value Champions", className="fw-bold text-white mb-2"),
-                                    dcc.Loading(
-                                        id="c360-table-loading",
-                                        type="circle",
-                                        color="#10b981",
-                                        children=html.Div(id="c360-top-customers-table-container"),
-                                        fullscreen=False
-                                    )
-                                ],
-                                className="dark-card p-3 rounded shadow-sm mb-3"
+                    # Row 4: High Value Table & Active Customer Trend
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.H5("Top High-Value Champions", className="fw-bold text-white mb-2"),
+                                        dcc.Loading(
+                                            id="c360-table-loading",
+                                            type="circle",
+                                            color="#10b981",
+                                            children=html.Div(id="c360-top-customers-table-container"),
+                                            fullscreen=False
+                                        )
+                                    ],
+                                    className="dark-card p-3 rounded shadow-sm mb-3"
+                                ),
+                                width=12, lg=6
                             ),
-                            width=12, lg=6
-                        ),
-                        dbc.Col(
-                            html.Div(
-                                [
-                                    html.H5("Active Customer Trend", className="fw-bold text-white mb-2"),
-                                    dcc.Loading(
-                                        id="c360-trend-loading",
-                                        type="circle",
-                                        color="#10b981",
-                                        children=dcc.Graph(id="c360-cust-trend-graph", config={"displayModeBar": False}),
-                                        fullscreen=False
-                                    )
-                                ],
-                                className="dark-card p-3 rounded shadow-sm mb-3"
+                            dbc.Col(
+                                html.Div(
+                                    [
+                                        html.H5("Active Customer Trend", className="fw-bold text-white mb-2"),
+                                        dcc.Loading(
+                                            id="c360-trend-loading",
+                                            type="circle",
+                                            color="#10b981",
+                                            children=dcc.Graph(id="c360-cust-trend-graph", config={"displayModeBar": False}),
+                                            fullscreen=False
+                                        )
+                                    ],
+                                    className="dark-card p-3 rounded shadow-sm mb-3"
+                                ),
+                                width=12, lg=6
                             ),
-                            width=12, lg=6
-                        ),
-                    ]
-                )
-            ],
-            fluid=True
-        )
-    ]
+                        ]
+                    )
+                ],
+                fluid=True
+            )
+        ]
+    )
+
+# --- ASYNC FILTER BAR POPULATION ON LOAD ---
+@callback(
+    Output("c360-filter-bar-container", "children"),
+    Input("c360-page-loaded", "id")
 )
+
+def populate_c360_filter_bar(_):
+    df_merged, _, _, _, _ = load_and_prep_data()
+    return create_filter_bar(
+        df_merged,
+        date_picker_id="c360-date-picker",
+        category_dropdown_id="c360-category-dropdown",
+        country_dropdown_id="c360-country-dropdown"
+    )
 
 # --- FILTER STORE SYNC CALLBACK ---
 @callback(
@@ -154,17 +172,14 @@ def sync_c360_filters_to_store(start_date, end_date, category, country):
 # --- KPI Callback ---
 @callback(
     [
-        # Values (Main Numbers)
         Output("c360-kpi-active-cust-value", "children"),
         Output("c360-kpi-avg-spend-value", "children"),
         Output("c360-kpi-avg-freq-value", "children"),
         Output("c360-kpi-repeat-rate-value", "children"),
-        # Badges
         Output("c360-kpi-active-cust-badge", "children"),
         Output("c360-kpi-avg-spend-badge", "children"),
         Output("c360-kpi-avg-freq-badge", "children"),
         Output("c360-kpi-repeat-rate-badge", "children"),
-        # Tooltips
         Output("c360-kpi-active-cust-tooltip", "children"),
         Output("c360-kpi-avg-spend-tooltip", "children"),
         Output("c360-kpi-avg-freq-tooltip", "children"),
@@ -188,23 +203,19 @@ def update_customer_kpis(filter_data):
 
     df_merged, _, _, _, _ = load_and_prep_data()
 
-    # Parse current period dates
     curr_start = pd.to_datetime(start_date)
     curr_end = pd.to_datetime(end_date)
     date_diff = curr_end - curr_start
 
-    # Calculate previous period dates of equal length
     prev_end = curr_start - pd.Timedelta(days=1)
     prev_start = prev_end - date_diff
 
-    # Filter current & previous datasets
     curr_df = filter_dataframe(df_merged, curr_start, curr_end, selected_category, selected_country)
     prev_df = filter_dataframe(df_merged, prev_start, prev_end, selected_category, selected_country)
 
     if curr_df.empty:
         return "0", "$0", "0.00", "0%", empty_badge, empty_badge, empty_badge, empty_badge, "No data", "No data", "No data", "No data"
 
-    # --- Compute Current Metrics ---
     curr_summary = curr_df.groupby("customer_key").agg(
         total_spend=("gross_sales_amount", "sum"),
         total_orders=("order_number", "nunique"),
@@ -217,7 +228,6 @@ def update_customer_kpis(filter_data):
     curr_repeat_cnt = (curr_summary["total_orders"] > 1).sum()
     curr_repeat_rate = (curr_repeat_cnt / curr_cust * 100) if curr_cust > 0 else 0
 
-    # --- Compute Previous Metrics ---
     if not prev_df.empty:
         prev_summary = prev_df.groupby("customer_key").agg(
             total_spend=("gross_sales_amount", "sum"),
@@ -232,13 +242,11 @@ def update_customer_kpis(filter_data):
     else:
         prev_cust = prev_spend = prev_freq = prev_repeat_rate = 0
 
-    # Generate dynamic soft badges matching overview.py styling
     badge_cust = create_trend_badge(curr_cust, prev_cust)
     badge_spend = create_trend_badge(curr_spend, prev_spend)
     badge_freq = create_trend_badge(curr_freq, prev_freq)
     badge_repeat = create_trend_badge(curr_repeat_rate, prev_repeat_rate)
 
-    # Tooltips
     single_order_cust = curr_cust - curr_repeat_cnt
     max_spend = curr_summary["total_spend"].max() if not curr_summary.empty else 0
     median_spend = curr_summary["total_spend"].median() if not curr_summary.empty else 0

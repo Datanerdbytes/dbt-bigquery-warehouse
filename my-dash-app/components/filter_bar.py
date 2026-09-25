@@ -9,34 +9,44 @@ def create_filter_bar(
     category_dropdown_id,
     country_dropdown_id
 ):
-    # Detect category and country columns dynamically
-    cat_col = next((c for c in ["category_name", "category", "product_category", "Category"] if c in df_merged.columns), None)
-    country_col = next((c for c in ["country", "region", "Country", "Region"] if c in df_merged.columns), None)
+    # Handle empty DataFrame safely
+    if df_merged is None or df_merged.empty:
+        min_date_allowed = "2023-01-01"
+        max_date_allowed = "2026-12-31"
+        default_start_date = "2023-01-01"
+        default_end_date = "2026-12-31"
+        category_options = [{"label": "All Categories", "value": "ALL"}]
+        country_options = [{"label": "All Countries", "value": "ALL"}]
+    else:
+        # Detect category and country columns dynamically
+        cat_col = next((c for c in ["category_name", "category", "product_category", "Category"] if c in df_merged.columns), None)
+        country_col = next((c for c in ["country", "region", "Country", "Region"] if c in df_merged.columns), None)
 
-    # Build options
-    category_options = [{"label": "All Categories", "value": "ALL"}]
-    if cat_col:
-        category_options += [{"label": str(cat), "value": str(cat)} for cat in sorted(df_merged[cat_col].dropna().unique())]
+        # Build options
+        category_options = [{"label": "All Categories", "value": "ALL"}]
+        if cat_col:
+            category_options += [{"label": str(cat), "value": str(cat)} for cat in sorted(df_merged[cat_col].dropna().unique())]
 
-    country_options = [{"label": "All Countries", "value": "ALL"}]
-    if country_col:
-        country_options += [{"label": str(country), "value": str(country)} for country in sorted(df_merged[country_col].dropna().unique())]
+        country_options = [{"label": "All Countries", "value": "ALL"}]
+        if country_col:
+            country_options += [{"label": str(country), "value": str(country)} for country in sorted(df_merged[country_col].dropna().unique())]
 
-    # Date range boundaries across entire dataset
-    date_col = next((c for c in ["order_date", "OrderDate", "date"] if c in df_merged.columns), df_merged.columns[0])
-    
-    # Ensure datetime format for calculations
-    dates = pd.to_datetime(df_merged[date_col].dropna())
-    
-    min_date_allowed = dates.min()
-    max_date_allowed = dates.max()
-
-    # Determine default start/end dates based on the latest year present in the dataset
-    latest_year = dates.dt.year.max()
-    latest_year_dates = dates[dates.dt.year == latest_year]
-
-    default_start_date = latest_year_dates.min().strftime("%Y-%m-%d")
-    default_end_date = latest_year_dates.max().strftime("%Y-%m-%d")
+        # Date range boundaries across entire dataset
+        date_col = next((c for c in ["order_date", "OrderDate", "date"] if c in df_merged.columns), df_merged.columns[0] if len(df_merged.columns) > 0 else None)
+        
+        if date_col and date_col in df_merged.columns:
+            dates = pd.to_datetime(df_merged[date_col].dropna())
+            if not dates.empty:
+                min_date_allowed = dates.min().strftime("%Y-%m-%d")
+                max_date_allowed = dates.max().strftime("%Y-%m-%d")
+                latest_year = dates.dt.year.max()
+                latest_year_dates = dates[dates.dt.year == latest_year]
+                default_start_date = latest_year_dates.min().strftime("%Y-%m-%d")
+                default_end_date = latest_year_dates.max().strftime("%Y-%m-%d")
+            else:
+                min_date_allowed, max_date_allowed, default_start_date, default_end_date = "2023-01-01", "2026-12-31", "2023-01-01", "2026-12-31"
+        else:
+            min_date_allowed, max_date_allowed, default_start_date, default_end_date = "2023-01-01", "2026-12-31", "2023-01-01", "2026-12-31"
 
     return html.Div(
         dbc.Row(

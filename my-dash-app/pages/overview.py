@@ -9,18 +9,17 @@ from data_loader import load_and_prep_data
 from components.kpi_bar import create_kpi_bar
 from components.filter_bar import create_filter_bar
 
-# Unpack data and configuration variables
-
-
+# Register Page
 dash.register_page(__name__, path="/", name="Product Overview")
 
 def layout():
-    # Calling cached load function inside the layout scope
-    df_merged, min_data_date, max_data_date, category_options, country_options = load_and_prep_data()
-
+    # LIGHTWEIGHT LAYOUT: No heavy data loading during initial page render.
+    # Dropdowns and initial metrics load asynchronously via callbacks.
     return html.Div(
         className="dashboard-container py-3",
         children=[
+            # Hidden dummy div to trigger initial asynchronous load on page mount
+            html.Div(id="overview-page-loaded", style={"display": "none"}),
             dbc.Container(
                 [
                     # Page Title & Overview
@@ -31,13 +30,15 @@ def layout():
                         ],
                         className="mb-4"
                     ),
-                    # 1. Filter Control Bar
-                    create_filter_bar(
-                        df_merged,
-                        date_picker_id="date-picker-range",
-                        category_dropdown_id="category-dropdown",
-                        country_dropdown_id="country-dropdown"
-                    ),
+                    # 1. Filter Control Bar (Loaded asynchronously)
+                    html.Div(id="overview-filter-bar-container", children=[
+                        create_filter_bar(
+                            pd.DataFrame(), # Empty placeholder frame for instant render
+                            date_picker_id="date-picker-range",
+                            category_dropdown_id="category-dropdown",
+                            country_dropdown_id="country-dropdown"
+                        )
+                    ]),
                     # 2. KPI Cards Bar
                     dcc.Loading(
                         id="kpi-loading",
@@ -174,15 +175,31 @@ def layout():
         ]
     )
 
+# --- ASYNC FILTER BAR POPULATION ON LOAD ---
+@callback(
+    Output("overview-filter-bar-container", "children"),
+    Input("overview-page-loaded", "id")
+)
+
+def populate_overview_filter_bar(_):
+    df_merged, _, _, _, _ = load_and_prep_data()
+    return create_filter_bar(
+        df_merged,
+        date_picker_id="date-picker-range",
+        category_dropdown_id="category-dropdown",
+        country_dropdown_id="country-dropdown"
+    )
+
 # --- FILTER STORE SYNC CALLBACK ---
 @callback(
-    Output("global-filter-store", "data"),
+    Output("global-filter-store", "data", allow_duplicate=True),
     [
         Input("date-picker-range", "start_date"),
         Input("date-picker-range", "end_date"),
         Input("category-dropdown", "value"),
         Input("country-dropdown", "value")
-    ]
+    ],
+    prevent_initial_call=True
 )
 def update_filter_store(start_date, end_date, category, country):
     return {
@@ -210,7 +227,6 @@ def update_filter_store(start_date, end_date, category, country):
     ],
    Input("global-filter-store", "data")
 )
-
 def update_all_kpis(filter_data):
     if not filter_data:
         return (no_update,) * 12
@@ -220,11 +236,14 @@ def update_all_kpis(filter_data):
     selected_category = filter_data.get("category")
     selected_country = filter_data.get("country")
 
+    if not start_date or not end_date:
+        return (no_update,) * 12
+
     # Retrieve cached dataset instantly from Flask-Caching
     df_merged, _, _, _, _ = load_and_prep_data()
     filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
 
-    # 1. Handle Empty DataFrame Case (Must return 12 outputs to match decorator)
+    # 1. Handle Empty DataFrame Case
     if filtered_df.empty:
         empty_tooltip = [html.Div("No data available", className="text-start")]
         empty_badge = html.Span("N/A", className="badge-soft-secondary")
@@ -246,25 +265,25 @@ def update_all_kpis(filter_data):
     quantity_display = format_compact_number(total_quantity, is_currency=False)
     customers_display = format_compact_number(total_customers, is_currency=False)
 
-    # 3. Compute Dynamic Period-over-Period Badges (Pass full df_merged to access prior dates)
+    # 3. Compute Dynamic Period-over-Period Badges
     sales_badge = calculate_pop_badge(
-    df_merged, "order_date", "gross_sales_amount", 
-    start_date, end_date, "sum", selected_category, selected_country
+        df_merged, "order_date", "gross_sales_amount", 
+        start_date, end_date, "sum", selected_category, selected_country
     )
 
     orders_badge = calculate_pop_badge(
-    df_merged, "order_date", "order_number", 
-    start_date, end_date, "nunique", selected_category, selected_country
+        df_merged, "order_date", "order_number", 
+        start_date, end_date, "nunique", selected_category, selected_country
     )
 
     quantity_badge = calculate_pop_badge(
-    df_merged, "order_date", "quantity", 
-    start_date, end_date, "sum", selected_category, selected_country
+        df_merged, "order_date", "quantity", 
+        start_date, end_date, "sum", selected_category, selected_country
     )   
 
     customers_badge = calculate_pop_badge(
-    df_merged, "order_date", "customer_key", 
-    start_date, end_date, "nunique", selected_category, selected_country
+        df_merged, "order_date", "customer_key", 
+        start_date, end_date, "nunique", selected_category, selected_country
     )
 
     # 4. Tooltip Metrics
@@ -298,7 +317,6 @@ def update_all_kpis(filter_data):
         html.Div(f"• Orders / Customer: {orders_per_customer:,.2f}", className="text-start")
     ]
 
-    # 5. Exact 12 Output Return Tuple
     return (
         sales_display,
         orders_display,
@@ -328,6 +346,9 @@ def update_sales_trend(filter_data):
     end_date = filter_data.get("end_date")
     selected_category = filter_data.get("category")
     selected_country = filter_data.get("country")
+
+    if not start_date or not end_date:
+        return no_update
 
     df_merged, _, _, _, _ = load_and_prep_data()
     filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
@@ -391,6 +412,9 @@ def update_category_pie(filter_data):
     selected_category = filter_data.get("category")
     selected_country = filter_data.get("country")
 
+    if not start_date or not end_date:
+        return no_update
+
     df_merged, _, _, _, _ = load_and_prep_data()
     filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
 
@@ -446,6 +470,9 @@ def update_top_products(filter_data):
     end_date = filter_data.get("end_date")
     selected_category = filter_data.get("category")
     selected_country = filter_data.get("country")
+
+    if not start_date or not end_date:
+        return no_update
 
     df_merged, _, _, _, _ = load_and_prep_data()
     filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
@@ -509,6 +536,9 @@ def update_regional_sales(filter_data):
     selected_category = filter_data.get("category")
     selected_country = filter_data.get("country")
 
+    if not start_date or not end_date:
+        return no_update
+
     df_merged, _, _, _, _ = load_and_prep_data()
     filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
 
@@ -556,6 +586,7 @@ def update_regional_sales(filter_data):
 
     return fig
 
+
 # --- MODAL CALLBACK ---
 @callback(
     [
@@ -586,14 +617,12 @@ def toggle_product_modal(clickData, close_clicks, filter_data):
     if trigger_id == "top-products-graph" and clickData:
         product_name = clickData["points"][0]["y"]
 
-        # Safely unpack stored filter state
         filter_data = filter_data or {}
         start_date = filter_data.get("start_date")
         end_date = filter_data.get("end_date")
         selected_category = filter_data.get("category")
         selected_country = filter_data.get("country")
 
-        # Pull server-cached dataset and apply filter parameters
         df_merged, _, _, _, _ = load_and_prep_data()
         filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
         product_df = filtered_df.loc[filtered_df["product_name"] == product_name].copy()
@@ -605,7 +634,6 @@ def toggle_product_modal(clickData, close_clicks, filter_data):
         total_qty = product_df["quantity"].sum()
         total_orders = product_df["order_number"].nunique()
 
-        # KPI Summary Card with Dark Styling
         kpi_summary = dbc.Row([
             dbc.Col(html.Div([html.Small("Revenue", className="text-muted d-block text-uppercase fw-semibold"), html.Strong(f"${total_rev:,.0f}", className="fs-5 text-white")]), width=4),
             dbc.Col(html.Div([html.Small("Units Sold", className="text-muted d-block text-uppercase fw-semibold"), html.Strong(f"{total_qty:,}", className="fs-5 text-white")]), width=4),
@@ -620,7 +648,6 @@ def toggle_product_modal(clickData, close_clicks, filter_data):
         records_df["customer_name"] = records_df["first_name"].fillna('') + " " + records_df["last_name"].fillna('')
         records_df["order_date"] = records_df["order_date"].dt.strftime("%Y-%m-%d")
 
-        # --- REPLACE DASH DATATABLE WITH AG-GRID HERE ---
         column_defs = [
             {"field": "order_number", "headerName": "Order #"},
             {"field": "order_date", "headerName": "Date"},
@@ -638,7 +665,6 @@ def toggle_product_modal(clickData, close_clicks, filter_data):
         detail_table = dag.AgGrid(
             rowData=records_df.to_dict("records"),
             columnDefs=column_defs,
-            # className="ag-theme-alpine-dark".
             dashGridOptions={
                 "theme": "themeBalham", 
                 "animateRows": True, 
@@ -668,7 +694,6 @@ def export_selected_product_details(n_clicks, click_data, filter_data):
     if not n_clicks or not click_data or not filter_data:
         return no_update
 
-    # Extract clicked product name from clickData
     product_name = click_data["points"][0]["y"]
 
     start_date = filter_data.get("start_date")
@@ -676,7 +701,6 @@ def export_selected_product_details(n_clicks, click_data, filter_data):
     selected_category = filter_data.get("category", "ALL")
     selected_country = filter_data.get("country", "ALL")
 
-    # Load and filter dataset
     df_merged, _, _, _, _ = load_and_prep_data()
     filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
     product_df = filtered_df[filtered_df["product_name"] == product_name].copy()
@@ -684,7 +708,6 @@ def export_selected_product_details(n_clicks, click_data, filter_data):
     if product_df.empty:
         return no_update
 
-    # Format table output for CSV
     product_df["customer_name"] = product_df["first_name"].fillna("") + " " + product_df["last_name"].fillna("")
     
     export_df = product_df[[
