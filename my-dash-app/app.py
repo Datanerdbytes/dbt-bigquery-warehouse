@@ -326,15 +326,16 @@ def execute_csv_download(n_clicks, filter_data, pathname):
     Output("app-wrapper", "className"),
     [Input("sidebar-toggle-btn", "n_clicks")],
     [State("app-wrapper", "className")],
+    prevent_initial_call=True
 )
 def toggle_sidebar(n_clicks, current_class):
     if not n_clicks:
         return current_class
     
-    if "sidebar-open" in current_class:
-        return "d-flex app-wrapper sidebar-closed"
+    if current_class and "sidebar-closed" in current_class:
+        return "app-wrapper sidebar-open"
     else:
-        return "d-flex app-wrapper sidebar-open"
+        return "app-wrapper sidebar-closed"
 
 if __name__ == "__main__":
     app.run(debug=True)
