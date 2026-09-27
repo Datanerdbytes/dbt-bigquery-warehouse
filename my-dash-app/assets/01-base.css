@@ -11,17 +11,49 @@ html, body {
 .app-wrapper {
     background-color: #0b0f19 !important;
     min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+    display: flex;
+    width: 100%;
 }
 
-.main-content-wrapper {
-    margin-left: 260px;
-    width: calc(100% - 260px);
-    max-width: calc(100% - 260px) !important;
+/* Sidebar Fixed Container with Width Transition */
+.app-wrapper .sidebar-fixed-container {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    width: 260px !important;
+    height: 100vh;
+    z-index: 1040;
+    background-color: #111827 !important;
+    border-right: 1px solid #1f2937 !important;
+    overflow-x: hidden;
+    overflow-y: auto;
+    transition: width 0.3s ease-in-out !important;
+}
+
+/* When closed, the sidebar shrinks to a 70px slim rail */
+.app-wrapper.sidebar-closed .sidebar-fixed-container {
+    width: 70px !important;
+}
+
+
+
+/* Main Content Wrapper Adjustment */
+.app-wrapper .main-content-wrapper {
+    flex: 1;
     min-height: 100vh;
     background-color: #0b0f19 !important;
     padding-top: 0 !important;
     padding-left: 1.5rem !important;
     padding-right: 1.5rem !important;
+    transition: margin-left 0.3s ease-in-out !important;
+    margin-left: 260px !important; /* Open state margin */
+}
+
+/* When the sidebar is collapsed to 70px, the content margin adjusts to match */
+.app-wrapper.sidebar-closed .main-content-wrapper {
+    margin-left: 70px !important;
 }
 
 /* Dashboard Container & Grid Bleed Control */

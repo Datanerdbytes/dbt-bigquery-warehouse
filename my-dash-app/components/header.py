@@ -94,9 +94,14 @@ def create_header():
             # Left: Welcome Greeting
             html.Div(
                 [
-                    html.H4("Welcome back, Roel! 👋", className="text-white fw-bold mb-1 fs-5"),
-                    html.P("Here's an overview of your store's latest performance and pipeline observability.", className="text-muted small mb-0 fs-7")
-                ]
+                    html.Div(
+                        [
+                            html.H4("Welcome back, Roel! 👋", className="text-white fw-bold mb-1 fs-5"),
+                            html.P("Here's an overview of your store's latest performance and pipeline observability.", className="text-muted small mb-0 fs-7")
+                        ]
+                    )
+                ],
+                className="d-flex align-items-center"
             ),
 
             # Right: Notification Bell & Action Buttons
