@@ -11,17 +11,54 @@ html, body {
 .app-wrapper {
     background-color: #0b0f19 !important;
     min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
 }
 
+/* Sidebar Fixed Container */
+.sidebar-fixed-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    height: 100vh;
+    z-index: 1040;
+    background-color: #111827;
+    border-right: 1px solid #1f2937;
+    overflow-y: auto;
+    transition: transform 0.3s ease-in-out;
+    transform: translateX(0); /* Default: Open */
+}
+
+/* When closed, slide sidebar completely off-screen to the left */
+.app-wrapper.sidebar-closed .sidebar-fixed-container {
+    transform: translateX(-260px);
+}
+
+/* Main Content Wrapper */
 .main-content-wrapper {
-    margin-left: 260px;
-    width: calc(100% - 260px);
-    max-width: calc(100% - 260px) !important;
+    flex: 1;
     min-height: 100vh;
     background-color: #0b0f19 !important;
     padding-top: 0 !important;
     padding-left: 1.5rem !important;
     padding-right: 1.5rem !important;
+    transition: margin-left 0.3s ease-in-out;
+    margin-left: 260px; /* Default: Leaves room for open sidebar */
+}
+
+/* When closed, main content expands to take up the full width */
+.app-wrapper.sidebar-closed .main-content-wrapper {
+    margin-left: 0 !important;
+}
+
+.app-wrapper {
+    background-color: #0b0f19 !important;
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+    display: flex;
+    width: 100%;
 }
 
 /* Dashboard Container & Grid Bleed Control */

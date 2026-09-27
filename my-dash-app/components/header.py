@@ -91,12 +91,24 @@ def create_header():
     return html.Div(
         className="top-header-bar d-flex align-items-center justify-content-between px-4 py-3 mb-4 rounded-3 position-relative",
         children=[
-            # Left: Welcome Greeting
+            # Left: Sidebar Toggle Button + Welcome Greeting
             html.Div(
                 [
-                    html.H4("Welcome back, Roel! 👋", className="text-white fw-bold mb-1 fs-5"),
-                    html.P("Here's an overview of your store's latest performance and pipeline observability.", className="text-muted small mb-0 fs-7")
-                ]
+                    dbc.Button(
+                        html.I(className="bi bi-list fs-5"),
+                        id="sidebar-toggle-btn",
+                        color="dark",
+                        className="me-3 border-secondary text-white header-icon-btn rounded-3",
+                        style={"backgroundColor": "transparent", "padding": "0.4rem 0.75rem"}
+                    ),
+                    html.Div(
+                        [
+                            html.H4("Welcome back, Roel! 👋", className="text-white fw-bold mb-1 fs-5"),
+                            html.P("Here's an overview of your store's latest performance and pipeline observability.", className="text-muted small mb-0 fs-7")
+                        ]
+                    )
+                ],
+                className="d-flex align-items-center"
             ),
 
             # Right: Notification Bell & Action Buttons

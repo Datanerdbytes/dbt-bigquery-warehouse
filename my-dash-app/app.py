@@ -32,7 +32,14 @@ app.layout = html.Div(
     [   
         dcc.Location(id="url", refresh=False),
         dcc.Store(id="global-filter-store", storage_type="session"),
-        create_sidebar(),
+        
+        # 1. Push Sidebar Container (Fixed position, slides in/out via CSS class)
+        html.Div(
+            create_sidebar(),
+            className="sidebar-fixed-container"
+        ),
+
+        # 2. Main Content Wrapper
         html.Div(
             [
                 create_header(),  
@@ -41,7 +48,8 @@ app.layout = html.Div(
             className="main-content-wrapper p-4"
         )
     ],
-    className="d-flex app-wrapper"
+    id="app-wrapper",
+    className="app-wrapper sidebar-open"  # Starts open
 )
 
 # Helper function to create standard preview grids
@@ -312,6 +320,21 @@ def execute_csv_download(n_clicks, filter_data, pathname):
         filename = f"product_overview_summary_{start_date}_to_{end_date}.csv"
 
     return dcc.send_string(csv_string, filename=filename)
+
+# --- SIDEBAR PUSH TOGGLE CALLBACK ---
+@app.callback(
+    Output("app-wrapper", "className"),
+    [Input("sidebar-toggle-btn", "n_clicks")],
+    [State("app-wrapper", "className")],
+)
+def toggle_sidebar(n_clicks, current_class):
+    if not n_clicks:
+        return current_class
+    
+    if "sidebar-open" in current_class:
+        return "d-flex app-wrapper sidebar-closed"
+    else:
+        return "d-flex app-wrapper sidebar-open"
 
 if __name__ == "__main__":
     app.run(debug=True)
