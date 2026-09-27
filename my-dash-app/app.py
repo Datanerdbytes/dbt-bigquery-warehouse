@@ -323,19 +323,26 @@ def execute_csv_download(n_clicks, filter_data, pathname):
 
 # --- SIDEBAR PUSH TOGGLE CALLBACK ---
 @app.callback(
-    Output("app-wrapper", "className"),
+    [Output("app-wrapper", "className"),
+     Output("sidebar-toggle-btn", "children")],
     [Input("sidebar-toggle-btn", "n_clicks")],
     [State("app-wrapper", "className")],
     prevent_initial_call=True
 )
 def toggle_sidebar(n_clicks, current_class):
     if not n_clicks:
-        return current_class
+        return no_update, no_update
     
     if current_class and "sidebar-closed" in current_class:
-        return "app-wrapper sidebar-open"
+        # Opening the sidebar -> Show hamburger menu
+        new_class = "app-wrapper sidebar-open"
+        new_icon = html.I(className="bi bi-list fs-5")
     else:
-        return "app-wrapper sidebar-closed"
+        # Closing the sidebar -> Show double greater-than chevrons
+        new_class = "app-wrapper sidebar-closed"
+        new_icon = html.I(className="bi bi-chevron-double-right fs-5")
+        
+    return new_class, new_icon
 
 if __name__ == "__main__":
     app.run(debug=True)
