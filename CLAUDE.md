@@ -1,3 +1,6 @@
+Replace `AGENTS.md` with this integrated version:
+
+````markdown
 # Agent Context & Rules
 
 ## 1. Project Overview
@@ -7,82 +10,111 @@
 
 ## 2. Tech Stack & Environment
 - **Language:** Python 3.[X]
-- **Core Framework:** Plotly Dash (Multi-page via `dash.register_page` architecture)
-- **Underlying Engine:** Flask (Used for server-side configurations and Flask-Caching)
-- **Data Engine:** Google BigQuery (Live connection via Application Default Credentials) & dbt Artifact Telemetry
+- **Core Framework:** Plotly Dash
+- **Underlying Engine:** Flask, including Flask-Caching
+- **Data Engine:** Google BigQuery via Application Default Credentials (ADC), plus dbt artifact telemetry
 - **Data Libraries:** `google-cloud-bigquery`, `pandas`, `pandas-gbq`, `pyarrow`, `json`
-- **Caching Framework:** `Flask-Caching` (Configured via FileSystemCache or Redis)
-- **Styling:** Dash Bootstrap Components (DBC) + Modular CSS layout overrides
-- **Code Formatters:** `black` for Python formatting, Prettier for CSS formatting
+- **Caching Framework:** Flask-Caching with FileSystemCache or Redis
+- **Styling:** Dash component libraries and modular CSS
+- **Code Formatters:** `black` for Python and Prettier for CSS
 
 ## 3. Architecture & File Structure
-- **Application Structure:** Multi-page app using native `dash.register_page` architecture.
-- **Data Flow:** `utils/data_loader.py` initializes the BigQuery client securely using GCP Application Default Credentials (ADC). Specific data-fetching functions are optimized with server-side caching (`@cache.memoize`) to return Pandas DataFrames efficiently. Layouts pull data inside callbacks or via a layout function, feeding into local browser memory (`dcc.Store`) or UI interfaces. 
-- **Observability Data Flow:** Pipeline observability telemetry is evaluated by loading and processing metadata from `analytics_layer/target/manifest.json`. Raw contents must be transformed into a memory-efficient flat schema during application execution or layout building to ensure stable page responsiveness.
-- **Directory Layout:**
+- Use Dash Pages with `dash.page_registry` and `dash.register_page(__name__)`, unless the Snapshot Engine is used. With Snapshot Engine, use callback routing instead of Dash Pages.
+- Keep Dash page modules in a `pages/` directory.
+- `utils/data_loader.py` initializes the BigQuery client securely with ADC. Cache expensive data-fetching operations server-side.
+- Pipeline observability telemetry is derived from `analytics_layer/target/manifest.json`. Transform raw contents into a memory-efficient flat schema.
+- The app entry point must expose the Flask server: `server = app.server`.
 
-# Directory Structure: demo-database
+Expected project structure:
 
 ```text
 demo-database/
-├── .venv/                      # Python virtual environment
-├── Scripts/                    # Data ingestion & DDL scripts
-│   ├── ingest_bronze.py        # Bronze layer ingestion to BigQuery
-│   ├── ingest_bigquery.py      # BigQuery load utilities
-│   ├── ingest_dbt_artifacts.py # dbt artifact ingestion (manifest.json, run_results.json)
-│   └── ddl_create_bronze_*.sql # DDL for bronze tables
-├── analytics_layer/            # dbt project (analytics_layer profile)
-│   ├── models/                 # dbt models (staging → marts)
-│   │   ├── staging/            # Silver layer (cleaned/transformed)
-│   │   └── marts/              # Gold layer (business-ready)
-│   └── target/                 # dbt compile artifacts (manifest.json)
-├── my-dash-app/                # Plotly Dash application
-│   ├── assets/                 # Custom CSS styling sheets (auto-loaded by Dash)
-│   ├── components/             # Reusable UI component modules
-│   │   ├── filter_bar.py
-│   │   ├── header.py
-│   │   ├── kpi_bar.py
-│   │   └── sidebar.py
-│   ├── pages/                  # Individual dashboard layout modules (dash.register_page)
-│   │   ├── overview.py         # Main overview dashboard
-│   │   ├── customer_360.py     # Customer 360 detail page
-│   │   └── pipeline_health.py  # Pipeline observability page
-│   ├── utils/                  # Utility modules (cache config, helpers)
-│   │   ├── cache.py            # Flask-Caching configuration
-│   │   └── helpers.py          # DataFrame filtering helpers
-│   ├── app.py                  # Main entry point: Dash init, cache, layout shell
-│   ├── app_observability.py    # Standalone observability app (manifest parsing, lineage)
-│   ├── data_loader.py          # BigQuery data fetchers with @cache.memoize
-│   └── requirements.txt        # Pinned Python dependencies
-├── AGENTS.md                   # This file (Global agent-specific rules)
-├── CLAUDE.md                   # Comprehensive instruction file
-└── Notebooks/                  # Jupyter notebooks for exploration
+├── .venv/
+├── Scripts/
+│   ├── ingest_bronze.py
+│   ├── ingest_bigquery.py
+│   ├── ingest_dbt_artifacts.py
+│   └── ddl_create_bronze_*.sql
+├── analytics_layer/
+│   ├── models/
+│   │   ├── staging/
+│   │   └── marts/
+│   └── target/
+├── my-dash-app/
+│   ├── assets/
+│   ├── components/
+│   ├── pages/
+│   ├── utils/
+│   ├── app.py
+│   ├── app_observability.py
+│   ├── data_loader.py
+│   └── requirements.txt
+├── AGENTS.md
+├── CLAUDE.md
+└── Notebooks/
 ```
-## 4. General Architecture & Standards
-- **Global Variables**: Never use global variables to store user-specific state. All mutable state must live in the client browser using `dcc.Store` or URL parameters to maintain thread safety.
-- **Server Variable**: Make sure the app file always exposes a server variable: `server = app.server`
-- **Dash Pages**: Use `dash.page_registry`, keep all pages in a `pages/` directory, and register each page with `dash.register_page(__name__)`.
-- **App IDs**: Prefer descriptive IDs like `"sales-filter-dropdown"` or `"observability-node-selector"` over `"dropdown-1"`. IDs must be unique across the entire app, including all pages.
-- **Loading Data**: Load data inside callbacks, not at import time. Avoid `df = pd.read_csv(...)` or database fetches at the module level. Fetch or refresh data inside the callback that needs it.
-- **Server-side Filtering**: Filter, aggregate, and paginate data in Python/SQL before passing it to graphs or `AgGrid`. Only send the rows or points needed for the current view to the client.
-- **Pin Dependencies**: Specify minimum or exact versions for `dash`, `plotly`, and component libraries in `requirements.txt` to avoid breaking changes on deploy.
 
-## 5. Callbacks & Optimization
-- **Dataset Size**: Do not pass massive datasets through `dcc.Store` if they can be cached server-side. Use `dcc.Store` only for lightweight state (IDs, UI toggles, query filters, parsed dbt metadata objects) with a maximum of 5MB.
-- **Caching**: Implement server-side caching using `flask_caching`. Decorate data-fetching operations inside `utils/data_loader.py` with the `@cache.memoize()` pattern. Ensure the cache key includes relevant query parameters.
-- **BigQuery Query Efficiency**: BigQuery charges by data scanned. The AI must always use explicit column names instead of `SELECT *`, apply logical `WHERE` filters, and implement date/time boundaries where applicable.
-- **Observability State Efficiency**: Always look up cached manifest dictionaries inside a `dcc.Store` module. Never programmatically trigger file read tasks to `analytics_layer/target/manifest.json` from within a dynamic layout update or loop callback.
-- **Input IDs**: Every `Input`, `Output`, and `State` ID referenced in a callback must be present in the layout when the callback fires. Set `suppress_callback_exceptions = True` on app initialization for multi-page routing layout safety.
-- **Prevent Callback Firing**: Apply `prevent_initial_call=True` in callback decorators that should not run on page load (e.g., actions triggered only by a button click).
-- **Prevent Unnecessary Updates**: When a callback should leave an output unchanged, return `dash.no_update` instead of raising a `PreventUpdate` exception, unless halting the entire chain is explicitly desired.
+## 4. General Architecture
+- Never use global variables to store user-specific state. Keep mutable client state in `dcc.Store` or URL parameters.
+- Use descriptive, globally unique component IDs, such as `"sales-filter-dropdown"`.
+- Load data inside callbacks, not at import time. Avoid module-level data reads or database queries; startup-loaded data will not refresh until the process restarts.
+- Use a layout function such as `def serve_layout(): ...` when the layout must be rebuilt on each page load.
+- Filter, aggregate, and paginate data in Python or SQL before sending it to graphs or `AgGrid`. Send only the rows or points needed for the current view.
+- Pin minimum or exact versions of Dash, Plotly, and component libraries in `requirements.txt`.
+- Use explicit BigQuery column names, logical filters, and date/time boundaries where applicable. Include a `LIMIT` during structural testing to control scan costs.
 
-## 6. Antigravity CLI Operations & Safety
-- **Production Safety Guidelines**: The active workspace is connected to a production Google Cloud environment (`quantum-echo-data-eng-prod`). The agent must NEVER run destructive commands (e.g., `bq rm`, `dbt clean`, or dropping production datasets) without explicit, multi-turn user confirmation.
-- **Resource Constraints**: When writing BigQuery SQL queries inside Python callbacks or scripts, the agent must enforce maximum optimization. Always include a `LIMIT` clause during structural testing to control data processing scan bills.
-- **Progressive Skill Delegation**: For specialized UI component additions, the agent should search the `.agents/skills/` directory for dedicated task capsules (like `/loading-spinner`) rather than trying to build raw script logic directly into the global app space.
+## 5. Callbacks, Data, and Performance
+- Do not pass massive datasets through `dcc.Store`. Use it only for lightweight state such as IDs, UI toggles, or query filters, with a maximum of 5 MB.
+- For large datasets, expensive queries, heavy computations, or API requests, use Flask-Caching and `@cache.memoize()`. Include relevant query parameters in cache keys.
+- Ensure every callback `Input`, `Output`, and `State` ID exists in the layout when the callback fires. For dynamic or multi-page layouts, set `suppress_callback_exceptions=True`.
+- Use `prevent_initial_call=True` for callbacks that should not run on page load, such as button-triggered actions.
+- Return `dash.no_update` when an output should remain unchanged. Use `raise PreventUpdate` when the entire callback should be skipped.
+- Keep callbacks focused: prefer one callback per user interaction and split large callbacks into smaller, composable ones.
+- Wrap potentially slow components in `dcc.Loading` to show a loading indicator.
+- Use background callbacks for work that takes more than a few seconds, with `background=True` and a configured manager such as `manager=background_callback_manager`.
+- Return output types appropriate to the component: strings or component lists for `children`, dictionaries for figures, and lists of dictionaries for `AgGrid` `rowData` and `columnDefs`.
+- Avoid blocking `time.sleep` loops in callbacks. Use `dcc.Interval` for asynchronous polling or an external task queue for long-running work.
 
-## 7. New Page Architectural Pattern & Optimization
-- **Asynchronous Layout Rendering:** Never call database queries or intensive data loaders directly inside a page's `layout()` function. The layout must return instantly with placeholder elements or empty grids to guarantee fast initial page delivery.
-- **Lazy Loading via Callbacks:** Fetch data inside callbacks triggered by tab selections (`active_tab`) or initial component mounting. 
-- **Safe Empty Data Handling:** Components and custom UI widgets (such as filter bars and charts) must gracefully handle `None` or empty DataFrames (`df.empty`) on initial load without raising `IndexError` or column lookup failures.
-- **Conditional Fetching:** When building multi-tab pages, ensure data fetching functions are only executed when the active tab is selected, returning `dash.no_update` for unselected tab grids/graphs to conserve memory and database read costs.
+## 6. Layout and Styling
+- Put core layout styles, grids, and structural overrides in CSS files under `assets/`.
+- Use a shared `theme.py` or `theme.js` for color, spacing, and font constants.
+- Use inline Python style dictionaries only for dynamic, runtime-computed styling. Avoid static inline style blocks.
+- Format Python with `black` and CSS with Prettier.
+
+## 7. Charts and Components
+- Prefer `plotly.express`; use `plotly.graph_objects` when fine-grained control is needed.
+- Prefer component libraries in this order: Dash Design Kit when available, Dash Core Components with Dash HTML Components, Dash Mantine Components, then Dash Bootstrap Components when required. Minimize the number of libraries used.
+- Do not use `dash_table.DataTable`; use `dash.AgGrid`.
+- When creating `dag.AgGrid`, set these properties:
+
+```python
+dashGridOptions={
+    "theme": "themeBalham",
+    "animateRows": True,
+    "pagination": True,
+    "paginationPageSize": 10,
+}
+columnSize="responsiveSizeToFit"
+defaultColDef={"filter": True, "sortable": True}
+```
+
+## 8. Observability and New Pages
+- Do not read `analytics_layer/target/manifest.json` from dynamic layout updates or loop callbacks. Reuse cached manifest dictionaries through a `dcc.Store` where appropriate.
+- Page layout functions must return quickly with placeholders or empty grids. Do not run database queries or intensive data loaders inside them.
+- Fetch data in callbacks triggered by page or tab selection.
+- For multi-tab pages, fetch data only for the active tab and return `dash.no_update` for unselected tab outputs.
+- Handle `None` and empty DataFrames without column lookup failures or `IndexError`.
+
+## 9. Avoid Hallucinations and Unsafe Patterns
+- Use `app.run`; never use `app.run_server`.
+- Do not use `app.validation_layout`. For dynamic layouts, use `suppress_callback_exceptions=True` during app initialization.
+- Import callback primitives using modern Dash syntax, for example: `from dash import Input, Output, State, callback, clientside_callback, no_update, ALL, MATCH`.
+- Never assign to callback `Input` values or mutate callback arguments in place.
+- Never put secrets, API keys, or credentials in layout code or `dcc.Store`. Use environment variables and server-side logic.
+- Never run destructive commands against production resources without explicit, multi-turn user confirmation.
+- For specialized UI additions, check `.agents/skills/` for a relevant task capsule before implementing.
+
+## 10. Production Safety
+- The workspace is connected to the production Google Cloud environment `quantum-echo-data-eng-prod`.
+- Never run destructive commands such as `bq rm`, `dbt clean`, or commands that drop production datasets without explicit, multi-turn user confirmation.
+````
