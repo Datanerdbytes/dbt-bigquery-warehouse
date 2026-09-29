@@ -105,3 +105,27 @@
   background: transparent;
   color: var(--dashboard-text);
 }
+
+/* Calendar popovers render outside the date-input wrapper. Keep their
+   month/year controls readable when Bootstrap supplies light text. */
+.dash-datepicker-controls .dash-input-container,
+.dash-datepicker-controls .dash-dropdown {
+  background: var(--dashboard-surface);
+  color: var(--dashboard-text);
+  border-color: var(--dashboard-border);
+}
+.dash-datepicker-controls .dash-input-element,
+.dash-datepicker-controls .dash-dropdown-value,
+.dash-datepicker-controls .dash-dropdown-trigger-icon,
+.dash-datepicker-controls .dash-input-stepper {
+  color: var(--dashboard-text);
+}
+.dash-datepicker-controls .dash-input-element {
+  background: var(--dashboard-surface);
+}
+.dash-datepicker-controls .dash-input-stepper:disabled {
+  color: var(--dashboard-muted);
+}
+.dash-datepicker-controls .dash-input-stepper {
+  background: var(--dashboard-raised);
+}
