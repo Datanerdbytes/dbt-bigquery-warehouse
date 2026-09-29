@@ -1,60 +1,107 @@
-/* Sticky Filter Bar Wrapper */
-.sticky-filter-bar {
-    position: sticky;
-    top: 0 !important;
-    z-index: 1020;
-    isolation: isolate;
-    background-color: transparent !important;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-    margin-bottom: 1rem !important;
-    width: 100% !important;
+.dashboard-filters {
+  display: grid;
+  grid-template-columns: minmax(310px, 1.3fr) repeat(2, minmax(150px, 1fr));
+  gap: 16px;
+  padding: 0 0 18px;
 }
-
-/* --- Dark Overrides for dcc.Dropdown --- */
-.Select-control {
-    background-color: #1f2937 !important;
-    border-color: #374151 !important;
-    color: #f8fafc !important;
-    border-radius: 8px !important;
+.filter-field {
+  min-width: 0;
 }
-
-.Select-value-label, 
-.Select-input input {
-    color: #f8fafc !important;
+.filter-label {
+  display: block;
+  color: var(--dashboard-muted);
+  font-size: 12px;
+  margin-bottom: 6px;
 }
-
-.Select-menu-outer {
-    background-color: #1f2937 !important;
-    border: 1px solid #374151 !important;
-    color: #f8fafc !important;
+.dashboard-date-picker {
+  width: 100%;
 }
-
-.VirtualizedSelectOption {
-    background-color: #1f2937 !important;
-    color: #f8fafc !important;
+.DateRangePicker,
+.DateRangePickerInput {
+  width: 100%;
 }
-
-.VirtualizedSelectFocusedOption {
-    background-color: #374151 !important;
-    color: #ffffff !important;
+.DateRangePickerInput {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
-
-/* --- Dark Overrides for dcc.DatePickerRange --- */
-.DateInput, 
+.DateInput {
+  width: 44%;
+  background: transparent;
+}
 .DateInput_input {
-    background-color: #1f2937 !important;
-    color: #f8fafc !important;
-    border-radius: 6px !important;
+  font-size: 13px;
+  padding: 8px 10px;
+  color: var(--dashboard-text);
+  background: var(--dashboard-surface);
+  font-family: var(--dashboard-font-body);
 }
-
-.SingleDatePickerInput__withBorder, 
 .DateRangePickerInput__withBorder {
-    background-color: #1f2937 !important;
-    border: 1px solid #374151 !important;
-    border-radius: 8px !important;
+  background: var(--dashboard-surface);
+  border: 1px solid var(--dashboard-border);
+  border-radius: 6px;
 }
-
 .DateRangePickerInput_arrow_svg {
-    fill: #94a3b8 !important;
+  fill: var(--dashboard-muted);
+}
+.DateInput_input__focused {
+  border-bottom-color: var(--dashboard-accent);
+}
+.DateRangePicker_picker {
+  z-index: 100;
+}
+/* Support both legacy and current Dash dropdowns. */
+.dashboard-dropdown {
+  --Dash-Fill-Inverse-Strong: var(--dashboard-surface);
+  --Dash-Text-Primary: var(--dashboard-text);
+  --Dash-Text-Weak: var(--dashboard-muted);
+  --Dash-Stroke-Strong: var(--dashboard-border);
+  --Dash-Fill-Interactive-Strong: var(--dashboard-accent);
+  font-size: 13px;
+}
+.Select-control,
+.Select-menu-outer {
+  background: var(--dashboard-surface) !important;
+  border-color: var(--dashboard-border) !important;
+  color: var(--dashboard-text) !important;
+  border-radius: 6px;
+}
+.Select-value-label,
+.Select-input input,
+.Select-placeholder,
+.VirtualizedSelectOption {
+  color: var(--dashboard-text) !important;
+}
+.Select-menu-outer {
+  z-index: 100;
+}
+.VirtualizedSelectFocusedOption {
+  background: var(--dashboard-raised);
+}
+@media (max-width: 1100px) {
+  .dashboard-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+  .filter-dates {
+    grid-column: 1 / -1;
+    max-width: 380px;
+  }
+}
+@media (max-width: 420px) {
+  .dashboard-filters {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .filter-dates {
+    max-width: none;
+  }
+}
+.dashboard-date-picker.dash-datepicker-input-wrapper {
+  background: var(--dashboard-surface);
+  color: var(--dashboard-text);
+  border-color: var(--dashboard-border);
+}
+.dashboard-date-picker .dash-datepicker-input {
+  background: transparent;
+  color: var(--dashboard-text);
 }

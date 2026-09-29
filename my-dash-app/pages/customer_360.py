@@ -1,6 +1,6 @@
 import dash
 import dash_ag_grid as dag
-from dash import html, dcc, callback, Input, Output, dash_table
+from dash import html, dcc, callback, Input, Output
 import dash_bootstrap_components as dbc
 import plotly.express as px
 import pandas as pd
@@ -8,147 +8,86 @@ from utils.helpers import create_trend_badge, filter_dataframe, format_compact_n
 from data_loader import load_and_prep_data
 from components.filter_bar import create_filter_bar
 from components.kpi_bar import create_kpi_bar
+from components.panels import loading, panel, chart_panel, create_grid
+from theme import COLORS, style_figure
 
 # Register Page
 dash.register_page(__name__, path="/customers", name="Customer 360")
 
+
 def layout():
-    # LIGHTWEIGHT LAYOUT: No heavy data processing during initial page render.
-    # Dropdowns and initial metrics load asynchronously via callbacks.
     return html.Div(
-        className="dashboard-container py-3",
-        children=[
-            # Hidden dummy div to trigger initial asynchronous load on page mount
-            html.Div(id="c360-page-loaded", style={"display": "none"}),
-            dbc.Container(
+        [
+            html.Div(id="c360-page-loaded", hidden=True),
+            html.Div(
+                id="c360-filter-bar-container",
+                children=create_filter_bar(
+                    pd.DataFrame(),
+                    date_picker_id="c360-date-picker",
+                    category_dropdown_id="c360-category-dropdown",
+                    country_dropdown_id="c360-country-dropdown",
+                ),
+            ),
+            loading(
+                create_kpi_bar(
+                    [
+                        ("Active customers", "c360-kpi-active-cust"),
+                        ("Average spend", "c360-kpi-avg-spend"),
+                        ("Order frequency", "c360-kpi-avg-freq"),
+                        ("Repeat rate", "c360-kpi-repeat-rate"),
+                    ]
+                ),
+                "c360-kpi-loading",
+            ),
+            html.Div(
                 [
-                    # Page Title & Overview
-                    html.Div(
-                        [
-                            html.H3("Customer 360", className="text-white fw-bold mb-1"),
-                            html.P("Comprehensive customer analytics including RFM segmentation, lifetime value distribution, and retention trends.", className="text-muted small mb-0"),
-                        ],
-                        className="mb-4"
+                    chart_panel(
+                        "Customer segments",
+                        "c360-rfm-segment-graph",
+                        "c360-rfm-loading",
+                        "span-8",
                     ),
-                    # Row 1: Filter Control Bar
-                    html.Div(id="c360-filter-bar-container", children=[
-                        create_filter_bar(
-                            pd.DataFrame(), # Empty placeholder frame for instant render
-                            date_picker_id="c360-date-picker",
-                            category_dropdown_id="c360-category-dropdown",
-                            country_dropdown_id="c360-country-dropdown"
-                        )
-                    ]),
-                    # Row 2: KPI Cards
-                    dcc.Loading(
-                        id="c360-kpi-loading",
-                        type="circle",
-                        color="#10b981",
-                        children=create_kpi_bar([
-                            ("ACTIVE CUSTOMERS", "c360-kpi-active-cust"),
-                            ("AVG SPEND / CUST", "c360-kpi-avg-spend"),
-                            ("AVG ORDER FREQ", "c360-kpi-avg-freq"),
-                            ("REPEAT RATE", "c360-kpi-repeat-rate"),
-                        ]),
-                        fullscreen=False,
-                        className="mb-3"
+                    chart_panel(
+                        "Customer spend distribution",
+                        "c360-spend-dist-graph",
+                        "c360-spend-loading",
+                        "span-4",
                     ),
-
-                    # Row 3: RFM Segmentation & Spend Distribution
-                    dbc.Row(
-                        [
-                            dbc.Col(
-                                html.Div(
-                                    [
-                                        html.H5("Customer RFM Segmentation", className="fw-bold text-light mb-2"),
-                                        dcc.Loading(
-                                            id="c360-rfm-loading",
-                                            type="circle",
-                                            color="#10b981",
-                                            children=dcc.Graph(id="c360-rfm-segment-graph", config={"displayModeBar": False}),
-                                            fullscreen=False
-                                        )
-                                    ],
-                                    className="dark-card p-3 rounded shadow-sm mb-3"
-                                ),
-                                width=12, lg=6
-                            ),
-                            dbc.Col(
-                                html.Div(
-                                    [
-                                        html.H5("Customer Spend Distribution (CLV)", className="fw-bold text-light mb-2"),
-                                        dcc.Loading(
-                                            id="c360-spend-loading",
-                                            type="circle",
-                                            color="#10b981",
-                                            children=dcc.Graph(id="c360-spend-dist-graph", config={"displayModeBar": False}),
-                                            fullscreen=False
-                                        )
-                                    ],
-                                    className="dark-card p-3 rounded shadow-sm mb-3"
-                                ),
-                                width=12, lg=6
-                            ),
-                        ]
+                    panel(
+                        "High-value customers",
+                        loading(
+                            html.Div(id="c360-top-customers-table-container"),
+                            "c360-table-loading",
+                        ),
+                        "span-8",
                     ),
-
-                    # Row 4: High Value Table & Active Customer Trend
-                    dbc.Row(
-                        [
-                            dbc.Col(
-                                html.Div(
-                                    [
-                                        html.H5("Top High-Value Champions", className="fw-bold text-white mb-2"),
-                                        dcc.Loading(
-                                            id="c360-table-loading",
-                                            type="circle",
-                                            color="#10b981",
-                                            children=html.Div(id="c360-top-customers-table-container"),
-                                            fullscreen=False
-                                        )
-                                    ],
-                                    className="dark-card p-3 rounded shadow-sm mb-3"
-                                ),
-                                width=12, lg=6
-                            ),
-                            dbc.Col(
-                                html.Div(
-                                    [
-                                        html.H5("Active Customer Trend", className="fw-bold text-white mb-2"),
-                                        dcc.Loading(
-                                            id="c360-trend-loading",
-                                            type="circle",
-                                            color="#10b981",
-                                            children=dcc.Graph(id="c360-cust-trend-graph", config={"displayModeBar": False}),
-                                            fullscreen=False
-                                        )
-                                    ],
-                                    className="dark-card p-3 rounded shadow-sm mb-3"
-                                ),
-                                width=12, lg=6
-                            ),
-                        ]
-                    )
+                    chart_panel(
+                        "Active customer trend",
+                        "c360-cust-trend-graph",
+                        "c360-trend-loading",
+                        "span-4",
+                    ),
                 ],
-                fluid=True
-            )
-        ]
+                className="dashboard-grid",
+            ),
+        ],
+        className="dashboard-container",
     )
+
 
 # --- ASYNC FILTER BAR POPULATION ON LOAD ---
 @callback(
-    Output("c360-filter-bar-container", "children"),
-    Input("c360-page-loaded", "id")
+    Output("c360-filter-bar-container", "children"), Input("c360-page-loaded", "id")
 )
-
 def populate_c360_filter_bar(_):
     df_merged, _, _, _, _ = load_and_prep_data()
     return create_filter_bar(
         df_merged,
         date_picker_id="c360-date-picker",
         category_dropdown_id="c360-category-dropdown",
-        country_dropdown_id="c360-country-dropdown"
+        country_dropdown_id="c360-country-dropdown",
     )
+
 
 # --- FILTER STORE SYNC CALLBACK ---
 @callback(
@@ -159,15 +98,16 @@ def populate_c360_filter_bar(_):
         Input("c360-category-dropdown", "value"),
         Input("c360-country-dropdown", "value"),
     ],
-    prevent_initial_call=True
+    prevent_initial_call=True,
 )
 def sync_c360_filters_to_store(start_date, end_date, category, country):
     return {
         "start_date": start_date,
         "end_date": end_date,
         "category": category,
-        "country": country
+        "country": country,
     }
+
 
 # --- KPI Callback ---
 @callback(
@@ -185,13 +125,26 @@ def sync_c360_filters_to_store(start_date, end_date, category, country):
         Output("c360-kpi-avg-freq-tooltip", "children"),
         Output("c360-kpi-repeat-rate-tooltip", "children"),
     ],
-    Input("global-filter-store", "data")
+    Input("global-filter-store", "data"),
 )
 def update_customer_kpis(filter_data):
     empty_badge = dbc.Badge("N/A", color="secondary", className="small")
 
     if not filter_data:
-        return "0", "$0", "0.00", "0%", empty_badge, empty_badge, empty_badge, empty_badge, "", "", "", ""
+        return (
+            "0",
+            "$0",
+            "0.00",
+            "0%",
+            empty_badge,
+            empty_badge,
+            empty_badge,
+            empty_badge,
+            "",
+            "",
+            "",
+            "",
+        )
 
     start_date = filter_data.get("start_date")
     end_date = filter_data.get("end_date")
@@ -199,7 +152,20 @@ def update_customer_kpis(filter_data):
     selected_country = filter_data.get("country")
 
     if not start_date or not end_date:
-        return "0", "$0", "0.00", "0%", empty_badge, empty_badge, empty_badge, empty_badge, "", "", "", ""
+        return (
+            "0",
+            "$0",
+            "0.00",
+            "0%",
+            empty_badge,
+            empty_badge,
+            empty_badge,
+            empty_badge,
+            "",
+            "",
+            "",
+            "",
+        )
 
     df_merged, _, _, _, _ = load_and_prep_data()
 
@@ -210,17 +176,38 @@ def update_customer_kpis(filter_data):
     prev_end = curr_start - pd.Timedelta(days=1)
     prev_start = prev_end - date_diff
 
-    curr_df = filter_dataframe(df_merged, curr_start, curr_end, selected_category, selected_country)
-    prev_df = filter_dataframe(df_merged, prev_start, prev_end, selected_category, selected_country)
+    curr_df = filter_dataframe(
+        df_merged, curr_start, curr_end, selected_category, selected_country
+    )
+    prev_df = filter_dataframe(
+        df_merged, prev_start, prev_end, selected_category, selected_country
+    )
 
     if curr_df.empty:
-        return "0", "$0", "0.00", "0%", empty_badge, empty_badge, empty_badge, empty_badge, "No data", "No data", "No data", "No data"
+        return (
+            "0",
+            "$0",
+            "0.00",
+            "0%",
+            empty_badge,
+            empty_badge,
+            empty_badge,
+            empty_badge,
+            "No data",
+            "No data",
+            "No data",
+            "No data",
+        )
 
-    curr_summary = curr_df.groupby("customer_key").agg(
-        total_spend=("gross_sales_amount", "sum"),
-        total_orders=("order_number", "nunique"),
-        total_units=("quantity", "sum")
-    ).reset_index()
+    curr_summary = (
+        curr_df.groupby("customer_key")
+        .agg(
+            total_spend=("gross_sales_amount", "sum"),
+            total_orders=("order_number", "nunique"),
+            total_units=("quantity", "sum"),
+        )
+        .reset_index()
+    )
 
     curr_cust = len(curr_summary)
     curr_spend = curr_summary["total_spend"].sum() / curr_cust if curr_cust > 0 else 0
@@ -229,14 +216,22 @@ def update_customer_kpis(filter_data):
     curr_repeat_rate = (curr_repeat_cnt / curr_cust * 100) if curr_cust > 0 else 0
 
     if not prev_df.empty:
-        prev_summary = prev_df.groupby("customer_key").agg(
-            total_spend=("gross_sales_amount", "sum"),
-            total_orders=("order_number", "nunique")
-        ).reset_index()
+        prev_summary = (
+            prev_df.groupby("customer_key")
+            .agg(
+                total_spend=("gross_sales_amount", "sum"),
+                total_orders=("order_number", "nunique"),
+            )
+            .reset_index()
+        )
 
         prev_cust = len(prev_summary)
-        prev_spend = prev_summary["total_spend"].sum() / prev_cust if prev_cust > 0 else 0
-        prev_freq = prev_summary["total_orders"].sum() / prev_cust if prev_cust > 0 else 0
+        prev_spend = (
+            prev_summary["total_spend"].sum() / prev_cust if prev_cust > 0 else 0
+        )
+        prev_freq = (
+            prev_summary["total_orders"].sum() / prev_cust if prev_cust > 0 else 0
+        )
         prev_repeat_cnt = (prev_summary["total_orders"] > 1).sum()
         prev_repeat_rate = (prev_repeat_cnt / prev_cust * 100) if prev_cust > 0 else 0
     else:
@@ -251,10 +246,28 @@ def update_customer_kpis(filter_data):
     max_spend = curr_summary["total_spend"].max() if not curr_summary.empty else 0
     median_spend = curr_summary["total_spend"].median() if not curr_summary.empty else 0
 
-    tt_cust = [html.Div(f"• Single-Order Cust: {single_order_cust:,}", className="text-start"), html.Div(f"• Repeat Cust: {curr_repeat_cnt:,}", className="text-start")]
-    tt_spend = [html.Div(f"• Max Spend: ${max_spend:,.0f}", className="text-start"), html.Div(f"• Median Spend: ${median_spend:,.0f}", className="text-start")]
-    tt_freq = [html.Div(f"• Total Orders: {curr_summary['total_orders'].sum():,}", className="text-start"), html.Div(f"• Units/Cust: {(curr_summary['total_units'].sum()/curr_cust):,.1f}", className="text-start")]
-    tt_repeat = [html.Div(f"• Repeat Count: {curr_repeat_cnt:,}", className="text-start"), html.Div(f"• Single Count: {single_order_cust:,}", className="text-start")]
+    tt_cust = [
+        html.Div(f"• Single-Order Cust: {single_order_cust:,}", className="text-start"),
+        html.Div(f"• Repeat Cust: {curr_repeat_cnt:,}", className="text-start"),
+    ]
+    tt_spend = [
+        html.Div(f"• Max Spend: ${max_spend:,.0f}", className="text-start"),
+        html.Div(f"• Median Spend: ${median_spend:,.0f}", className="text-start"),
+    ]
+    tt_freq = [
+        html.Div(
+            f"• Total Orders: {curr_summary['total_orders'].sum():,}",
+            className="text-start",
+        ),
+        html.Div(
+            f"• Units/Cust: {(curr_summary['total_units'].sum()/curr_cust):,.1f}",
+            className="text-start",
+        ),
+    ]
+    tt_repeat = [
+        html.Div(f"• Repeat Count: {curr_repeat_cnt:,}", className="text-start"),
+        html.Div(f"• Single Count: {single_order_cust:,}", className="text-start"),
+    ]
 
     return (
         f"{curr_cust:,}",
@@ -274,12 +287,11 @@ def update_customer_kpis(filter_data):
 
 # --- Visual 1: RFM Segmentation ---
 @callback(
-    Output("c360-rfm-segment-graph", "figure"),
-    Input("global-filter-store", "data")
+    Output("c360-rfm-segment-graph", "figure"), Input("global-filter-store", "data")
 )
 def update_rfm_segments(filter_data):
     if not filter_data:
-        return px.bar(title="No Data")
+        return style_figure(px.bar(title="No Data"))
 
     start_date = filter_data.get("start_date")
     end_date = filter_data.get("end_date")
@@ -287,10 +299,12 @@ def update_rfm_segments(filter_data):
     selected_country = filter_data.get("country")
 
     df_merged, _, _, _, _ = load_and_prep_data()
-    filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
+    filtered_df = filter_dataframe(
+        df_merged, start_date, end_date, selected_category, selected_country
+    )
 
     if filtered_df.empty:
-        return px.bar(title="No Data")
+        return style_figure(px.bar(title="No Data"))
 
     max_ref_date = pd.to_datetime(end_date)
     filtered_df["order_date"] = pd.to_datetime(filtered_df["order_date"])
@@ -300,7 +314,7 @@ def update_rfm_segments(filter_data):
         .agg(
             recency=("order_date", lambda x: (max_ref_date - x.max()).days),
             frequency=("order_number", "nunique"),
-            monetary=("gross_sales_amount", "sum")
+            monetary=("gross_sales_amount", "sum"),
         )
         .reset_index()
     )
@@ -320,10 +334,10 @@ def update_rfm_segments(filter_data):
     seg_counts.columns = ["Segment", "Customer Count"]
 
     color_map = {
-        "Champions": "#10b981",
-        "Loyal Customers": "#3b82f6",
-        "Promising / Recent": "#f59e0b",
-        "Hibernating / Lost": "#ef4444"
+        "Champions": COLORS["success"],
+        "Loyal Customers": COLORS["accent"],
+        "Promising / Recent": COLORS["warning"],
+        "Hibernating / Lost": COLORS["danger"],
     }
 
     fig = px.bar(
@@ -332,31 +346,36 @@ def update_rfm_segments(filter_data):
         y="Segment",
         orientation="h",
         color="Segment",
-        color_discrete_map=color_map
+        color_discrete_map=color_map,
     )
 
-    fig.update_traces(hovertemplate="<b>Segment:</b> %{y}<br><b>Customers:</b> %{x:,}<extra></extra>")
+    fig.update_traces(
+        hovertemplate="<b>Segment:</b> %{y}<br><b>Customers:</b> %{x:,}<extra></extra>"
+    )
     fig.update_layout(
         margin=dict(l=10, r=10, t=10, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(showgrid=True, gridcolor="#1f2937", tickfont=dict(color="#9ca3af")),
-        yaxis=dict(showgrid=False, tickfont=dict(color="#9ca3af")),
+        xaxis=dict(
+            showgrid=True,
+            gridcolor=COLORS["border"],
+            tickfont=dict(color=COLORS["muted"]),
+        ),
+        yaxis=dict(showgrid=False, tickfont=dict(color=COLORS["muted"])),
         showlegend=False,
-        height=320
+        height=320,
     )
 
-    return fig
+    return style_figure(fig)
 
 
 # --- Visual 2: Spend Distribution ---
 @callback(
-    Output("c360-spend-dist-graph", "figure"),
-    Input("global-filter-store", "data")
+    Output("c360-spend-dist-graph", "figure"), Input("global-filter-store", "data")
 )
 def update_spend_distribution(filter_data):
     if not filter_data:
-        return px.histogram(title="No Data")
+        return style_figure(px.histogram(title="No Data"))
 
     start_date = filter_data.get("start_date")
     end_date = filter_data.get("end_date")
@@ -364,43 +383,61 @@ def update_spend_distribution(filter_data):
     selected_country = filter_data.get("country")
 
     df_merged, _, _, _, _ = load_and_prep_data()
-    filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
+    filtered_df = filter_dataframe(
+        df_merged, start_date, end_date, selected_category, selected_country
+    )
 
     if filtered_df.empty:
-        return px.histogram(title="No Data")
+        return style_figure(px.histogram(title="No Data"))
 
-    cust_spend = filtered_df.groupby("customer_key")["gross_sales_amount"].sum().reset_index()
+    cust_spend = (
+        filtered_df.groupby("customer_key")["gross_sales_amount"].sum().reset_index()
+    )
 
     fig = px.histogram(
         cust_spend,
         x="gross_sales_amount",
         nbins=30,
-        labels={"gross_sales_amount": "Total Customer Spend ($)", "count": "Customer Count"},
-        color_discrete_sequence=["#10b981"]
+        labels={
+            "gross_sales_amount": "Total Customer Spend ($)",
+            "count": "Customer Count",
+        },
+        color_discrete_sequence=[COLORS["success"]],
     )
 
-    fig.update_traces(hovertemplate="<b>Spend Range:</b> %{x}<br><b>Customers:</b> %{y}<extra></extra>")
+    fig.update_traces(
+        hovertemplate="<b>Spend Range:</b> %{x}<br><b>Customers:</b> %{y}<extra></extra>"
+    )
 
     fig.update_layout(
         margin=dict(l=10, r=10, t=10, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        yaxis=dict(showgrid=True, gridcolor="#1f2937", tickfont=dict(color="#9ca3af")),
-        xaxis=dict(showgrid=False, tickprefix="$", tickfont=dict(color="#9ca3af")),
-        height=320
+        yaxis=dict(
+            showgrid=True,
+            gridcolor=COLORS["border"],
+            tickfont=dict(color=COLORS["muted"]),
+        ),
+        xaxis=dict(
+            showgrid=False, tickprefix="$", tickfont=dict(color=COLORS["muted"])
+        ),
+        height=320,
     )
 
-    return fig
+    return style_figure(fig)
 
 
 # --- Visual 3: Top High-Value Customers Table ---
 @callback(
     Output("c360-top-customers-table-container", "children"),
-    Input("global-filter-store", "data")
+    Input("global-filter-store", "data"),
 )
 def update_top_customers_table(filter_data):
     if not filter_data:
-        return html.Div("No transactions found for selection.", className="text-muted p-3 text-center")
+        return html.Div(
+            "No transactions found for selection.",
+            className="text-muted p-3 text-center",
+        )
 
     start_date = filter_data.get("start_date")
     end_date = filter_data.get("end_date")
@@ -408,62 +445,55 @@ def update_top_customers_table(filter_data):
     selected_country = filter_data.get("country")
 
     df_merged, _, _, _, _ = load_and_prep_data()
-    filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
+    filtered_df = filter_dataframe(
+        df_merged, start_date, end_date, selected_category, selected_country
+    )
 
     if filtered_df.empty:
-        return html.Div("No transactions found for selection.", className="text-muted p-3 text-center")
+        return html.Div(
+            "No transactions found for selection.",
+            className="text-muted p-3 text-center",
+        )
 
     top_cust = (
         filtered_df.groupby(["first_name", "last_name", "country"])
         .agg(
             total_spend=("gross_sales_amount", "sum"),
-            total_orders=("order_number", "nunique")
+            total_orders=("order_number", "nunique"),
         )
         .reset_index()
         .sort_values(by="total_spend", ascending=False)
         .head(10)
     )
 
-    top_cust["customer_name"] = top_cust["first_name"].fillna("") + " " + top_cust["last_name"].fillna("")
+    top_cust["customer_name"] = (
+        top_cust["first_name"].fillna("") + " " + top_cust["last_name"].fillna("")
+    )
 
     column_defs = [
         {"field": "customer_name", "headerName": "Customer"},
         {"field": "country", "headerName": "Country"},
         {"field": "total_orders", "headerName": "Orders", "type": "rightAligned"},
         {
-            "field": "total_spend", 
-            "headerName": "Total Spend", 
+            "field": "total_spend",
+            "headerName": "Total Spend",
             "type": "rightAligned",
-            "valueFormatter": {"function": "d3.format('$,.0f')(params.value)"}
+            "valueFormatter": {"function": "d3.format('$,.0f')(params.value)"},
         },
     ]
 
-    grid = dag.AgGrid(
-        rowData=top_cust.to_dict("records"),
-        columnDefs=column_defs,
-        className="ag-theme-alpine-dark",
-        dashGridOptions={
-            "theme": "themeBalham", 
-            "animateRows": True, 
-            "pagination": True, 
-            "paginationPageSize": 10
-        },
-        columnSize="responsiveSizeToFit",
-        defaultColDef={"filter": True, "sortable": True},
-        style={"height": "320px", "width": "100%"}
-    )
+    grid = create_grid(column_defs, top_cust.to_dict("records"))
 
     return grid
 
 
 # --- Visual 4: Active Customer Trend ---
 @callback(
-    Output("c360-cust-trend-graph", "figure"),
-    Input("global-filter-store", "data")
+    Output("c360-cust-trend-graph", "figure"), Input("global-filter-store", "data")
 )
 def update_customer_trend(filter_data):
     if not filter_data:
-        return px.line(title="No Data")
+        return style_figure(px.line(title="No Data"))
 
     start_date = filter_data.get("start_date")
     end_date = filter_data.get("end_date")
@@ -471,13 +501,17 @@ def update_customer_trend(filter_data):
     selected_country = filter_data.get("country")
 
     df_merged, _, _, _, _ = load_and_prep_data()
-    filtered_df = filter_dataframe(df_merged, start_date, end_date, selected_category, selected_country)
-    
+    filtered_df = filter_dataframe(
+        df_merged, start_date, end_date, selected_category, selected_country
+    )
+
     if filtered_df.empty:
-        return px.line(title="No Data")
+        return style_figure(px.line(title="No Data"))
 
     df_trend = filtered_df.copy()
-    df_trend["year_month"] = pd.to_datetime(df_trend["order_date"]).dt.to_period("M").dt.to_timestamp()
+    df_trend["year_month"] = (
+        pd.to_datetime(df_trend["order_date"]).dt.to_period("M").dt.to_timestamp()
+    )
 
     monthly_cust = (
         df_trend.groupby("year_month")["customer_key"]
@@ -491,23 +525,27 @@ def update_customer_trend(filter_data):
         y="active_customers",
         markers=True,
         labels={"year_month": "Month", "active_customers": "Active Customers"},
-        color_discrete_sequence=["#3b82f6"]
+        color_discrete_sequence=[COLORS["accent"]],
     )
 
     fig.update_traces(
         mode="lines+markers",
-        line=dict(width=3, color="#3b82f6"),
-        marker=dict(size=6, color="#60a5fa"),
-        hovertemplate="<b>Date:</b> %{x|%b %Y}<br><b>Active Cust:</b> %{y:,}<extra></extra>"
+        line=dict(width=3, color=COLORS["accent"]),
+        marker=dict(size=6, color=COLORS["accent"]),
+        hovertemplate="<b>Date:</b> %{x|%b %Y}<br><b>Active Cust:</b> %{y:,}<extra></extra>",
     )
 
     fig.update_layout(
         margin=dict(l=10, r=10, t=10, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        yaxis=dict(showgrid=True, gridcolor="#1f2937", tickfont=dict(color="#9ca3af")),
-        xaxis=dict(showgrid=False, tickfont=dict(color="#9ca3af")),
-        height=320
+        yaxis=dict(
+            showgrid=True,
+            gridcolor=COLORS["border"],
+            tickfont=dict(color=COLORS["muted"]),
+        ),
+        xaxis=dict(showgrid=False, tickfont=dict(color=COLORS["muted"])),
+        height=320,
     )
 
-    return fig
+    return style_figure(fig)

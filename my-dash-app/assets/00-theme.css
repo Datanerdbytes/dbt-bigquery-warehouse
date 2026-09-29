@@ -1,0 +1,22 @@
+/* Generated from theme.py; edit shared tokens there. */
+:root {
+  --dashboard-background: #0f172a;
+  --dashboard-surface: #1b2336;
+  --dashboard-raised: #263249;
+  --dashboard-text: #f8fafc;
+  --dashboard-muted: #a7b5c9;
+  --dashboard-border: #354258;
+  --dashboard-accent: #69a5ff;
+  --dashboard-success: #5ddd98;
+  --dashboard-warning: #f6c56b;
+  --dashboard-danger: #ff8585;
+  --dashboard-purple: #b6a0ff;
+  --dashboard-spinner: #10b981;
+  --dashboard-font-body: "Fira Sans", system-ui, sans-serif;
+  --dashboard-font-number: "Fira Code", ui-monospace, monospace;
+  --dashboard-gap: 12px;
+  --dashboard-panel: 16px;
+  --dashboard-sidebar: 208px;
+  --dashboard-rail: 64px;
+  color-scheme: dark;
+}

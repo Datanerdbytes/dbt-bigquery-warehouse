@@ -351,6 +351,73 @@ class DashboardRegressionTests(unittest.TestCase):
         self.assertEqual(len(result[-2].data), 2)
         self.assertEqual(list(result[-2].data[0].x), ["stale_source"])
 
+    def test_layouts_have_flat_children_and_unique_ids(self):
+        def walk(component, ids):
+            if isinstance(component, (list, tuple)):
+                for child in component:
+                    self.assertNotIsInstance(child, (list, tuple))
+                    walk(child, ids)
+            elif hasattr(component, "to_plotly_json"):
+                props = component.to_plotly_json()["props"]
+                if props.get("id"):
+                    self.assertNotIn(props["id"], ids)
+                    ids.add(props["id"])
+                walk(props.get("children"), ids)
+
+        for name in ("overview", "customer_360", "pipeline_health"):
+            with self.subTest(page=name):
+                page = sys.modules[f"pages.{name}"]
+                layout = page.layout() if callable(page.layout) else page.layout
+                walk(layout, set())
+
+    def test_ranked_products_respect_filters_and_limit(self):
+        page = sys.modules["pages.overview"]
+        df = pd.DataFrame(
+            [
+                dict(
+                    product_name=f"P{i}",
+                    order_date=pd.Timestamp("2025-01-15"),
+                    category="Bikes",
+                    country="PH",
+                    quantity=i,
+                    gross_sales_amount=i * 10,
+                )
+                for i in range(12)
+            ]
+        )
+        filters = dict(
+            start_date="2025-01-01",
+            end_date="2025-12-31",
+            category="Bikes",
+            country="PH",
+        )
+        with patch.object(
+            page, "load_and_prep_data", return_value=(df, None, None, [], [])
+        ):
+            rows = page.update_top_products(filters)
+            self.assertEqual(len(rows), 10)
+            self.assertEqual(rows[0], dict(product_name="P11", units=11, revenue=110))
+            self.assertEqual(page.update_top_products(dict(filters, country="US")), [])
+
+    def test_product_export_uses_selected_product_and_filters(self):
+        page = sys.modules["pages.overview"]
+        (df, *_), _ = self.load_sales(self.frames(["2025-01-15", "2025-02-15"]))
+        filters = dict(
+            start_date="2025-02-01",
+            end_date="2025-02-28",
+            category="ALL",
+            country="ALL",
+        )
+        with patch.object(
+            page, "load_and_prep_data", return_value=(df, None, None, [], [])
+        ):
+            result = page.export_selected_product_details(
+                1, "Product Details: Bike", filters
+            )
+        self.assertIn("2025-02-15", result["content"])
+        self.assertNotIn("2025-01-15", result["content"])
+        self.assertTrue(result["filename"].endswith(".csv"))
+
 
 if __name__ == "__main__":
     unittest.main()

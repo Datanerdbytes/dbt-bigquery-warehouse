@@ -4,19 +4,17 @@ from dash import html, dcc, callback, Input, Output, State, no_update
 import dash_bootstrap_components as dbc
 from data_loader import load_pipeline_health_summary
 from utils.helpers import dataframe_value
+from components.panels import loading
 
 logger = logging.getLogger(__name__)
 
 
 def _bell(has_alerts):
-    children = [html.I(className="bi bi-bell-fill fs-6 text-muted")]
-    if has_alerts:
-        children.append(
-            html.Span(
-                className="position-absolute top-0 start-100 translate-middle p-1 bg-danger border border-light rounded-circle"
-            )
-        )
-    return children
+    return [
+        html.I(className="bi bi-bell", **{"aria-hidden": "true"}),
+        html.Span("Pipeline alerts" if has_alerts else "Pipeline status"),
+        html.Span(className="health-dot alert-dot" if has_alerts else "health-dot"),
+    ]
 
 
 def build_health_state(df_summary):
@@ -41,7 +39,7 @@ def build_health_state(df_summary):
     if failed_count:
         items.append(
             dbc.DropdownMenuItem(
-                f"🚨 {failed_count} dbt Test Failures Detected",
+                f"{failed_count} dbt Test Failures Detected",
                 href="/pipeline-health",
                 className="text-danger",
             )
@@ -49,7 +47,7 @@ def build_health_state(df_summary):
     if warning_count or status == "WARNING":
         items.append(
             dbc.DropdownMenuItem(
-                f"⚠️ Pipeline warning: {warning_count} test warnings",
+                f"Pipeline warning: {warning_count} test warnings",
                 href="/pipeline-health",
                 className="text-warning",
             )
@@ -58,7 +56,7 @@ def build_health_state(df_summary):
     if not has_alerts:
         items.append(
             dbc.DropdownMenuItem(
-                f"✅ Pipeline healthy ({passed_count} tests passed)",
+                f"Pipeline healthy ({passed_count} tests passed)",
                 className="text-success",
             )
         )
@@ -116,116 +114,94 @@ def refresh_header_health(_pathname, _n_intervals, previous_alert):
     return items, bell, title, icon, message, is_open, signature
 
 
+PAGE_HEADINGS = {
+    "/": ("Product Overview", "Revenue, demand, and product performance"),
+    "/customers": ("Customer 360", "Customer value, engagement, and retention"),
+    "/pipeline-health": (
+        "Pipeline Health",
+        "Latest loads, test coverage, and execution history",
+    ),
+}
+
+
+@callback(
+    Output("dashboard-page-title", "children"),
+    Output("dashboard-page-subtitle", "children"),
+    Output("global-export-btn", "disabled"),
+    Input("url", "pathname"),
+)
+def update_page_heading(pathname):
+    title, subtitle = PAGE_HEADINGS.get(pathname, ("Analytics", "Explore your data"))
+    return title, subtitle, pathname not in ("/", "/customers")
+
+
 def create_header():
-    """Build a query-free shell; the callback refreshes health after page load."""
-    return html.Div(
-        className="top-header-bar d-flex align-items-center justify-content-between px-4 py-3 mb-4 rounded-3 position-relative",
-        children=[
+    return html.Header(
+        [
             dcc.Interval(id="header-health-refresh", interval=60_000, n_intervals=0),
             dcc.Store(id="header-health-alert-state"),
-            # Left: Welcome Greeting
             html.Div(
                 [
-                    html.Div(
-                        [
-                            html.H4(
-                                "Welcome back, Roel! 👋",
-                                className="text-white fw-bold mb-1 fs-5",
-                            ),
-                            html.P(
-                                "Here's an overview of your store's latest performance and pipeline observability.",
-                                className="text-muted small mb-0 fs-7",
-                            ),
-                        ]
-                    )
+                    html.H1("Product Overview", id="dashboard-page-title"),
+                    html.P(
+                        "Revenue, demand, and product performance",
+                        id="dashboard-page-subtitle",
+                    ),
                 ],
-                className="d-flex align-items-center",
+                className="page-heading",
             ),
-            # Right: Notification Bell & Action Buttons
             html.Div(
                 [
-                    # Dynamic Notification Bell
                     dbc.DropdownMenu(
-                        label=dcc.Loading(
-                            id="header-health-loading",
-                            type="circle",
-                            color="#10b981",
-                            fullscreen=False,
-                            children=html.Div(
-                                id="header-health-bell",
-                                children=_bell(False),
-                                className="position-relative d-inline-block",
-                            ),
+                        label=loading(
+                            html.Div(id="header-health-bell", children=_bell(False)),
+                            "header-health-loading",
                         ),
                         children=html.Div(
-                            "Checking pipeline health…",
-                            id="header-health-menu",
-                            className="dark-card shadow-lg border border-secondary p-1 rounded",
+                            "Checking pipeline health…", id="header-health-menu"
                         ),
-                        nav=False,
-                        in_navbar=False,
-                        toggle_style={
-                            "backgroundColor": "transparent",
-                            "border": "1px solid #6c757d",
-                            "padding": "0.5rem 0.75rem",
-                        },
-                        className="me-2 header-icon-btn rounded-3",
+                        className="header-health-menu",
                         align_end=True,
+                        caret=False,
+                        toggle_class_name="health-toggle",
                     ),
-                    # Report Modal Trigger
                     dbc.Button(
                         [
-                            html.I(className="bi bi-file-earmark-text me-2"),
-                            html.Span("Preview & Export"),
+                            html.I(
+                                className="bi bi-download", **{"aria-hidden": "true"}
+                            ),
+                            "Preview & export",
                         ],
                         id="global-export-btn",
+                        className="export-btn",
                         color="primary",
-                        className="export-btn rounded-3 px-3 py-2 fw-semibold border-0",
                     ),
                     dcc.Download(id="global-download-file"),
                 ],
-                className="d-flex align-items-center",
+                className="header-actions",
             ),
-            # Ingestion Alert Toast Container (Positioned top-right)
             dbc.Toast(
                 [
-                    html.P(
-                        id="header-health-toast-message",
-                        className="mb-1 text-white small",
-                    ),
-                    html.A(
-                        "View Details in Pipeline Health →",
-                        href="/pipeline-health",
-                        className="text-info small fw-bold text-decoration-none",
-                    ),
+                    html.P(id="header-health-toast-message"),
+                    html.A("View pipeline health", href="/pipeline-health"),
                 ],
                 id="pipeline-alert-toast",
                 header="Pipeline Health",
                 icon="warning",
                 is_open=False,
                 dismissable=True,
-                duration=8000,  # Auto-dismisses after 8 seconds
-                style={
-                    "position": "fixed",
-                    "top": "20px",
-                    "right": "20px",
-                    "zIndex": 9999,
-                    "minWidth": "320px",
-                },
-                className="dark-card border border-secondary shadow-lg",
+                duration=8000,
+                className="pipeline-toast",
             ),
-            # Executive Report Preview Modal
             dbc.Modal(
                 [
-                    dbc.ModalHeader(
-                        dbc.ModalTitle(
-                            "Executive Report Preview", className="fw-bold text-white"
-                        ),
-                        close_button=True,
-                    ),
+                    dbc.ModalHeader(dbc.ModalTitle("Executive report preview")),
                     dbc.ModalBody(
-                        html.Div(id="export-modal-body-content"),
-                        style={"maxHeight": "70vh", "overflowY": "auto"},
+                        loading(
+                            html.Div(id="export-modal-body-content"),
+                            "export-preview-loading",
+                        ),
+                        className="export-modal-body",
                     ),
                     dbc.ModalFooter(
                         [
@@ -234,16 +210,11 @@ def create_header():
                                 id="close-export-modal-btn",
                                 color="secondary",
                                 outline=True,
-                                className="me-2",
                             ),
                             dbc.Button(
-                                [
-                                    html.I(className="bi bi-download me-2"),
-                                    html.Span("Download CSV Report"),
-                                ],
+                                "Download CSV report",
                                 id="confirm-download-btn",
-                                color="success",
-                                className="fw-semibold",
+                                color="primary",
                             ),
                         ]
                     ),
@@ -254,4 +225,5 @@ def create_header():
                 centered=True,
             ),
         ],
+        className="top-header-bar",
     )

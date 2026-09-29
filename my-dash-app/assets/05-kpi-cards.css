@@ -1,71 +1,65 @@
-/* KPI Card Structural Layout */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--dashboard-gap);
+  margin-bottom: var(--dashboard-gap);
+}
 .kpi-card {
-    background-color: #ffffff;
-    padding: 20px;
-    border-radius: 6px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+  background: var(--dashboard-surface);
+  border: 1px solid var(--dashboard-border);
+  border-radius: 8px;
+  padding: var(--dashboard-panel);
+  min-width: 0;
 }
-
-/* Responsive KPI Value Container */
-.kpi-value-container {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.25rem;
-    flex-wrap: wrap;
+.kpi-label {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--dashboard-muted);
 }
-
 .kpi-number {
-    font-size: 1.45rem !important;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    white-space: nowrap;
+  font-family: var(--dashboard-font-number);
+  font-size: clamp(19px, 1.8vw, 27px);
+  font-weight: 500;
+  letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
-
+.kpi-number h4 {
+  font: inherit;
+  letter-spacing: inherit;
+}
+.kpi-number span {
+  font-family: var(--dashboard-font-body);
+  font-size: 12px;
+  letter-spacing: normal;
+}
 .kpi-badge {
-    white-space: nowrap;
-    font-size: 0.72rem !important;
-    padding: 2px 6px !important;
-    flex-shrink: 0;
+  margin-top: 8px;
+  font-size: 11px;
 }
-
-/* 4-Color Accent Border System */
-.kpi-sales { border-left: 5px solid #2ecc71; }
-.kpi-orders { border-left: 5px solid #3498db; }
-.kpi-quantity { border-left: 5px solid #9b59b6; }
-.kpi-customers { border-left: 5px solid #f39c12; }
-
-/* Dynamic Soft Badges */
 .badge-soft-success {
-    background-color: rgba(16, 185, 129, 0.15) !important;
-    color: #10b981 !important;
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-size: 0.75rem;
-    font-weight: 600;
+  color: var(--dashboard-success);
 }
-
 .badge-soft-danger {
-    background-color: rgba(239, 68, 68, 0.15) !important;
-    color: #ef4444 !important;
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-size: 0.75rem;
-    font-weight: 600;
+  color: var(--dashboard-danger);
 }
-
 .badge-soft-secondary {
-    background-color: rgba(156, 163, 175, 0.15) !important;
-    color: #9ca3af !important;
-    border: 1px solid rgba(156, 163, 175, 0.3);
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-size: 0.75rem;
-    font-weight: 600;
+  color: var(--dashboard-muted);
+}
+.secondary-kpis {
+  margin: 12px 0 0;
+}
+.secondary-kpis .kpi-number {
+  font-size: 17px;
+}
+@media (max-width: 1100px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 380px) {
+  .kpi-card {
+    padding: 12px;
+  }
 }

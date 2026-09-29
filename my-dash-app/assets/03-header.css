@@ -1,118 +1,112 @@
-/* Navbar Custom Styles */
-.navbar {
-    background-color: #0b0f19 !important;
-    border-bottom: 1px solid #1f2937;
-}
-
-.navbar-brand {
-    color: #ffffff !important;
-    font-weight: 700;
-}
-
-.navbar-nav .nav-link {
-    color: #9ca3af !important;
-    transition: color 0.2s ease-in-out;
-}
-
-.navbar-nav .nav-link:hover {
-    color: #f3f4f6 !important;
-}
-
-.navbar-nav .nav-link.active {
-    color: #3b82f6 !important;
-    font-weight: 600;
-    border-bottom: 2px solid #3b82f6;
-    padding-bottom: 2px;
-}
-
-/* Top Dashboard Header Bar */
 .top-header-bar {
-    background-color: transparent !important; 
-    border: none !important;
-    margin-bottom: 1.25rem !important;
-    padding-top: 0.75rem !important;
-    padding-bottom: 0.75rem !important;
-    width: 100% !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    margin-top: 0 !important;
-    z-index: 1050 !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--dashboard-border);
 }
-
-/* Header Buttons & Actions */
-.header-icon-btn {
-    background-color: #1f2937 !important;
-    border-color: #374151 !important;
-    height: 40px !important;
-    width: 44px !important;
-    transition: all 0.2s ease-in-out;
-    overflow: visible !important;
+.page-heading h1 {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.65px;
+  margin: 0 0 6px;
 }
-
-/* Hide default caret arrow if it causes layout overflow */
-.header-icon-btn .dropdown-toggle::after {
-  display: none !important;
+.page-heading p {
+  font-size: 13px;
+  color: var(--dashboard-muted);
+  margin: 0;
 }
-
-.header-icon-btn:hover {
-    background-color: #374151 !important;
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
-
-.header-icon-btn i:hover {
-    color: #f8fafc !important;
-}
-
+.health-toggle,
 .export-btn {
-    background: linear-gradient(135deg, #a855f7 0%, #6366f1 100%) !important;
-    color: #ffffff !important;
-    font-size: 0.88rem;
-    box-shadow: 0 4px 12px rgba(168, 85, 247, 0.25);
-    transition: all 0.2s ease-in-out;
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  box-shadow: none;
 }
-
-.export-btn:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(168, 85, 247, 0.35);
+.health-toggle {
+  color: var(--dashboard-muted);
+  border: 1px solid var(--dashboard-border);
+  background: var(--dashboard-surface);
 }
-
-/* Header Banner Card */
-.header-banner {
-    background-color: #1a252f;
-    border-radius: 8px;
-    text-align: center;
-    margin-top: 0 !important;
-    padding: 2.5rem 1.5rem !important;
+#header-health-bell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-
-.header-banner h2 {
-    font-size: 2.5rem !important;
-    margin-bottom: 0.25rem !important;
+.health-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dashboard-muted);
 }
-
-.header-banner p {
-    font-size: 0.95rem !important;
+.alert-dot {
+  background: var(--dashboard-warning);
 }
-
-/* Notification Dropdown Positioning */
-.notification-dropdown .dropdown-menu {
-  min-width: 280px !important;
-  max-width: 320px !important;
-  left: auto !important;
-  right: 0 !important; /* Locks right edge to bell button */
-  transform: translate3d(-100px, 40px, 0px) !important; /* Offsets menu leftward */
-  z-index: 1060 !important;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+.export-btn {
+  background: var(--dashboard-accent);
+  color: var(--dashboard-background);
+  border: 1px solid var(--dashboard-accent);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
 }
-
-/* Ensure the parent wrapper has relative positioning */
-.notification-dropdown {
-  position: relative !important;
+.export-btn:hover,
+.export-btn:focus {
+  background: color-mix(in srgb, var(--dashboard-accent) 80%, white);
+  color: var(--dashboard-background);
+  border-color: var(--dashboard-accent);
 }
-
-/* Position dropdown content cleanly */
-.header-icon-btn .dropdown-menu {
-  min-width: 280px !important;
- margin-top: 0.75rem !important;
-  z-index: 1060 !important;
+.export-btn:disabled {
+  background: var(--dashboard-raised);
+  color: var(--dashboard-muted);
+  border-color: var(--dashboard-border);
+}
+.header-health-menu .dropdown-menu {
+  min-width: 280px;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 8px;
+  background: var(--dashboard-surface);
+  border: 1px solid var(--dashboard-border);
+}
+.header-health-menu .dropdown-item {
+  white-space: normal;
+  font-size: 12px;
+  border-radius: 4px;
+  padding: 8px;
+  color: var(--dashboard-text);
+}
+.header-health-menu .dropdown-item:hover {
+  background: var(--dashboard-raised);
+}
+.pipeline-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1100;
+  width: min(340px, calc(100vw - 40px));
+  background: var(--dashboard-surface);
+  border: 1px solid var(--dashboard-border);
+}
+.export-modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+@media (max-width: 760px) {
+  .page-heading h1 {
+    font-size: 22px;
+  }
+  .top-header-bar {
+    gap: 12px;
+  }
 }
