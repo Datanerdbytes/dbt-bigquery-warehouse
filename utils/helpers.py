@@ -3,8 +3,20 @@ import pandas as pd
 from dash import html
 
 
-def filter_dataframe(df, start_date, end_date, selected_category="ALL", selected_country="ALL"):
+def dataframe_value(df, column, default=0):
+    """Read one optional summary value without leaking pandas nulls into the UI."""
+    if df is None or df.empty or column not in df.columns:
+        return default
+    value = df[column].iloc[0]
+    return default if pd.isna(value) else value
+
+
+def filter_dataframe(
+    df, start_date, end_date, selected_category="ALL", selected_country="ALL"
+):
     """Reusable DataFrame filtering logic for Date Range, Product Category, and Region."""
+    if df is None:
+        return pd.DataFrame()
     if df.empty or not start_date or not end_date:
         return df.head(0)
 
@@ -38,12 +50,21 @@ def create_trend_badge(current_val, prev_val):
         return html.Span(f"{pct_change:.1f}% ↓", className="badge-soft-danger")
 
 
-def calculate_pop_badge(full_df, date_col, metric_col, start_date, end_date, agg_type="sum", category=None, country=None):
+def calculate_pop_badge(
+    full_df,
+    date_col,
+    metric_col,
+    start_date,
+    end_date,
+    agg_type="sum",
+    category=None,
+    country=None,
+):
     """
     End-to-End Orchestrator for Overview.
     Derives prior date range, filters data, performs aggregation, and outputs HTML badge.
     """
-    if not start_date or not end_date or full_df.empty:
+    if not start_date or not end_date or full_df is None or full_df.empty:
         return html.Span("N/A", className="badge-soft-secondary")
 
     # 1. Parse current date window
@@ -86,7 +107,7 @@ def format_compact_number(val, is_currency=False):
     """
     if val is None or val == 0:
         return "$0" if is_currency else "0"
-    
+
     abs_val = abs(val)
     prefix = "$" if is_currency else ""
     sign = "-" if val < 0 else ""

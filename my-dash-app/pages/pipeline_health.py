@@ -6,6 +6,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
+from utils.helpers import dataframe_value
 from data_loader import (
     load_pipeline_health_summary, 
     load_dbt_execution_logs, 
@@ -295,7 +296,7 @@ def layout():
                                     html.P("Side-by-side comparison of row counts between SQL Server source ingestion and BigQuery destination.", className="text-muted small mb-3"),
                                     dcc.Graph(id="pipeline-ingestion-chart", style={"height": "350px"}),
                                     html.Hr(className="my-4 border-secondary"),
-                                    html.H6("Detailed Ingestion Audit Logs", className="text-white fw-bold mb-3"),
+                                    html.H6("Recent Ingestion Audit Logs (latest 200, past 30 days)", className="text-white fw-bold mb-3"),
                                     dcc.Loading(
                                         id="table-ingestion-loading",
                                         type="circle",
@@ -388,36 +389,59 @@ def update_pipeline_data(active_tab):
     # Load all base summary/metadata needed for KPIs
     df_summary = load_pipeline_health_summary()
     df_source_freshness = load_source_freshness()
-    
+
     # KPI metrics calculations
-    freshness_val = f"{df_source_freshness['hours_since_load'].min():.0f}h" if not df_source_freshness.empty else "N/A"
-    latest_load_val = pd.to_datetime(df_source_freshness['last_loaded'].max()).strftime('%Y-%m-%d %H:%M UTC') if not df_source_freshness.empty else 'N/A'
-    
-    passed = df_summary["passed_tests"].iloc[0] if not df_summary.empty else 0
-    failed = df_summary["failed_tests"].iloc[0] if not df_summary.empty else 0
-    warnings = df_summary["warning_tests"].iloc[0] if not df_summary.empty else 0
-    avg_dur = df_summary["avg_model_duration_sec"].iloc[0] if not df_summary.empty else 0.0
+    freshness_hours = pd.Series(dtype="float64")
+    load_dates = pd.Series(dtype="datetime64[ns, UTC]")
+    if df_source_freshness is not None and not df_source_freshness.empty:
+        freshness_hours = pd.to_numeric(
+            df_source_freshness["hours_since_load"], errors="coerce"
+        ).dropna()
+        load_dates = pd.to_datetime(
+            df_source_freshness["last_loaded"], errors="coerce", utc=True
+        ).dropna()
+    freshness_val = (
+        f"{freshness_hours.max():.0f}h" if not freshness_hours.empty else "N/A"
+    )
+    latest_load_val = (
+        load_dates.max().strftime("%Y-%m-%d %H:%M UTC")
+        if not load_dates.empty
+        else "N/A"
+    )
 
-    coverage_pct = df_summary["overall_column_coverage_pct"].iloc[0] if not df_summary.empty else 0.0
-    total_models = df_summary["total_models"].iloc[0] if not df_summary.empty else 0
-    total_columns = df_summary["total_columns"].iloc[0] if not df_summary.empty else 0
-    total_tested = df_summary["total_columns_with_tests"].iloc[0] if not df_summary.empty else 0
-    total_tests = df_summary["total_tests"].iloc[0] if not df_summary.empty else 0
-    models_fully = df_summary["models_fully_covered"].iloc[0] if not df_summary.empty else 0
-    models_well = df_summary["models_well_covered"].iloc[0] if not df_summary.empty else 0
-    models_poor = df_summary["models_poorly_covered"].iloc[0] if not df_summary.empty else 0
+    passed = dataframe_value(df_summary, "passed_tests", 0)
+    failed = dataframe_value(df_summary, "failed_tests", 0)
+    warnings = dataframe_value(df_summary, "warning_tests", 0)
+    avg_dur = dataframe_value(df_summary, "avg_model_duration_sec", 0.0)
 
-    coverage_color = "success" if coverage_pct >= 90 else ("warning" if coverage_pct >= 70 else "danger")
+    coverage_pct = dataframe_value(df_summary, "overall_column_coverage_pct", 0.0)
+    total_models = dataframe_value(df_summary, "total_models", 0)
+    total_columns = dataframe_value(df_summary, "total_columns", 0)
+    total_tested = dataframe_value(df_summary, "total_columns_with_tests", 0)
+    total_tests = dataframe_value(df_summary, "total_tests", 0)
+    models_fully = dataframe_value(df_summary, "models_fully_covered", 0)
+    models_well = dataframe_value(df_summary, "models_well_covered", 0)
+    models_poor = dataframe_value(df_summary, "models_poorly_covered", 0)
+
+    coverage_color = (
+        "success"
+        if coverage_pct >= 90
+        else ("warning" if coverage_pct >= 70 else "danger")
+    )
 
     kpi_source = html.H4(freshness_val, className="text-white fw-bold mb-0")
     kpi_latest = html.H4(latest_load_val, className="text-white fw-bold mb-0")
     kpi_passed = html.H4(f"{passed:,}", className="text-success fw-bold mb-0")
     kpi_failed = html.H4(f"{failed:,}", className="text-danger fw-bold mb-0")
-    kpi_cov = html.H4(f"{coverage_pct:.1f}%", className=f"text-{coverage_color} fw-bold mb-0")
-    kpi_tested_cols = html.H4(f"{total_tested:,} / {total_columns:,}", className="text-white fw-bold mb-0")
+    kpi_cov = html.H4(
+        f"{coverage_pct:.1f}%", className=f"text-{coverage_color} fw-bold mb-0"
+    )
+    kpi_tested_cols = html.H4(
+        f"{total_tested:,} / {total_columns:,}", className="text-white fw-bold mb-0"
+    )
     kpi_tot_tests = html.H4(f"{total_tests:,}", className="text-info fw-bold mb-0")
     kpi_avg_dur = html.H4(f"{avg_dur:.2f}s", className="text-white fw-bold mb-0")
-    
+
     kpi_m100 = [html.H4(f"{models_fully:,}", className="text-success fw-bold mb-0"), html.Span(f"of {total_models}", className="text-muted small")]
     kpi_m80 = [html.H4(f"{models_well:,}", className="text-warning fw-bold mb-0"), html.Span(f"of {total_models}", className="text-muted small")]
     kpi_m50 = [html.H4(f"{models_poor:,}", className="text-danger fw-bold mb-0"), html.Span(f"of {total_models}", className="text-muted small")]
@@ -430,7 +454,7 @@ def update_pipeline_data(active_tab):
     if active_tab == "tab-model-coverage":
         df_model_cov = load_model_coverage_details()
         model_cov = df_model_cov.to_dict("records") if not df_model_cov.empty else []
-        
+
         if not df_model_cov.empty:
             # Explicitly calculate coverage percentage to ensure it matches the table
             if "tested_columns" in df_model_cov.columns and "total_columns" in df_model_cov.columns:
@@ -443,7 +467,7 @@ def update_pipeline_data(active_tab):
                     df_model_cov[cov_col] = df_model_cov[cov_col] * 100
 
             df_sorted = df_model_cov.sort_values(cov_col, ascending=True)
-            
+
             fig_model_cov = px.bar(
                 df_sorted, x=cov_col, y="model_name", orientation="h",
                 template="plotly_dark",
@@ -453,7 +477,7 @@ def update_pipeline_data(active_tab):
                 color_continuous_scale=["#da3633", "#f59e0b", "#10b981"],
                 range_color=[0, 100]  # <--- Fixes the scale from absolute 0% to 100%
             )
-            
+
             fig_model_cov.update_traces(textposition='outside')
             fig_model_cov.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
@@ -478,11 +502,11 @@ def update_pipeline_data(active_tab):
     if active_tab == "tab-column-coverage":
         df_col_cov = load_column_coverage_details()
         col_cov = df_col_cov.to_dict("records") if not df_col_cov.empty else []
-        
+
         if not df_col_cov.empty:
             df_grouped = df_col_cov.groupby(["model_name", "has_tests"], as_index=False).size()
             df_grouped["status"] = df_grouped["has_tests"].map({True: "Tested Columns", False: "Untested Columns"})
-            
+
             fig_col_cov = px.bar(
                 df_grouped, x="model_name", y="size", color="status", barmode="stack",
                 template="plotly_dark",
@@ -509,10 +533,12 @@ def update_pipeline_data(active_tab):
     # Table Ingestion Tab Processing
     if active_tab == "tab-table-ingestion":
         df_ingestion = load_table_ingestion_logs()
-        ingestion_grid = df_ingestion.to_dict("records") if not df_ingestion.empty else []
-        
-        if not df_ingestion.empty:
-            df_latest = df_ingestion.sort_values("run_timestamp").groupby("table_name", as_index=False).last()
+        ingestion_grid = (
+            df_ingestion.to_dict("records") if not df_ingestion.empty else []
+        )
+
+        df_latest = load_table_ingestion_logs(latest_only=True)
+        if not df_latest.empty:
             df_melted = df_latest.melt(
                 id_vars=["table_name"],
                 value_vars=["source_rows", "destination_rows"],
@@ -523,7 +549,7 @@ def update_pipeline_data(active_tab):
                 "source_rows": "SQL Server (Source)",
                 "destination_rows": "BigQuery (Destination)"
             })
-            
+
             fig_ingestion = px.bar(
                 df_melted, x="table_name", y="row_count", color="metric_type", barmode="group", text="row_count",
                 template="plotly_dark",

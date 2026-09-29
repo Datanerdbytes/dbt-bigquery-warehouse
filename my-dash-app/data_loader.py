@@ -9,6 +9,7 @@ from utils.cache import cache
 
 DEFAULT_DRIVER = "ODBC Driver 18 for SQL Server"
 
+
 def get_bigquery_client():
     """Helper function to initialize the BigQuery client from environment variables."""
     load_dotenv()
@@ -16,7 +17,9 @@ def get_bigquery_client():
     project_id = os.environ.get("GCP_PROJECT_ID", "quantum-echo-data-eng-prod")
 
     if key_file_path and os.path.exists(key_file_path):
-        return bigquery.Client.from_service_account_json(key_file_path, project=project_id)
+        return bigquery.Client.from_service_account_json(
+            key_file_path, project=project_id
+        )
     return bigquery.Client(project=project_id)
 
 
@@ -34,6 +37,7 @@ def load_and_prep_data():
             gross_sales_amount, 
             unit_price 
         FROM `quantum-echo-data-eng-prod.gold.fct_sales`
+        WHERE order_date >= DATE '2010-01-01'
     """
 
     query_products = """
@@ -57,19 +61,42 @@ def load_and_prep_data():
     df_products = client.query(query_products).to_dataframe()
     df_customers = client.query(query_customers).to_dataframe()
 
-    df_sales['order_date'] = pd.to_datetime(df_sales['order_date'], errors='coerce')
-
-    df_merged = (
-        df_sales
-        .merge(df_products, on="product_key", how="left")
-        .merge(df_customers, on="customer_key", how="left")  
+    # Keep the schema intact even when a source returns no rows.
+    df_sales = pd.DataFrame() if df_sales is None else df_sales
+    df_products = pd.DataFrame() if df_products is None else df_products
+    df_customers = pd.DataFrame() if df_customers is None else df_customers
+    df_sales = df_sales.reindex(
+        columns=[
+            "product_key",
+            "customer_key",
+            "order_date",
+            "order_number",
+            "quantity",
+            "gross_sales_amount",
+            "unit_price",
+        ]
+    )
+    df_products = df_products.reindex(
+        columns=["product_key", "product_name", "category"]
+    )
+    df_customers = df_customers.reindex(
+        columns=["customer_key", "first_name", "last_name", "country"]
     )
 
-    df_merged['order_date'] = pd.to_datetime(df_merged['order_date'], errors='coerce')
+    df_sales["order_date"] = pd.to_datetime(df_sales["order_date"], errors="coerce")
+
+    df_merged = df_sales.merge(df_products, on="product_key", how="left").merge(
+        df_customers, on="customer_key", how="left"
+    )
+
+    df_merged["order_date"] = pd.to_datetime(df_merged["order_date"], errors="coerce")
     df_merged = df_merged[df_merged["order_date"].dt.year >= 2010].copy()
 
-    min_data_date = df_merged["order_date"].min().strftime("%Y-%m-%d")
-    max_data_date = df_merged["order_date"].max().strftime("%Y-%m-%d")
+    min_data_date = None
+    max_data_date = None
+    if not df_merged.empty:
+        min_data_date = df_merged["order_date"].min().strftime("%Y-%m-%d")
+        max_data_date = df_merged["order_date"].max().strftime("%Y-%m-%d")
 
     unique_categories = sorted(df_merged["category"].dropna().unique())
     category_options = [{"label": "All Categories", "value": "ALL"}] + [
@@ -84,12 +111,17 @@ def load_and_prep_data():
     return df_merged, min_data_date, max_data_date, category_options, country_options
 
 
-@cache.memoize()
+@cache.memoize(timeout=60)
 def load_pipeline_health_summary():
     """Fetches high-level pipeline health summary KPIs from audit_metadata."""
     client = get_bigquery_client()
     query = """
-        SELECT *
+        SELECT
+            last_dbt_run, passed_tests, failed_tests, warning_tests,
+            avg_model_duration_sec, total_models, total_columns,
+            total_columns_with_tests, overall_column_coverage_pct, total_tests,
+            models_fully_covered, models_well_covered, models_poorly_covered,
+            overall_system_status
         FROM `quantum-echo-data-eng-prod.audit_metadata.v_latest_pipeline_health`
     """
     return client.query(query).to_dataframe()
@@ -155,6 +187,11 @@ def load_source_freshness():
             TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), run_timestamp, MINUTE) as minutes_since_load
         FROM `quantum-echo-data-eng-prod.audit_metadata.dbt_execution_logs`
         WHERE resource_type = 'sql_to_bigquery'
+          AND status IN ('pass', 'success')
+        QUALIFY ROW_NUMBER() OVER (
+            PARTITION BY target_table, node_name
+            ORDER BY run_timestamp DESC, execution_id DESC
+        ) = 1
         ORDER BY run_timestamp DESC
     """
     return client.query(query).to_dataframe()
@@ -271,10 +308,7 @@ def build_engine() -> Engine:
         f"TrustServerCertificate=yes;"
     )
 
-    connection_url = URL.create(
-        "mssql+pyodbc",
-        query={"odbc_connect": odbc_str}
-    )
+    connection_url = URL.create("mssql+pyodbc", query={"odbc_connect": odbc_str})
 
     return create_engine(connection_url, pool_pre_ping=True, fast_executemany=True)
 
@@ -288,8 +322,14 @@ def verify_connection(engine: Engine) -> None:
 
 
 @cache.memoize()
-def load_table_ingestion_logs() -> pd.DataFrame:
-    """Load table ingestion logs and row count parity metrics from BigQuery audit table."""
+def load_table_ingestion_logs(
+    days_back: int = 30, limit: int = 200, latest_only: bool = False
+) -> pd.DataFrame:
+    """Bound audit history; independently retain each table's latest parity snapshot."""
+    if not isinstance(days_back, int) or not 1 <= days_back <= 365:
+        raise ValueError("days_back must be between 1 and 365")
+    if not isinstance(limit, int) or not 1 <= limit <= 1000:
+        raise ValueError("limit must be between 1 and 1000")
     try:
         client = get_bigquery_client()
         query = """
@@ -306,18 +346,49 @@ def load_table_ingestion_logs() -> pd.DataFrame:
                 status,
                 error_message
             FROM `quantum-echo-data-eng-prod.audit_metadata.table_ingestion_logs`
-            ORDER BY run_timestamp DESC
         """
-        df = client.query(query).to_dataframe()
-        
+        if latest_only:
+            # No time cutoff here: a stale table must remain visible in the chart.
+            query += """
+                QUALIFY ROW_NUMBER() OVER (
+                    PARTITION BY resource_type, table_name, target_table
+                    ORDER BY run_timestamp DESC, log_id DESC
+                ) = 1
+                ORDER BY run_timestamp DESC, log_id DESC
+            """
+            job_config = bigquery.QueryJobConfig()
+        else:
+            query += """
+                WHERE run_timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days_back DAY)
+                ORDER BY run_timestamp DESC, log_id DESC
+                LIMIT @limit
+            """
+            job_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("days_back", "INT64", days_back),
+                    bigquery.ScalarQueryParameter("limit", "INT64", limit),
+                ]
+            )
+        df = client.query(query, job_config=job_config).to_dataframe()
+
         if not df.empty and "run_timestamp" in df.columns:
             df["run_timestamp"] = pd.to_datetime(df["run_timestamp"])
-            
+
         return df
     except Exception as e:
         print(f"Warning: Could not load table ingestion logs from BigQuery: {e}")
-        return pd.DataFrame(columns=[
-            "log_id", "run_timestamp", "resource_type", "table_name", 
-            "target_table", "source_rows", "destination_rows", "rows_inserted",
-            "duration_seconds", "status", "error_message"
-        ])
+        return pd.DataFrame(
+            columns=[
+                "log_id",
+                "run_timestamp",
+                "resource_type",
+                "table_name",
+                "target_table",
+                "source_rows",
+                "destination_rows",
+                "rows_inserted",
+                "duration_seconds",
+                "status",
+                "error_message",
+            ]
+        )
