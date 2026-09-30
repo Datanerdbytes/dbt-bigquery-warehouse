@@ -4,7 +4,7 @@ import dash_bootstrap_components as dbc
 
 def create_sidebar():
     links = [
-        ("Product Overview", "/", "bi-graph-up"),
+        ("Product Overview", "/dashboard", "bi-graph-up"),
         ("Customer 360", "/customers", "bi-people"),
         ("Pipeline Health", "/pipeline-health", "bi-activity"),
     ]
@@ -46,6 +46,9 @@ def create_sidebar():
                 id="dashboard-navigation",
                 className="sidebar-navigation",
                 vertical=True,
+            ),
+            html.Button(
+                "Sign out", id="dashboard-signout", className="auth-signout-button"
             ),
             html.Div(
                 [

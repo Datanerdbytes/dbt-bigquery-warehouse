@@ -23,3 +23,5 @@ cache-directory/
 #system create file
 .DS_Store
 docs/.DS_Store
+node_modules/
+!.env.example

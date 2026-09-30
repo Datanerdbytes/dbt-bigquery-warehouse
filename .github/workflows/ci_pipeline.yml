@@ -38,6 +38,19 @@ jobs:
           uv python install 3.12
           uv sync
 
+      - name: Set up Node for authentication build
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Build and test dashboard authentication offline
+        run: |
+          npm ci
+          npm run build:auth
+          npm run test:auth
+          uv run python -B -m unittest discover -s tests -v
+
       - name: Setup GCP & dbt Profile
         env:
           GCP_SA_KEY: ${{ secrets.GCP }}

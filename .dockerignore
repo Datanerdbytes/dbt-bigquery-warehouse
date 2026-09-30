@@ -1,0 +1,8 @@
+.git
+.venv
+node_modules
+.env
+.env.*
+**/__pycache__
+**/cache-directory
+my-dash-app/assets/auth.bundle.js

@@ -115,7 +115,7 @@ def refresh_header_health(_pathname, _n_intervals, previous_alert):
 
 
 PAGE_HEADINGS = {
-    "/": ("Product Overview", "Revenue, demand, and product performance"),
+    "/dashboard": ("Product Overview", "Revenue, demand, and product performance"),
     "/customers": ("Customer 360", "Customer value, engagement, and retention"),
     "/pipeline-health": (
         "Pipeline Health",
@@ -132,7 +132,7 @@ PAGE_HEADINGS = {
 )
 def update_page_heading(pathname):
     title, subtitle = PAGE_HEADINGS.get(pathname, ("Analytics", "Explore your data"))
-    return title, subtitle, pathname not in ("/", "/customers")
+    return title, subtitle, pathname not in ("/dashboard", "/customers")
 
 
 def create_header():

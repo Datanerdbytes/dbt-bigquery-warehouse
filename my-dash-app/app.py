@@ -3,6 +3,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import dash
+from flask import Flask
+from auth import install_auth
 from dash import (
     Dash,
     html,
@@ -25,16 +27,31 @@ from components.header import create_header
 from utils.helpers import filter_dataframe
 from data_loader import load_and_prep_data
 
+# Register authentication before Dash request hooks.
+server = Flask(__name__)
+install_auth(server)
+
 # Initialize App
 app = Dash(
     __name__,
+    server=server,
     use_pages=True,
+    assets_ignore=r"auth\.bundle\.js",
     external_stylesheets=[
         dbc.themes.DARKLY,
         "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600&display=swap",
         dbc.icons.BOOTSTRAP,
     ],
     suppress_callback_exceptions=True,
+)
+
+app.index_string = (
+    app.index_string.replace("<html>", '<html lang="en">')
+    .replace("{%css%}", '{%css%}<script src="/assets/auth.bundle.js"></script>')
+    .replace(
+        "{%app_entry%}",
+        '<div id="auth-session-loading" role="status" tabindex="-1">Connecting to your workspace…</div>{%app_entry%}',
+    )
 )
 
 cache.init_app(app.server)

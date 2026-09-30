@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "my-dash-app"))
 
 import data_loader
+import auth
 from components import header
 from utils.cache import cache
 from utils.helpers import filter_dataframe, dataframe_value
@@ -173,13 +174,32 @@ class DashboardRegressionTests(unittest.TestCase):
 
     def test_dash_layout_and_callback_registration_work_without_queries(self):
         client = self.dashboard.server.test_client()
-        for path in ["/", "/_dash-layout", "/_dash-dependencies"]:
-            response = client.get(path)
-            self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
-        dependencies = client.get("/_dash-dependencies").get_json()
+        with patch("auth.verify_access", return_value=({"id": "test-user"}, 3600)):
+            for path in ["/dashboard", "/_dash-layout", "/_dash-dependencies"]:
+                response = client.get(path)
+                self.assertEqual(
+                    response.status_code, 200, response.get_data(as_text=True)
+                )
+            dependencies = client.get("/_dash-dependencies").get_json()
         self.assertTrue(
             any("header-health-menu" in callback["output"] for callback in dependencies)
         )
+
+    def test_auth_routes_and_bundle_are_registered_together(self):
+        client = self.dashboard.server.test_client()
+        with patch("auth.verify_access", return_value=({"id": "test-user"}, 3600)):
+            html = client.get("/dashboard").get_data(as_text=True)
+        self.assertEqual(html.count('src="/assets/auth.bundle.js"'), 1)
+        self.assertNotIn("auth.bundle.js?m=", html)
+        self.assertIn('id="auth-session-loading"', html)
+        self.assertIn('id="auth-form"', client.get("/login").get_data(as_text=True))
+        with client.get("/assets/auth.bundle.js") as response:
+            self.assertEqual(response.status_code, 200)
+        with patch(
+            "auth.verify_access",
+            side_effect=auth.AuthError("session_required", 401),
+        ):
+            self.assertEqual(client.get("/_dash-layout").status_code, 401)
 
     def test_empty_header_does_not_claim_healthy(self):
         for frame in [None, pd.DataFrame()]:
@@ -417,6 +437,7 @@ class DashboardRegressionTests(unittest.TestCase):
         self.assertIn("2025-02-15", result["content"])
         self.assertNotIn("2025-01-15", result["content"])
         self.assertTrue(result["filename"].endswith(".csv"))
+
 
 if __name__ == "__main__":
     unittest.main()

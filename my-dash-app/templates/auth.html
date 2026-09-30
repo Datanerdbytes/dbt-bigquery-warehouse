@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" data-auth-page="{{ mode }}">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ 'Create account' if mode == 'signup' else 'Sign in' }} · Quantum Echo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/assets/00-theme.css"><link rel="stylesheet" href="/assets/08-auth.css">
+<script>setTimeout(function(){if(!window.qeAuthStarted){var e=document.getElementById('auth-loading')||document.getElementById('auth-session-loading');if(e)e.textContent='Authentication did not load. Reload the page or contact your administrator.';}},10000);</script>
+<script defer src="/assets/auth.bundle.js"></script>
+</head>
+<body class="auth-page"><main class="auth-card">
+<a class="auth-brand" href="/login">Quantum Echo<span>Analytics workspace</span></a>
+<div id="auth-loading" role="status">Connecting to your workspace…</div>
+<section id="auth-content" hidden>
+<p class="auth-eyebrow">YOUR ANALYTICS WORKSPACE</p>
+<h1>{{ 'Create your account' if mode == 'signup' else 'Welcome back' }}</h1>
+<p class="auth-intro">{{ 'Get started with secure access to your team’s insights.' if mode == 'signup' else 'Sign in to explore your data and monitor your pipelines.' }}</p>
+<div class="auth-providers"><button type="button" data-provider="google">Continue with Google</button><button type="button" data-provider="github">Continue with GitHub</button></div>
+<div class="auth-divider">or continue with email</div>
+<form id="auth-form" novalidate>
+<label for="auth-email">Email address</label><input id="auth-email" name="email" type="email" autocomplete="email" required aria-describedby="auth-email-error" placeholder="you@company.com"><span id="auth-email-error" class="auth-field-error"></span>
+<label for="auth-password">Password</label><div class="auth-password-row"><input id="auth-password" name="password" type="password" autocomplete="{{ 'new-password' if mode == 'signup' else 'current-password' }}" required aria-describedby="auth-password-error"><button type="button" id="auth-show-password" aria-label="Show password" aria-pressed="false">Show</button></div><span id="auth-password-error" class="auth-field-error"></span>
+{% if mode == 'signup' %}<p class="auth-hint">Use at least 8 characters.</p>{% endif %}
+<button class="auth-primary" type="submit">{{ 'Create account' if mode == 'signup' else 'Sign in' }}</button>
+</form>
+<p class="auth-switch">{{ 'Already have an account?' if mode == 'signup' else 'New to Quantum Echo?' }} <a href="{{ '/login' if mode == 'signup' else '/signup' }}">{{ 'Sign in' if mode == 'signup' else 'Create an account' }}</a></p>
+</section>
+<div id="auth-message" role="alert" tabindex="-1" hidden></div><button id="auth-signout" type="button" hidden>Sign out</button><a id="auth-back" href="/login" hidden>Back to sign in</a>
+<p class="auth-note">Access is limited to approved team members.</p>
+<noscript>Enable JavaScript and reload to sign in securely.</noscript>
+</main></body></html>

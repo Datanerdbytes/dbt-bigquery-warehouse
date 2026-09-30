@@ -1,0 +1,17 @@
+{
+  "name": "quantum-echo-auth",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:auth": "node Scripts/build-auth.mjs",
+    "test:auth": "node --test tests/auth-browser.test.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.100.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "prettier": "3.6.2",
+    "jsdom": "26.1.0"
+  }
+}

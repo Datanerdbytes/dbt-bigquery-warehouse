@@ -22,7 +22,7 @@ from components.panels import loading, panel, chart_panel, create_grid
 from theme import COLORS, style_figure
 
 # Register Page
-dash.register_page(__name__, path="/", name="Product Overview")
+dash.register_page(__name__, path="/dashboard", name="Product Overview")
 
 
 def layout():
