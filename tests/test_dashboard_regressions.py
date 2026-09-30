@@ -418,6 +418,5 @@ class DashboardRegressionTests(unittest.TestCase):
         self.assertNotIn("2025-01-15", result["content"])
         self.assertTrue(result["filename"].endswith(".csv"))
 
-
 if __name__ == "__main__":
     unittest.main()
