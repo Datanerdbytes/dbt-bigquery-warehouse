@@ -36,7 +36,7 @@ app = Dash(
     __name__,
     server=server,
     use_pages=True,
-    assets_ignore=r"auth\.bundle\.js",
+    assets_ignore=r"(?:auth|showcase)\.bundle\.js",
     external_stylesheets=[
         dbc.themes.DARKLY,
         "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600&display=swap",

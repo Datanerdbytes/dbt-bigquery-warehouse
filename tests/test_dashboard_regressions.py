@@ -191,9 +191,12 @@ class DashboardRegressionTests(unittest.TestCase):
             html = client.get("/dashboard").get_data(as_text=True)
         self.assertEqual(html.count('src="/assets/auth.bundle.js"'), 1)
         self.assertNotIn("auth.bundle.js?m=", html)
+        self.assertNotIn("showcase.bundle.js", html)
         self.assertIn('id="auth-session-loading"', html)
         self.assertIn('id="auth-form"', client.get("/login").get_data(as_text=True))
         with client.get("/assets/auth.bundle.js") as response:
+            self.assertEqual(response.status_code, 200)
+        with client.get("/assets/showcase.bundle.js") as response:
             self.assertEqual(response.status_code, 200)
         with patch(
             "auth.verify_access",

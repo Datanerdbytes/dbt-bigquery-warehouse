@@ -81,3 +81,9 @@ Tests mock Supabase and prohibit production BigQuery client construction in
 regression tests. Actual account sign-in and OAuth provider consent require your
 credentials and provider configuration; automated checks do not create accounts,
 send confirmation emails, or query production analytics.
+
+### Public product landing page
+
+Anonymous GET/HEAD requests to `/` render the product showcase without starting Supabase or loading dashboard data. A verified, approved session at `/` still redirects to `/dashboard`; stale, denied, or unavailable sessions can still view the public landing page. `/login` and `/signup` are dedicated authentication pages, linked from the landing page header. Protected dashboard routes, callbacks, and exports retain their existing authorization requirements.
+
+`npm run build:auth` builds the authentication bundle and the separate, public `showcase.bundle.js` slideshow. Both are excluded from Dash auto-injection and are loaded only by their respective templates. Docker copies both generated bundles from its Node build stage.

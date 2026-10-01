@@ -25,6 +25,7 @@ PUBLIC_ASSETS = {
     "/assets/00-theme.css",
     "/assets/08-auth.css",
     "/assets/auth.bundle.js",
+    "/assets/showcase.bundle.js",
 }
 
 
@@ -110,6 +111,17 @@ def install_auth(server):
                 return jsonify(error=error.code), error.status
             if request.headers.get("Origin") != origin:
                 return jsonify(error="origin_rejected"), 403
+        # The public product page never needs dashboard data or a valid session.
+        # Preserve the existing root redirect for verified, approved members.
+        if request.path == "/" and request.method in {"GET", "HEAD"}:
+            if request.cookies.get(COOKIE):
+                try:
+                    g.auth_user, _ = verify_access(request.cookies.get(COOKIE))
+                except AuthError:
+                    pass
+                else:
+                    return redirect("/dashboard")
+            return render_template("landing.html")
         if request.path in PUBLIC or request.path in PUBLIC_ASSETS:
             return None
         try:
@@ -122,8 +134,6 @@ def install_auth(server):
                     return redirect("/login")
                 return render_template("auth.html", mode="unavailable"), 503
             return jsonify(error=error.code), error.status
-        if request.path == "/":
-            return redirect("/dashboard")
 
     @server.after_request
     def private(response):
