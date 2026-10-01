@@ -57,20 +57,25 @@ app.index_string = (
 cache.init_app(app.server)
 server = app.server
 
-app.layout = html.Div(
-    [
-        dcc.Location(id="url", refresh=False),
-        dcc.Store(id="global-filter-store", storage_type="session"),
-        # 1. Push Sidebar Container (Fixed position, slides in/out via CSS class)
-        html.Div(create_sidebar(), className="sidebar-fixed-container"),
-        # 2. Main Content Wrapper
-        html.Div(
-            [create_header(), dash.page_container], className="main-content-wrapper"
-        ),
-    ],
-    id="app-wrapper",
-    className="app-wrapper sidebar-open",  # Starts open
-)
+
+def serve_layout():
+    return html.Div(
+        [
+            dcc.Location(id="url", refresh=False),
+            dcc.Store(id="global-filter-store", storage_type="session"),
+            # 1. Push Sidebar Container (Fixed position, slides in/out via CSS class)
+            html.Div(create_sidebar(), className="sidebar-fixed-container"),
+            # 2. Main Content Wrapper
+            html.Div(
+                [create_header(), dash.page_container], className="main-content-wrapper"
+            ),
+        ],
+        id="app-wrapper",
+        className="app-wrapper sidebar-open",  # Starts open
+    )
+
+
+app.layout = serve_layout
 
 
 # Helper function to create standard preview grids
