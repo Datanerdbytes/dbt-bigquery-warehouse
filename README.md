@@ -1,7 +1,9 @@
 # 🚀 Enterprise Data Warehouse, Pipeline Observability & Analytics Platform
 
 > 🌐 **Live Interactive App:** [https://dash-observability-app-1022429033383.us-central1.run.app/](https://dash-observability-app-1022429033383.us-central1.run.app/)
-
+**Login Credentials**
+> username: ```datanerdbytes@gmail.com```
+> password: ```necnor-jYzjuh-kisti0```
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![dbt](https://img.shields.io/badge/dbt-Core%201.12+-FF694B?style=for-the-badge&logo=dbt&logoColor=white)](https://www.getdbt.com/)
 [![Google BigQuery](https://img.shields.io/badge/Google%20BigQuery-Cloud%20EDW-669DF6?style=for-the-badge&logo=googlecloud&logoColor=white)](https://cloud.google.com/bigquery)
