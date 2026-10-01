@@ -137,3 +137,129 @@
     min-height: 44px;
   }
 }
+
+.sidebar-account {
+  position: relative;
+  margin-top: auto;
+  padding-top: 16px;
+}
+.sidebar-account-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--dashboard-text);
+}
+.sidebar-account-trigger::-webkit-details-marker {
+  display: none;
+}
+.sidebar-account-trigger:hover,
+.sidebar-account[open] > .sidebar-account-trigger {
+  background: var(--dashboard-raised);
+}
+.sidebar-account-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--dashboard-accent);
+  color: var(--dashboard-background);
+  font-size: 12px;
+  font-weight: 600;
+}
+.sidebar-account-identity {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+.sidebar-account-identity strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+}
+.sidebar-account-identity > span {
+  font-size: 11px;
+  color: var(--dashboard-muted);
+}
+.sidebar-account-panel {
+  position: absolute;
+  bottom: calc(100% - 8px);
+  left: 0;
+  width: 280px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 100px);
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--dashboard-surface);
+  border: 1px solid var(--dashboard-border);
+  border-radius: 16px;
+  box-shadow: 0 12px 32px
+    color-mix(in srgb, var(--dashboard-background) 60%, transparent);
+  z-index: 60;
+}
+.sidebar-account-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+}
+.sidebar-account-email {
+  color: var(--dashboard-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  padding: 0 8px;
+}
+.sidebar-account-panel hr {
+  border-color: var(--dashboard-border);
+  opacity: 1;
+  margin: 12px 0;
+}
+.sidebar-account-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--dashboard-text);
+  background: transparent;
+  text-align: left;
+}
+.sidebar-account-action:hover {
+  background: var(--dashboard-raised);
+}
+.sidebar-account-trigger:focus-visible,
+.sidebar-account-action:focus-visible {
+  outline: 2px solid var(--dashboard-accent);
+  outline-offset: 2px;
+}
+@media (min-width: 761px) {
+  .sidebar-closed .sidebar-account-trigger {
+    justify-content: center;
+    padding-inline: 0;
+  }
+  .sidebar-closed .sidebar-account-trigger .sidebar-account-identity,
+  .sidebar-closed .sidebar-account-trigger > i {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .sidebar-account {
+    margin-top: 12px;
+    padding-top: 0;
+  }
+  .sidebar-account-panel {
+    top: calc(100% + 8px);
+    bottom: auto;
+  }
+}

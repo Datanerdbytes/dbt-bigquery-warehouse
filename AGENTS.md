@@ -1,6 +1,3 @@
-Replace `AGENTS.md` with this integrated version:
-
-````markdown
 # Agent Context & Rules
 
 ## 1. Project Overview
@@ -117,4 +114,3 @@ defaultColDef={"filter": True, "sortable": True}
 ## 10. Production Safety
 - The workspace is connected to the production Google Cloud environment `quantum-echo-data-eng-prod`.
 - Never run destructive commands such as `bq rm`, `dbt clean`, or commands that drop production datasets without explicit, multi-turn user confirmation.
-````
