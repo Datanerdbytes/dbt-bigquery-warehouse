@@ -9,6 +9,8 @@
 - **Language:** Python 3.[X]
 - **Core Framework:** Plotly Dash
 - **Underlying Engine:** Flask, including Flask-Caching
+- **Authentication:** Supabase Auth with `@supabase/supabase-js`, OAuth PKCE, and Flask server-side authorization
+- **Frontend Build:** Node.js 22+, npm, and esbuild for the authentication bundle
 - **Data Engine:** Google BigQuery via Application Default Credentials (ADC), plus dbt artifact telemetry
 - **Data Libraries:** `google-cloud-bigquery`, `pandas`, `pandas-gbq`, `pyarrow`, `json`
 - **Caching Framework:** Flask-Caching with FileSystemCache or Redis
@@ -28,6 +30,7 @@ Expected project structure:
 demo-database/
 ├── .venv/
 ├── Scripts/
+│   ├── build-auth.mjs
 │   ├── ingest_bronze.py
 │   ├── ingest_bigquery.py
 │   ├── ingest_dbt_artifacts.py
@@ -38,14 +41,22 @@ demo-database/
 │   │   └── marts/
 │   └── target/
 ├── my-dash-app/
-│   ├── assets/
+│   ├── assets/                      # Shared CSS and generated auth.bundle.js
+│   ├── auth_frontend/               # Supabase client and session lifecycle JS
+│   ├── templates/                   # Flask authentication pages
 │   ├── components/
 │   ├── pages/
 │   ├── utils/
+│   ├── auth.py                      # Request guard, public config, session bridge
 │   ├── app.py
 │   ├── app_observability.py
 │   ├── data_loader.py
 │   └── requirements.txt
+├── docs/supabase-auth.md
+├── tests/                          # Offline Python and browser-state auth tests
+├── package.json
+├── package-lock.json
+├── .env.example
 ├── AGENTS.md
 ├── CLAUDE.md
 └── Notebooks/
@@ -114,3 +125,22 @@ defaultColDef={"filter": True, "sortable": True}
 ## 10. Production Safety
 - The workspace is connected to the production Google Cloud environment `quantum-echo-data-eng-prod`.
 - Never run destructive commands such as `bq rm`, `dbt clean`, or commands that drop production datasets without explicit, multi-turn user confirmation.
+
+## 11. Authentication & Access Control
+
+- Keep authentication in the existing Dash/Flask application; do not introduce Next.js routing or SSR middleware. See [Supabase authentication setup](docs/supabase-auth.md).
+- Register `install_auth(server)` from `my-dash-app/auth.py` before constructing Dash so authorization runs before Dash request hooks, data callbacks, and exports.
+- Serve `/login`, `/signup`, and `/auth/callback` as Flask-rendered pages outside the dashboard layout. Product Overview lives at `/dashboard`; authenticated `/` requests redirect there. Keep navigation and route-dependent callbacks consistent.
+- Email/password signup requires email confirmation. Google and GitHub OAuth use PKCE and require separately enabled/configured providers in Supabase. Never assume a rendered provider button means the provider is enabled.
+- Verify access tokens against Supabase Auth on every protected request, then require a confirmed email on the case-insensitive, exact-email `AUTH_ALLOWED_EMAILS` allowlist. An empty allowlist denies everyone. Never authorize from client state, editable metadata, or unverified JWT claims.
+- Keep the public route/asset allowlist explicit. `/auth/config` exposes only the public project URL and anon key; `/auth/session` POST validates the token and sets the access cookie, while DELETE clears it. Authentication endpoints must remain usable before a session exists.
+- Require exact `Origin` matching for mutations. Cookies must be HttpOnly and SameSite=Lax, with Secure enabled except for explicitly configured HTTP localhost development. Preserve `private, no-store` response headers.
+- Keep refresh tokens managed by Supabase JS. Never put access/refresh tokens, provider secrets, or the approval allowlist in `dcc.Store`, logs, templates, or browser configuration.
+- Wait for session synchronization before releasing Dash data requests or revealing the dashboard. Preserve token refresh, sign-out across tabs, callback error recovery, and visible startup failure states. Do not automatically replay rejected mutations.
+- Return 401 for invalid sessions, 403 for denied access, and 503 for configuration/service failures; fail closed before data loaders run. Redirect unauthorized page navigation to `/login`.
+- Read `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `AUTH_APP_ORIGIN`, and `AUTH_ALLOWED_EMAILS` from root `.env` locally or the deployment environment. Runtime environment values take precedence. Use only the public anon key in browser configuration; never a service-role key.
+- Keep browser and server pointed at the same Supabase project. The default build uses `/auth/config` at runtime; optional build-time public values override it. Leave build-time values unset for portable Docker/CI builds.
+- Distinguish Google Cloud's authorized redirect URI (`https://<project-ref>.supabase.co/auth/v1/callback`) from Supabase's allowed app redirect URLs (`<app-origin>/auth/callback`). Do not substitute one for the other.
+- Edit `auth_frontend/` sources, then run `npm ci` and `npm run build:auth`. Never fix authentication by editing only the generated bundle or disabling the server guard. Exclude the bundle from Dash auto-injection and load it exactly once through the index template.
+- Commit the backend, templates, CSS, frontend sources, generated tracked bundle, package manifests, build script, and Docker integration together. Docker builds the bundle in a Node stage and runs only Python/Gunicorn in the final image.
+- After auth changes, run `.venv/bin/python -B -m unittest discover -s tests -v` and `npm run test:auth`. Verify unauthenticated page/data access, approval and confirmation checks, expiry/refresh, logout, OAuth errors, and loading states without querying production BigQuery or creating real accounts.

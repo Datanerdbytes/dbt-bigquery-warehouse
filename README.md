@@ -27,6 +27,7 @@ An end-to-end, production-grade enterprise data engineering and business intelli
   - [3. Pipeline Observability, Test Coverage & Telemetry Logging](#3-pipeline-observability-test-coverage--telemetry-logging)
   - [4. Interactive Multi-Page Dash Application ("Dashdark X")](#4-interactive-multi-page-dash-application-dashdark-x)
   - [5. CI/CD Pipeline & Google Cloud Run Deployment](#5-cicd-pipeline--google-cloud-run-deployment)
+  - [6. Supabase Authentication & Access Control](#6-supabase-authentication--access-control)
 - [Screenshots & Dashboards](#-screenshots--dashboards)
 - [Technology Stack](#-technology-stack)
 - [Project Directory Structure](#-project-directory-structure)
@@ -34,6 +35,8 @@ An end-to-end, production-grade enterprise data engineering and business intelli
   - [Prerequisites](#prerequisites)
   - [Environment Configuration](#environment-configuration)
   - [Running the Ingestion & dbt Pipeline](#running-the-ingestion--dbt-pipeline)
+  - [Supabase & OAuth Configuration](#supabase--oauth-configuration)
+  - [Authentication Troubleshooting](#authentication-troubleshooting)
   - [Running the Dash Web App Locally](#running-the-dash-web-app-locally)
   - [Running with Docker](#running-with-docker)
 - [Data Models & Schema Reference](#-data-models--schema-reference)
@@ -50,7 +53,8 @@ Modern enterprise analytics demands not only timely reporting, but also transpar
 3. **Validates** every stage with automated assertions (uniqueness, referential integrity, range constraints, whitespace validation).
 4. **Captures Telemetry** from dbt artifacts (`manifest.json` and `run_results.json`) to track run durations, failures, warnings, and column-level test coverage over time.
 5. **Presents Business & Data Health Insights** through an interactive, multi-page **Plotly Dash** interface equipped with server-side caching (`Flask-Caching`), client-side session store (`dcc.Store`), asynchronous loading spinners, modal drill-downs, and executive CSV export capabilities.
-6. **Continuous Delivery** automatically compiles and tests dbt models on pull requests, builds an optimized Docker container, and deploys to **Google Cloud Run** on pushes to `main`.
+6. **Secures Dashboard Access** with Supabase email/password authentication, Google/GitHub OAuth support, confirmed-email approval, and server-side protection of pages, data callbacks, and exports.
+7. **Continuous Delivery** automatically compiles and tests dbt models on pull requests, builds an optimized Docker container, and deploys to **Google Cloud Run** on pushes to `main`.
 
 ---
 
@@ -197,7 +201,7 @@ flowchart TD
 
 Built using Plotly Dash's native `dash.register_page` architecture, styled with a modern dark theme (`dbc.themes.DARKLY`), Bootstrap Icons, and bespoke CSS modules (`assets/`).
 
-#### 🎛️ Page 1: Product Overview (`/`)
+#### 🎛️ Page 1: Product Overview (`/dashboard`)
 - **Interactive Global Filters**: Sticky filter bar supporting dynamic Date Range Picker, Product Category dropdown, and Country/Region selector.
 - **Period-over-Period (PoP) KPI Bar**:
   - Displays Total Sales, Total Orders, Total Quantity, and Total Customers.
@@ -243,12 +247,36 @@ Built using Plotly Dash's native `dash.register_page` architecture, styled with 
 ### 5. CI/CD Pipeline & Google Cloud Run Deployment
 
 - **Automated CI/CD Workflow (`.github/workflows/ci_pipeline.yml`)**:
-  - **Validate & Test Job**: Triggers on pull requests and pushes to `main`. Automatically provisions Python 3.12 with Astral `uv`, injects GCP credentials, and executes `dbt compile` and `dbt test` to prevent regressions.
+  - **Validate & Test Job**: Triggers on pull requests and pushes to `main`. Automatically provisions Python 3.12 with Astral `uv` and Node 22, builds the authentication bundle and runs offline Python/browser-state tests, then injects GCP credentials, and executes `dbt compile` and `dbt test` to prevent regressions.
   - **Deploy Cloud Run Job**: On merge to `main`, configures Docker authentication to Google Artifact Registry, builds an optimized production container, and deploys to **Google Cloud Run** (`dash-observability-app`) in `us-central1` with CPU/memory limits and automatic scaling (0 to 2 instances).
 - **Production Containerization (`Dockerfile`)**:
-  - Lightweight Python 3.12-slim base image.
+  - Node 22 build stage runs `npm ci` and `npm run build:auth`.
+  - Python 3.12-slim runtime receives the compiled authentication bundle; Node is not required at runtime.
+  - Supabase configuration is supplied through Cloud Run runtime environment variables; `.env` is excluded from the image.
   - Uses `uv` for deterministic dependency resolution.
   - Executes via **Gunicorn** WSGI production server (`--workers 1 --threads 8 app:server`).
+
+### 6. Supabase Authentication & Access Control
+
+The dashboard uses Supabase Auth with `@supabase/supabase-js` and a Flask authorization layer. Login and signup share the dashboard's dark theme and accessible form controls.
+
+| Route | Behavior |
+| --- | --- |
+| `/login`, `/signup` | Public Flask pages for email/password and Google/GitHub sign-in |
+| `/auth/callback` | Completes the OAuth or email-confirmation PKCE code exchange |
+| `/auth/config` | Returns only the public Supabase project URL and anon key |
+| `/auth/session` | Same-origin POST validates a session and sets the access cookie; DELETE clears it |
+| `/dashboard` | Protected Product Overview and successful-login destination |
+| `/customers`, `/pipeline-health` | Protected analytics pages |
+| `/` | Redirects approved users to `/dashboard`, unauthenticated users to `/login` |
+
+Flask verifies tokens with Supabase and requires a confirmed email on the server-side `AUTH_ALLOWED_EMAILS` list before executing Dash callbacks or exports. Browser checks alone do not grant access. The access-token cookie is HttpOnly and SameSite=Lax, with Secure enabled for HTTPS deployments. Authentication and dashboard responses use `private, no-store`.
+
+Supabase JS manages session persistence and refresh. The dashboard stays hidden while the browser synchronizes its session with Flask, and sign-out clears the server cookie and local browser session across tabs. Google and GitHub buttons require their respective providers to be enabled in Supabase; they are not enabled by deploying the app.
+
+**User management:** Users register through `/signup` or an enabled OAuth provider. Inspect accounts in Supabase → Authentication → Users. Add verified email addresses to `AUTH_ALLOWED_EMAILS` to approve dashboard access; remove them to revoke it, then restart/redeploy all app instances. An empty allowlist grants nobody access. All approved users have the same dashboard capabilities; there is no in-app admin or role-management page.
+
+See [the detailed authentication guide](docs/supabase-auth.md) for session behavior and deployment notes.
 
 ---
 
@@ -340,6 +368,8 @@ Built using Plotly Dash's native `dash.register_page` architecture, styled with 
 | **Data Transformation** | **dbt Core (1.12+)** & **dbt-bigquery** | Medallion ELT, star-schema data modeling, incremental execution |
 | **Data Quality & Linting**| **dbt-utils**, **dbt-expectations**, **SQLFluff** | Data assertion testing, referential integrity, SQL styling |
 | **Telemetry & Observability** | **Custom dbt Artifact Parsers** | Ingesting `manifest.json` and `run_results.json` into BigQuery audit logs |
+| **Authentication** | **Supabase Auth** & **@supabase/supabase-js** | Email/password, OAuth PKCE, session refresh, and Flask access checks |
+| **Authentication Build** | **Node.js 22**, **npm**, **esbuild** | Reproducible browser bundle; runtime public configuration |
 | **Dashboard Framework** | **Plotly Dash (4.4+)** | Interactive multi-page web application (`dash.register_page`) |
 | **UI Components & Themes**| **Dash Bootstrap Components (DBC)** | Darkly theme layout, responsive grids, navbars, modals, tooltips |
 | **High-Performance Grids**| **Dash AG Grid (35.3+)** | Enterprise tables with sorting, filtering, and cell styling conditions |
@@ -389,7 +419,15 @@ demo-database/
 │   │   ├── 03-header.css            # Header, greeting, notification menu, toast styles
 │   │   ├── 04-filters.css           # Sticky filter bar, dropdowns, and date picker
 │   │   ├── 05-kpi-cards.css         # Dark KPI cards, number formatting, trend badges
-│   │   └── 06-components.css        # Modal dialogs and AG Grid overrides
+│   │   ├── 06-components.css        # Modal dialogs and AG Grid overrides
+│   │   ├── 08-auth.css              # Login/signup and session loading states
+│   │   └── auth.bundle.js           # Generated authentication client
+│   ├── auth_frontend/
+│   │   ├── supabase-client.js       # Environment/runtime Supabase client initialization
+│   │   └── main.js                  # Forms, OAuth PKCE, refresh, and session gate
+│   ├── templates/
+│   │   └── auth.html                # Flask login/signup/callback template
+│   ├── auth.py                     # Server authorization and session endpoints
 │   ├── components/                  # Reusable UI component modules
 │   │   ├── filter_bar.py            # Dynamic DatePickerRange and category/country filters
 │   │   ├── header.py                # Top navigation header, alerts bell, toast, export btn
@@ -406,6 +444,7 @@ demo-database/
 │   ├── app_observability.py         # Standalone pipeline observability & lineage viewer
 │   └── data_loader.py               # BigQuery data fetchers with @cache.memoize
 ├── Scripts/                         # Data ingestion and DDL scripts
+│   ├── build-auth.mjs              # esbuild authentication bundle build
 │   ├── create_init_database.sql     # SQL Server database initialization
 │   ├── ddl_create_bronze_*.sql      # DDL definitions for bronze tables
 │   ├── ingest_bronze.py             # CSV to SQL Server bronze ingestion
@@ -414,6 +453,11 @@ demo-database/
 ├── utils/
 │   ├── audit_logger.py              # Centralized BigQuery audit logging helper
 │   └── helpers.py                   # Filtering and statistical helper functions
+├── docs/supabase-auth.md            # Authentication configuration and operations
+├── tests/                           # Python regression and JS auth state tests
+├── package.json                     # Auth dependencies and build/test commands
+├── package-lock.json                # Locked npm dependency versions
+├── .env.example                     # Authentication variable template, no credentials
 ├── Dockerfile                       # Production multi-stage Docker build file
 ├── pyproject.toml                   # Pinned project dependencies managed with uv
 ├── run_pipeline.sh                  # End-to-end execution bash script
@@ -427,6 +471,8 @@ demo-database/
 ### Prerequisites
 
 - **Python**: Version `3.12+`
+- **Node.js**: Version `22+` with npm for the authentication build (Docker supplies its own build stage).
+- **Supabase project**: Email confirmation configured and any desired OAuth providers enabled.
 - **Package Manager**: [`uv`](https://github.com/astral-sh/uv) recommended (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
 - **Google Cloud Platform**:
   - BigQuery API enabled on project `quantum-echo-data-eng-prod` (or your custom project).
@@ -454,6 +500,12 @@ SOURCE_FOLDER=/path/to/your/raw/csv/files
 GCP_PROJECT_ID=quantum-echo-data-eng-prod
 GCP_KEY_PATH=/path/to/your/gcp-key.json
 TARGET_DATASET=bronze
+
+# Supabase authentication — replace placeholders with your project's public values
+NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<public-anon-key>
+AUTH_APP_ORIGIN=http://localhost:8050
+AUTH_ALLOWED_EMAILS=analyst@example.com
 ```
 
 Ensure your `~/.dbt/profiles.yml` is configured for BigQuery:
@@ -513,25 +565,74 @@ uv run analytics_layer/scripts/calculate_coverage.py
 
 ---
 
+### Supabase & OAuth Configuration
+
+The Flask app loads root `.env` without overriding existing environment values. Configure the same four auth variables in Cloud Run for production, with `AUTH_APP_ORIGIN=https://dash-observability-app-1022429033383.us-central1.run.app`. Keep the allowlist and provider secrets server-side. The anon key is intentionally public; never substitute a service-role key.
+
+1. In Supabase **Authentication → Sign In / Providers**, keep **Confirm email** enabled. For Google, open the provider, enter your Google OAuth client ID and secret, turn **Enable Sign in with Google** on, and **Save**. Configure and enable GitHub separately if needed.
+2. In **Google Cloud → Google Auth Platform → Clients → your Web application client**, add the following under **Authorized redirect URIs** and save:
+
+   ```text
+   https://gqzxjsjxdezucscxvinr.supabase.co/auth/v1/callback
+   ```
+
+   This is the current project's Supabase callback. Use your own project ref if deploying another project. Adding `https://supabase.co` under JavaScript origins does not register this redirect URI.
+3. In Supabase **Authentication → URL Configuration**, set the Site URL to the production app origin and allow these app redirect URLs:
+
+   ```text
+   http://localhost:8050/auth/callback
+   https://dash-observability-app-1022429033383.us-central1.run.app/auth/callback
+   ```
+
+   Also add `http://localhost:8080/auth/callback` if testing with the Docker command below.
+4. Add the email returned by Google/GitHub (or the verified email/password account) to `AUTH_ALLOWED_EMAILS`. Restart/redeploy after approval changes. An existing confirmed account can sign in immediately once approved; no replacement signup is needed.
+
+Google redirects to **Supabase's `/auth/v1/callback`**, and Supabase redirects to **the app's `/auth/callback`**. These are two distinct configuration steps.
+
+### Authentication Troubleshooting
+
+| Symptom | Check or fix |
+| --- | --- |
+| `Unsupported provider: provider is not enabled` | Enable the provider toggle and save in the same Supabase project the app uses; entering client credentials alone is insufficient. |
+| Google `redirect_uri_mismatch` | Add the exact Supabase callback above to the Google client's **Authorized redirect URIs**. Retry from the app's login page after the change propagates. |
+| Email confirmed but callback cannot finish | Open confirmation links in the browser where signup began. If already confirmed, return to `/login` and sign in with the existing account. |
+| Account awaits approval | Add the verified account email to the server's `AUTH_ALLOWED_EMAILS` and restart/redeploy. |
+| Origin rejected | Match `AUTH_APP_ORIGIN` to the browser's scheme, host, and port. `localhost` and `127.0.0.1` are different origins. |
+| Dashboard remains on “Loading…” | Build the frontend and deploy all auth source files together. Confirm `/login`, `/auth/config`, and `/auth/session` are registered; an orphaned `auth.bundle.js` cannot function without the backend. |
+| Authentication unavailable | Check runtime variables and Supabase availability; the app intentionally denies data access until verification succeeds. |
+
 ### Running the Dash Web App Locally
 
-Launch the Plotly Dash application with hot-reloading:
+From the repository root, install dependencies, build authentication, then start Dash with hot-reloading:
 
 ```bash
+uv sync
+npm ci
+npm run build:auth
 cd my-dash-app
 uv run python app.py
 ```
 
 Open your browser and navigate to:
 ```text
-http://127.0.0.1:8050/
+http://localhost:8050/login
 ```
 
-- **Product Overview**: `http://127.0.0.1:8050/`
-- **Customer 360**: `http://127.0.0.1:8050/customers`
-- **Pipeline Health**: `http://127.0.0.1:8050/pipeline-health`
+- **Login / Signup**: `http://localhost:8050/login` / `http://localhost:8050/signup`
+- **Product Overview**: `http://localhost:8050/dashboard`
+- **Customer 360**: `http://localhost:8050/customers`
+- **Pipeline Health**: `http://localhost:8050/pipeline-health`
 
 ---
+
+Run offline authentication and dashboard regression checks from the repository root:
+
+```bash
+.venv/bin/python -B -m unittest discover -s tests -v
+npm run test:auth
+```
+
+These checks mock authentication/data access. Live provider consent and account sign-in must also be checked with your configured project. Rebuild with `npm run build:auth` after editing `my-dash-app/auth_frontend/`; commit the backend, frontend sources, templates, CSS, package manifests, build script, Dockerfile, and tracked bundle together.
 
 ### Running with Docker
 
@@ -543,13 +644,15 @@ docker build -t dash-observability-app .
 
 # Run the container
 docker run -p 8080:8080 \
+  --env-file .env \
+  -e AUTH_APP_ORIGIN="http://localhost:8080" \
   -e GCP_PROJECT_ID="quantum-echo-data-eng-prod" \
   -e GCP_KEY_PATH="/app/gcp-key.json" \
   -v $(pwd)/gcp-key.json:/app/gcp-key.json:ro \
   dash-observability-app
 ```
 
-Navigate to `http://localhost:8080` to access the application.
+Navigate to `http://localhost:8080/login`. The Node build stage compiles authentication automatically; the Python runtime receives public configuration from environment variables through `/auth/config`. No Supabase build arguments are required. `.env` is excluded from the image and supplied only at runtime.
 
 ---
 
