@@ -6,7 +6,8 @@
 - **Target Audience:** Internal business analysts, data engineers, and stakeholders.
 
 ## 2. Tech Stack & Environment
-- **Language:** Python 3.[X]
+- **Language:** Python 3.12 locally and in Docker; `pyproject.toml` requires Python >=3.12
+- **Python Dependencies:** Root `pyproject.toml` and `uv.lock`, managed with uv
 - **Core Framework:** Plotly Dash
 - **Underlying Engine:** Flask, including Flask-Caching
 - **Authentication:** Supabase Auth with `@supabase/supabase-js`, OAuth PKCE, and Flask server-side authorization
@@ -20,47 +21,97 @@
 ## 3. Architecture & File Structure
 - Use Dash Pages with `dash.page_registry` and `dash.register_page(__name__)`, unless the Snapshot Engine is used. With Snapshot Engine, use callback routing instead of Dash Pages.
 - Keep Dash page modules in a `pages/` directory.
-- `utils/data_loader.py` initializes the BigQuery client securely with ADC. Cache expensive data-fetching operations server-side.
-- Pipeline observability telemetry is derived from `analytics_layer/target/manifest.json`. Transform raw contents into a memory-efficient flat schema.
+- `my-dash-app/data_loader.py` owns dashboard data access and initializes BigQuery with ADC or the server-side `GCP_KEY_PATH` override. Shared caching lives in root `utils/cache.py`. Cache expensive data-fetching operations server-side.
+- Pipeline Health reads cached BigQuery telemetry through `my-dash-app/data_loader.py`. `Scripts/ingest_dbt_artifacts.py` ingests `analytics_layer/target/run_results.json`; `analytics_layer/scripts/` calculates manifest coverage and uploads it to BigQuery. `my-dash-app/app_observability.py` also contains manifest parsing helpers. Transform raw artifacts into a memory-efficient flat schema.
 - The app entry point must expose the Flask server: `server = app.server`.
 
-Expected project structure:
+Current project structure (key source files; generated and local-only files are noted):
 
 ```text
 demo-database/
-├── .venv/
+├── .agents/skills/                  # Project task capsules and design skills
+├── .github/workflows/ci_pipeline.yml # Offline checks, dbt validation, Cloud Run deployment
 ├── Scripts/
-│   ├── build-auth.mjs
-│   ├── ingest_bronze.py
-│   ├── ingest_bigquery.py
-│   ├── ingest_dbt_artifacts.py
+│   ├── build-auth.mjs               # Builds auth.bundle.js and showcase.bundle.js
+│   ├── ingest_bronze.py             # Local CSVs → SQL Server bronze
+│   ├── ingest_bigquery.py           # SQL Server bronze → BigQuery
+│   ├── ingest_dbt_artifacts.py      # dbt run results → BigQuery audit telemetry
+│   ├── create_init_database.sql
+│   ├── ddl_table_ingestion_logs.sql
 │   └── ddl_create_bronze_*.sql
 ├── analytics_layer/
+│   ├── dbt_project.yml
+│   ├── packages.yml
+│   ├── package-lock.yml
 │   ├── models/
+│   │   ├── _sources/
 │   │   ├── staging/
 │   │   └── marts/
-│   └── target/
+│   ├── analyses/                    # Analytics and audit SQL
+│   ├── macros/                      # Custom schema and data tests
+│   ├── scripts/
+│   │   ├── calculate_coverage.py
+│   │   └── load_coverage_to_bq.py
+│   ├── src/analytics_layer/
+│   └── target/                      # Generated dbt artifacts
 ├── my-dash-app/
-│   ├── assets/                      # Shared CSS and generated auth.bundle.js
-│   ├── auth_frontend/               # Supabase client and session lifecycle JS
-│   ├── templates/                   # Flask authentication pages
-│   ├── components/
-│   ├── pages/
-│   ├── utils/
+│   ├── app.py                       # Dash/Flask entry point; exposes server
 │   ├── auth.py                      # Request guard, public config, session bridge
-│   ├── app.py
-│   ├── app_observability.py
-│   ├── data_loader.py
-│   └── requirements.txt
-├── docs/supabase-auth.md
-├── tests/                          # Offline Python and browser-state auth tests
+│   ├── data_loader.py               # Cached dashboard queries and data preparation
+│   ├── app_observability.py         # Observability module outside Dash Pages directory
+│   ├── theme.py                     # Shared Python chart and color helpers
+│   ├── assets/                      # Modular CSS, browser JS, generated bundles
+│   │   └── 00-theme.css             # CSS theme tokens
+│   ├── auth_frontend/
+│   │   ├── main.js
+│   │   ├── supabase-client.js
+│   │   └── showcase.js
+│   ├── templates/
+│   │   ├── auth.html
+│   │   ├── landing.html
+│   │   └── showcase.html
+│   ├── components/                  # Sidebar, header, filters, KPIs, panels, revenue chart
+│   └── pages/
+│       ├── overview.py              # /dashboard
+│       ├── customer_360.py          # /customers
+│       └── pipeline_health.py       # /pipeline-health
+├── utils/                          # Shared root package, imported by app and scripts
+│   ├── __init__.py
+│   ├── cache.py
+│   ├── helpers.py
+│   └── audit_logger.py
+├── src/demo_database/__init__.py    # Package/CLI scaffold
+├── docs/
+│   ├── supabase-auth.md
+│   └── images/                      # Dashboard screenshots
+├── tests/                          # Offline Python regressions and auth browser tests
+│   ├── test_auth.py
+│   ├── test_dashboard_regressions.py
+│   ├── test_revenue_chart.py
+│   ├── test_sidebar.py
+│   └── auth-browser.test.mjs
+├── Notebooks/                      # Exploratory analytics and exported figures
+├── logs/query_log.sql
+├── run_pipeline.sh                 # Ingestion, dbt execution/tests, artifact upload
+├── Dockerfile                      # Node build stage + Python/Gunicorn runtime
+├── pyproject.toml
+├── uv.lock
+├── .python-version
 ├── package.json
 ├── package-lock.json
 ├── .env.example
+├── .sqlfluff
+├── .sqlfluffignore
+├── app.py                          # Deployment trigger placeholder, not the Dash entry point
+├── README.md
 ├── AGENTS.md
-├── CLAUDE.md
-└── Notebooks/
+└── CLAUDE.md
 ```
+
+- Run the dashboard with `uv run python my-dash-app/app.py` from the repository root. Docker runs `app:server` from `/app/my-dash-app`.
+- Python dependencies belong in root `pyproject.toml`, with resolved versions in `uv.lock`; there is no `my-dash-app/requirements.txt`.
+- `utils/` is the shared root Python package. The local `my-dash-app/utils/` and `api_service/` directories contain only cache remnants, not maintained source modules.
+- `.venv/`, `node_modules/`, `cache-directory/`, `__pycache__/`, and generated dbt outputs are local/runtime artifacts, not source locations. Keep credentials and `.env` values out of documentation and version control.
 
 ## 4. General Architecture
 - Never use global variables to store user-specific state. Keep mutable client state in `dcc.Store` or URL parameters.
@@ -68,7 +119,7 @@ demo-database/
 - Load data inside callbacks, not at import time. Avoid module-level data reads or database queries; startup-loaded data will not refresh until the process restarts.
 - Use a layout function such as `def serve_layout(): ...` when the layout must be rebuilt on each page load.
 - Filter, aggregate, and paginate data in Python or SQL before sending it to graphs or `AgGrid`. Send only the rows or points needed for the current view.
-- Pin minimum or exact versions of Dash, Plotly, and component libraries in `requirements.txt`.
+- Pin minimum or exact versions of Dash, Plotly, and component libraries in root `pyproject.toml` and update `uv.lock` when dependencies change.
 - Use explicit BigQuery column names, logical filters, and date/time boundaries where applicable. Include a `LIMIT` during structural testing to control scan costs.
 
 ## 5. Callbacks, Data, and Performance
