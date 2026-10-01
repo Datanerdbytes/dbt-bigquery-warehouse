@@ -20,6 +20,7 @@ from components.kpi_bar import create_kpi_bar
 from components.filter_bar import create_filter_bar
 from components.panels import loading, panel, chart_panel, create_grid
 from theme import COLORS, style_figure
+from components.revenue_chart import revenue_menu, map_figure, normalize_view
 
 # Register Page
 dash.register_page(__name__, path="/dashboard", name="Product Overview")
@@ -29,6 +30,7 @@ def layout():
     return html.Div(
         [
             html.Div(id="overview-page-loaded", hidden=True),
+            dcc.Store(id="overview-revenue-view", storage_type="session", data="donut"),
             html.Div(
                 id="overview-filter-bar-container",
                 children=create_filter_bar(
@@ -62,6 +64,9 @@ def layout():
                         "category-pie-graph",
                         "category-pie-loading",
                         "span-4",
+                        actions=revenue_menu(),
+                        title_id="overview-revenue-title",
+                        footer=html.Div(id="overview-revenue-details"),
                     ),
                     panel(
                         "Top-performing products",
@@ -439,10 +444,34 @@ def update_sales_trend(filter_data):
 
 
 # --- CHART 2 CALLBACK: Revenue by Product Category ---
-@callback(Output("category-pie-graph", "figure"), Input("global-filter-store", "data"))
-def update_category_pie(filter_data):
+@callback(
+    Output("overview-revenue-view", "data"),
+    Input("overview-revenue-donut", "n_clicks"),
+    Input("overview-revenue-map", "n_clicks"),
+    prevent_initial_call=True,
+)
+def select_revenue_view(donut_clicks, map_clicks):
+    return "map" if callback_context.triggered_id == "overview-revenue-map" else "donut"
+
+
+@callback(
+    Output("category-pie-graph", "figure"),
+    Output("overview-revenue-title", "children"),
+    Output("overview-revenue-details", "children"),
+    Output("overview-revenue-donut", "active"),
+    Output("overview-revenue-map", "active"),
+    Input("global-filter-store", "data"),
+    Input("overview-revenue-view", "data"),
+)
+def update_category_pie(filter_data, view="donut"):
+    view = normalize_view(view)
+    title = "Revenue by country" if view == "map" else "Revenue by category"
+
+    def result(figure, details=None):
+        return figure, title, details, view == "donut", view == "map"
+
     if not filter_data:
-        return no_update
+        return result(style_figure(px.scatter(title="Select a date range")))
 
     start_date = filter_data.get("start_date")
     end_date = filter_data.get("end_date")
@@ -450,7 +479,7 @@ def update_category_pie(filter_data):
     selected_country = filter_data.get("country")
 
     if not start_date or not end_date:
-        return no_update
+        return result(style_figure(px.scatter(title="Select a date range")))
 
     df_merged, _, _, _, _ = load_and_prep_data()
     filtered_df = filter_dataframe(
@@ -458,7 +487,11 @@ def update_category_pie(filter_data):
     )
 
     if filtered_df.empty:
-        return style_figure(px.pie(title="No data for selected period"))
+        return result(style_figure(px.scatter(title="No data for selected period")))
+
+    if view == "map":
+        figure, details = map_figure(filtered_df)
+        return result(figure, details)
 
     cat_df = filtered_df.groupby("category")["gross_sales_amount"].sum().reset_index()
 
@@ -500,7 +533,7 @@ def update_category_pie(filter_data):
         height=260,
     )
 
-    return style_figure(fig)
+    return result(style_figure(fig))
 
 
 # --- CHART 3 CALLBACK: Top 10 Products by Revenue ---

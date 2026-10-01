@@ -15,19 +15,34 @@ def loading(component, loading_id):
     )
 
 
-def panel(title, child, class_name="", description=None):
+def panel(
+    title, child, class_name="", description=None, *, actions=None, title_id=None
+):
     return html.Section(
         [
             html.Div(
                 [
-                    html.H2(title, className="panel-title"),
-                    (
-                        html.P(description, className="panel-description")
-                        if description
-                        else None
+                    html.Div(
+                        [
+                            html.H2(
+                                title,
+                                className="panel-title",
+                                **({"id": title_id} if title_id else {}),
+                            ),
+                            (
+                                html.P(description, className="panel-description")
+                                if description
+                                else None
+                            ),
+                        ]
                     ),
+                    actions,
                 ],
-                className="panel-heading",
+                className=(
+                    "panel-heading panel-heading-actions"
+                    if actions is not None
+                    else "panel-heading"
+                ),
             ),
             html.Div(child, className="panel-content"),
         ],
@@ -35,19 +50,34 @@ def panel(title, child, class_name="", description=None):
     )
 
 
-def chart_panel(title, graph_id, loading_id, class_name="", description=None):
+def chart_panel(
+    title,
+    graph_id,
+    loading_id,
+    class_name="",
+    description=None,
+    *,
+    actions=None,
+    title_id=None,
+    footer=None,
+):
     return panel(
         title,
-        loading(
-            dcc.Graph(
-                id=graph_id,
-                config={"displayModeBar": False, "responsive": True},
-                className="dashboard-chart",
+        [
+            loading(
+                dcc.Graph(
+                    id=graph_id,
+                    config={"displayModeBar": False, "responsive": True},
+                    className="dashboard-chart",
+                ),
+                loading_id,
             ),
-            loading_id,
-        ),
+            footer,
+        ],
         class_name,
         description,
+        actions=actions,
+        title_id=title_id,
     )
 
 
