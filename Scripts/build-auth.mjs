@@ -15,3 +15,12 @@ await build({
     ),
   },
 });
+
+await build({
+  entryPoints: ["my-dash-app/auth_frontend/showcase.js"],
+  outfile: "my-dash-app/assets/showcase.bundle.js",
+  bundle: true,
+  minify: true,
+  sourcemap: false,
+  target: ["es2020"],
+});

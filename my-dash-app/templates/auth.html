@@ -26,11 +26,12 @@
     </script>
     <script defer src="/assets/auth.bundle.js"></script>
   </head>
-  <body class="auth-page">
+  <body class="auth-page auth-dedicated">
+    <a class="auth-home-link" href="/">← Back to Quantum Echo</a>
     <main class="auth-shell">
       <div class="auth-panel">
         <div class="auth-card">
-          <a class="auth-brand" href="/login"
+          <a class="auth-brand" href="/"
             >Quantum Echo<span>Analytics workspace</span></a
           >
           <div id="auth-loading" role="status">
@@ -142,155 +143,6 @@
           <noscript>Enable JavaScript and reload to sign in securely.</noscript>
         </div>
       </div>
-      <section class="auth-showcase" aria-labelledby="auth-product-heading">
-        <div class="auth-showcase-heading">
-          <p class="auth-eyebrow">CLARITY AT EVERY LAYER</p>
-          <h2 id="auth-product-heading">
-            Your business performance.<br />Your data health.<br /><span
-              >One workspace.</span
-            >
-          </h2>
-          <p class="auth-product-intro">
-            Explore sales trends, understand your customers, and monitor the
-            pipelines behind your reporting. Quantum Echo brings business
-            analytics and data health into one connected workspace.
-          </p>
-        </div>
-        <figure class="auth-preview" aria-labelledby="auth-preview-caption">
-          <figcaption id="auth-preview-caption">
-            <span class="auth-preview-title"
-              ><span class="auth-preview-mark" aria-hidden="true">Q</span>
-              Workspace overview</span
-            ><span class="auth-preview-label">Illustrative preview</span>
-          </figcaption>
-          <div class="auth-preview-body">
-            <div class="auth-preview-summary">
-              <div>
-                <p class="auth-chart-label">Sales performance</p>
-                <p class="auth-preview-value">$128,430 <span>+18.6%</span></p>
-              </div>
-              <span class="auth-chart-period">Last 6 months</span>
-            </div>
-            <svg
-              class="auth-trend"
-              viewBox="0 0 560 174"
-              role="img"
-              aria-labelledby="auth-trend-title auth-trend-desc"
-            >
-              <title id="auth-trend-title">Illustrative sales trend</title>
-              <desc id="auth-trend-desc">
-                Fictional monthly sales rise overall from January through June,
-                with a small dip in March.
-              </desc>
-              <defs>
-                <linearGradient
-                  id="auth-trend-fill"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop
-                    offset="0%"
-                    stop-color="currentColor"
-                    stop-opacity="0.24"
-                  />
-                  <stop
-                    offset="100%"
-                    stop-color="currentColor"
-                    stop-opacity="0"
-                  />
-                </linearGradient>
-              </defs>
-              <g class="auth-chart-grid">
-                <path d="M16 26H544M16 64H544M16 102H544M16 140H544" />
-              </g>
-              <path
-                d="M16 121 C58 121 75 78 122 83 S191 111 228 95 S298 53 334 60 S406 76 440 43 S501 46 544 18 L544 140H16Z"
-                fill="url(#auth-trend-fill)"
-              />
-              <path
-                d="M16 121 C58 121 75 78 122 83 S191 111 228 95 S298 53 334 60 S406 76 440 43 S501 46 544 18"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-                stroke-linecap="round"
-              />
-              <circle cx="544" cy="18" r="5" fill="currentColor" />
-              <g class="auth-chart-axis">
-                <text x="16" y="166">Jan</text>
-                <text x="122" y="166">Feb</text>
-                <text x="228" y="166">Mar</text>
-                <text x="334" y="166">Apr</text>
-                <text x="440" y="166">May</text>
-                <text x="544" y="166" text-anchor="end">Jun</text>
-              </g>
-            </svg>
-            <div class="auth-preview-details">
-              <section
-                class="auth-category"
-                aria-labelledby="auth-category-heading"
-              >
-                <h3 id="auth-category-heading">Sales by category</h3>
-                <div class="auth-category-row">
-                  <span>Technology</span><span>48%</span>
-                </div>
-                <div class="auth-category-track" aria-hidden="true">
-                  <span class="auth-category-technology"></span>
-                </div>
-                <div class="auth-category-row">
-                  <span>Furniture</span><span>32%</span>
-                </div>
-                <div class="auth-category-track" aria-hidden="true">
-                  <span class="auth-category-furniture"></span>
-                </div>
-                <div class="auth-category-row">
-                  <span>Office supplies</span><span>20%</span>
-                </div>
-                <div class="auth-category-track" aria-hidden="true">
-                  <span class="auth-category-office"></span>
-                </div>
-              </section>
-              <section
-                class="auth-pipeline"
-                aria-labelledby="auth-pipeline-heading"
-              >
-                <h3 id="auth-pipeline-heading">Pipeline health</h3>
-                <div class="auth-pipeline-status">
-                  <span class="auth-status-dot" aria-hidden="true"></span> All
-                  runs completed
-                </div>
-                <div class="auth-pipeline-metrics">
-                  <div><strong>24/24</strong><span>Models built</span></div>
-                  <div><strong>98.2%</strong><span>Test coverage</span></div>
-                </div>
-                <p class="auth-pipeline-note">
-                  Quality checks <span>Passed</span>
-                </p>
-              </section>
-            </div>
-          </div>
-        </figure>
-        <div class="auth-features">
-          <section>
-            <span class="auth-feature-number" aria-hidden="true">01 /</span>
-            <h3>Business performance</h3>
-            <p>Explore revenue, product performance, and sales trends.</p>
-          </section>
-          <section>
-            <span class="auth-feature-number" aria-hidden="true">02 /</span>
-            <h3>Customer insights</h3>
-            <p>Understand customer segments and purchasing patterns.</p>
-          </section>
-          <section>
-            <span class="auth-feature-number" aria-hidden="true">03 /</span>
-            <h3>Pipeline visibility</h3>
-            <p>
-              Review execution results, data quality checks, and test coverage.
-            </p>
-          </section>
-        </div>
-      </section>
     </main>
   </body>
 </html>

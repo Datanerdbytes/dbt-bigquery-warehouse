@@ -77,6 +77,32 @@ class AuthTests(unittest.TestCase):
             remote.assert_not_called()
         self.loader.assert_not_called()
 
+    def test_public_landing_is_separate_from_signin(self):
+        with patch.object(auth, "urlopen") as remote:
+            page = self.client.get("/")
+            self.assertEqual(page.status_code, 200)
+            html = page.get_data(as_text=True)
+            self.assertIn('href="/login"', html)
+            self.assertIn('id="auth-showcase"', html)
+            self.assertIn('src="/assets/showcase.bundle.js"', html)
+            self.assertNotIn('id="auth-form"', html)
+            self.assertNotIn('src="/assets/auth.bundle.js"', html)
+            login = self.client.get("/login").get_data(as_text=True)
+            self.assertIn('id="auth-form"', login)
+            self.assertNotIn('id="auth-showcase"', login)
+            remote.assert_not_called()
+        self.loader.assert_not_called()
+
+    def test_landing_remains_public_with_stale_cookie_or_auth_outage(self):
+        self.client.set_cookie(auth.COOKIE, "stale")
+        for status in (401, 403, 503):
+            with patch.object(
+                auth, "verify_access", side_effect=auth.AuthError("unavailable", status)
+            ):
+                self.assertEqual(self.client.get("/").status_code, 200)
+                self.assertEqual(self.client.get("/_dash-layout").status_code, status)
+        self.loader.assert_not_called()
+
     def test_unauthenticated_requests_never_load_data(self):
         for path in ["/dashboard", "/customers", "/pipeline-health", "/export"]:
             self.assertEqual(self.client.get(path).location, "/login")
