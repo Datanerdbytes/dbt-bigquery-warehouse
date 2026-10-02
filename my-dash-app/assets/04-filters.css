@@ -96,6 +96,10 @@
     max-width: none;
   }
 }
+/* The outer Dash wrapper is square; let the page show around the rounded input. */
+.dashboard-filters .dash-datepicker {
+  background: transparent;
+}
 .dashboard-date-picker.dash-datepicker-input-wrapper {
   background: var(--dashboard-surface);
   color: var(--dashboard-text);

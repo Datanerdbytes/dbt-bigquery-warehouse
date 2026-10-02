@@ -7,7 +7,12 @@ def create_kpi_card(title, card_id):
         [
             html.H2(title, className="kpi-label"),
             html.Div("—", id=f"{card_id}-value", className="kpi-number"),
-            html.Div(id=f"{card_id}-badge", className="kpi-badge"),
+            dbc.Badge(
+                id=f"{card_id}-badge",
+                color="var(--dashboard-raised)",
+                pill=True,
+                className="kpi-badge",
+            ),
             dbc.Tooltip(
                 id=f"{card_id}-tooltip", target=f"{card_id}-card", placement="bottom"
             ),
