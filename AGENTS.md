@@ -135,6 +135,8 @@ demo-database/
 - Avoid blocking `time.sleep` loops in callbacks. Use `dcc.Interval` for asynchronous polling or an external task queue for long-running work.
 
 ## 6. Layout and Styling
+- Use the [ui-ux-pro-max skill](/Users/roelsomido/.codex/skills/ui-ux-pro-max/SKILL.md) when designing, building, reviewing, or fixing interfaces. Read the skill before UI work and apply its guidance for accessibility, interaction, responsive layout, typography, color, and visual consistency. Skip it for purely non-visual backend work.
+- Follow the skill's scoped workflow: use `--design-system` for new pages or product-wide design and a focused `--domain` search for component changes. Run its search script from the resolved skill directory; adapt guidance to Plotly Dash and preserve the existing shared theme.
 - Put core layout styles, grids, and structural overrides in CSS files under `assets/`.
 - Use a shared `theme.py` or `theme.js` for color, spacing, and font constants.
 - Use inline Python style dictionaries only for dynamic, runtime-computed styling. Avoid static inline style blocks.
@@ -142,7 +144,9 @@ demo-database/
 
 ## 7. Charts and Components
 - Prefer `plotly.express`; use `plotly.graph_objects` when fine-grained control is needed.
-- Prefer component libraries in this order: Dash Design Kit when available, Dash Core Components with Dash HTML Components, Dash Mantine Components, then Dash Bootstrap Components when required. Minimize the number of libraries used.
+- Prefer [Dash Bootstrap Components](https://www.dash-bootstrap-components.com/) for supported UI components, imported as `import dash_bootstrap_components as dbc`. Consult the official component documentation and verify props against the installed version before implementation.
+- Use Dash Core Components and Dash HTML Components for Dash-specific functionality and semantic structure, and retain Plotly graphs and AG Grid for charts and tables. Use other component libraries only when needed; minimize library mixing.
+- Use `dbc.Badge` for KPI trend indicators, preserving readable positive/negative colors, values, and directional cues. Style Bootstrap components with the shared dashboard tokens and CSS under `assets/`.
 - Do not use `dash_table.DataTable`; use `dash.AgGrid`.
 - When creating `dag.AgGrid`, set these properties:
 
