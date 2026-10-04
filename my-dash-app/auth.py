@@ -163,8 +163,11 @@ def install_auth(server):
             if request.headers.get("Origin") != origin:
                 return jsonify(error="origin_rejected"), 403
 
-        # Rate limiting for auth endpoints (after origin validation)
-        if request.path in {"/auth/session", "/login", "/signup"}:
+        # Rate limiting for auth endpoints (after origin validation, POST only)
+        if (
+            request.method in {"POST", "PUT", "DELETE", "PATCH"}
+            and request.path in {"/auth/session", "/login", "/signup"}
+        ):
             client_ip = request.remote_addr or "unknown"
             if not check_rate_limit(f"{request.path}:{client_ip}"):
                 return jsonify(error="rate_limited"), 429

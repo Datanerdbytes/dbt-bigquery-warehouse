@@ -78,11 +78,18 @@ select {
 }
 .panel-heading {
   margin-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
 }
 .panel-title {
   font-size: 15px;
   font-weight: 500;
   margin: 0;
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .panel-description {
   font-size: 12px;

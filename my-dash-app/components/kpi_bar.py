@@ -14,7 +14,10 @@ def create_kpi_card(title, card_id):
                 className="kpi-badge",
             ),
             dbc.Tooltip(
-                id=f"{card_id}-tooltip", target=f"{card_id}-card", placement="bottom"
+                id=f"{card_id}-tooltip",
+                target=f"{card_id}-card",
+                placement="top",
+                style={"pointer-events": "none"},
             ),
         ],
         id=f"{card_id}-card",
