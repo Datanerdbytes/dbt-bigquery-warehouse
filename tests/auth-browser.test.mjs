@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 const source = readFileSync("my-dash-app/auth_frontend/main.js", "utf8")
   .replace(
-    /import \{ getSupabaseClient \} from [^;]+;/,
-    "const getSupabaseClient=async()=>window.mockClient;",
+    /import \{[^}]+\} from [^;]+;/,
+    "const getSupabaseClient=async()=>window.mockClient;const getCsrfToken=()=>window.mockCsrfToken||null;",
   )
   .replaceAll("location.replace(", "window.navigate(");
 const tick = () => new Promise((resolve) => setTimeout(resolve, 25));
