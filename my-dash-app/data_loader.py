@@ -13,10 +13,12 @@ logger = logging.getLogger(__name__)
 DEFAULT_DRIVER = "ODBC Driver 18 for SQL Server"
 
 
-def require_env(name: str) -> str:
-    """Get required environment variable or raise RuntimeError."""
+def require_env(name: str, default: str = None) -> str:
+    """Get required environment variable, optionally with a default."""
     value = os.environ.get(name)
     if not value:
+        if default is not None:
+            return default
         raise RuntimeError(f"Missing required environment variable: {name}")
     return value
 
@@ -25,7 +27,7 @@ def get_bigquery_client():
     """Helper function to initialize the BigQuery client from environment variables."""
     load_dotenv()
     key_file_path = os.environ.get("GCP_KEY_PATH")
-    project_id = require_env("GCP_PROJECT_ID")
+    project_id = require_env("GCP_PROJECT_ID", "quantum-echo-data-eng-prod")
 
     if key_file_path and os.path.exists(key_file_path):
         return bigquery.Client.from_service_account_json(
@@ -38,7 +40,7 @@ def get_bigquery_client():
 def load_and_prep_data():
     client = get_bigquery_client()
 
-    project_id = require_env("GCP_PROJECT_ID")
+    project_id = require_env("GCP_PROJECT_ID", "quantum-echo-data-eng-prod")
     query_sales = f"""
         SELECT 
             product_key, 
@@ -74,19 +76,19 @@ def load_and_prep_data():
     df_products = client.query(query_products).to_dataframe()
     df_customers = client.query(query_customers).to_dataframe()
 
-    # Keep the schema intact even when a source returns no rows.
-    for df, expected_cols in [
-        (df_sales, ["product_key", "customer_key", "order_date", "order_number", "quantity", "gross_sales_amount", "unit_price"]),
-        (df_products, ["product_key", "product_name", "category"]),
-        (df_customers, ["customer_key", "first_name", "last_name", "country"]),
+    # Normalize each DataFrame: keep expected schema, handle None/empty.
+    for name, df, expected_cols in [
+        ("sales", df_sales, ["product_key", "customer_key", "order_date", "order_number", "quantity", "gross_sales_amount", "unit_price"]),
+        ("products", df_products, ["product_key", "product_name", "category"]),
+        ("customers", df_customers, ["customer_key", "first_name", "last_name", "country"]),
     ]:
         if df is None or df.empty:
             df = pd.DataFrame(columns=expected_cols)
         else:
             df = df.reindex(columns=expected_cols)
-        if df is df_sales:
+        if name == "sales":
             df_sales = df
-        elif df is df_products:
+        elif name == "products":
             df_products = df
         else:
             df_customers = df

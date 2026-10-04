@@ -155,12 +155,6 @@ def install_auth(server):
 
     @server.before_request
     def protect():
-        # Rate limiting for auth endpoints
-        if request.path in {"/auth/session", "/login", "/signup"}:
-            client_ip = request.remote_addr or "unknown"
-            if not check_rate_limit(f"{request.path}:{client_ip}"):
-                return jsonify(error="rate_limited"), 429
-
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             try:
                 _, _, origin, _ = settings()
@@ -168,6 +162,12 @@ def install_auth(server):
                 return jsonify(error=error.code), error.status
             if request.headers.get("Origin") != origin:
                 return jsonify(error="origin_rejected"), 403
+
+        # Rate limiting for auth endpoints (after origin validation)
+        if request.path in {"/auth/session", "/login", "/signup"}:
+            client_ip = request.remote_addr or "unknown"
+            if not check_rate_limit(f"{request.path}:{client_ip}"):
+                return jsonify(error="rate_limited"), 429
         # The public product page never needs dashboard data or a valid session.
         # Preserve the existing root redirect for verified, approved members.
         if request.path == "/" and request.method in {"GET", "HEAD"}:
