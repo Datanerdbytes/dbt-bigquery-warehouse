@@ -315,21 +315,21 @@ def update_rfm_segments(filter_data):
             recency=("order_date", lambda x: (max_ref_date - x.max()).days),
             frequency=("order_number", "nunique"),
             monetary=("gross_sales_amount", "sum"),
-        )
-        .reset_index()
+)
+    .reset_index()
+)
+
+    # Vectorized RFM classification instead of row-by-row apply()
+    import numpy as np
+    rfm["Segment"] = np.select(
+        [
+            (rfm["frequency"] >= 3) & (rfm["recency"] <= 30),
+            (rfm["frequency"] >= 2) & (rfm["recency"] <= 60),
+            rfm["recency"] > 90,
+        ],
+        ["Champions", "Loyal Customers", "Hibernating / Lost"],
+        default="Promising / Recent",
     )
-
-    def classify_rfm(row):
-        if row["frequency"] >= 3 and row["recency"] <= 30:
-            return "Champions"
-        elif row["frequency"] >= 2 and row["recency"] <= 60:
-            return "Loyal Customers"
-        elif row["recency"] > 90:
-            return "Hibernating / Lost"
-        else:
-            return "Promising / Recent"
-
-    rfm["Segment"] = rfm.apply(classify_rfm, axis=1)
     seg_counts = rfm["Segment"].value_counts().reset_index()
     seg_counts.columns = ["Segment", "Customer Count"]
 

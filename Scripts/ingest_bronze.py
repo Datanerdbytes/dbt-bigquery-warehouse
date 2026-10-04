@@ -98,7 +98,7 @@ def build_engine() -> Engine:
         f"UID={username};"
         f"PWD={password};"
         f"Encrypt=yes;"
-        f"TrustServerCertificate=yes;"
+        f"TrustServerCertificate=no;"
     )
 
     connection_url = URL.create(
@@ -179,6 +179,13 @@ def discover_csvs(source_root: Path) -> Iterable[tuple[Path, str]]:
 def ingest_csv(engine: Engine, csv_path: Path, schema: str, table: str) -> int:
     df = pd.read_csv(csv_path)
     df.columns = df.columns.str.strip()
+
+    # Validate schema and table names to prevent SQL injection
+    allowed_schemas = {"bronze"}
+    if schema not in allowed_schemas:
+        raise ValueError(f"Invalid schema: {schema}")
+    if not table.isidentifier() or not schema.isidentifier():
+        raise ValueError(f"Invalid table name: {schema}.{table}")
 
     # Re-runnable: TRUNCATE the target first so re-running the script doesn't
     # duplicate rows. Use an explicit autocommit transaction so the TRUNCATE

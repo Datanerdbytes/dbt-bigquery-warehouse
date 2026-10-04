@@ -1,4 +1,4 @@
-import { getSupabaseClient } from "./supabase-client.js";
+import { getSupabaseClient, getCsrfToken } from "./supabase-client.js";
 window.qeAuthStarted = true;
 const nativeFetch = window.fetch.bind(window);
 const mode = document.documentElement.dataset.authPage;
@@ -51,10 +51,13 @@ function showForm() {
   element("auth-content").hidden = false;
 }
 async function bridge(method, session) {
+  const csrfToken = getCsrfToken();
+  const headers = { "Content-Type": "application/json" };
+  if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
   const response = await nativeFetch("/auth/session", {
     method,
     credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
+    headers,
     ...(session
       ? { body: JSON.stringify({ access_token: session.access_token }) }
       : {}),

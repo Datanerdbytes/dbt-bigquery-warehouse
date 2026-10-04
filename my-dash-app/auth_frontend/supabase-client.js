@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 let client;
+let csrfToken = null;
 export async function getSupabaseClient(fetchConfig = fetch) {
   if (client) return client;
   const response = await fetchConfig("/auth/config", {
@@ -13,6 +14,7 @@ export async function getSupabaseClient(fetchConfig = fetch) {
   const config = await response.json();
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || config.url;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || config.anonKey;
+  csrfToken = config.csrfToken || null;
   if (!url || !key) throw new Error("Authentication is not configured.");
   client = createClient(url, key, {
     auth: {
@@ -23,4 +25,7 @@ export async function getSupabaseClient(fetchConfig = fetch) {
     },
   });
   return client;
+}
+export function getCsrfToken() {
+  return csrfToken;
 }

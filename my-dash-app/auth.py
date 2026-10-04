@@ -1,8 +1,11 @@
 """Supabase identity verification and the Flask/Dash authorization boundary."""
 
 import base64
+import hashlib
+import hmac
 import json
 import os
+import secrets
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -10,7 +13,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from dotenv import load_dotenv
-from flask import g, jsonify, redirect, render_template, request
+from flask import g, jsonify, redirect, render_template, request, session
 
 COOKIE = "qe_access_token"
 PUBLIC = {
@@ -53,6 +56,36 @@ def settings():
     ):
         raise AuthError("auth_not_configured", 503)
     return url, key, origin, parsed.scheme == "https"
+
+
+def generate_csrf_token():
+    """Generate a CSRF token for forms."""
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_hex(32)
+    return session['csrf_token']
+
+
+def validate_csrf_token():
+    """Validate the CSRF token for state-changing requests."""
+    if request.method not in {"GET", "HEAD", "OPTIONS", "TRACE"}:
+        token = session.get('csrf_token', None)
+        if not token:
+            return False
+        # Check if token is in headers or form data
+        header_token = request.headers.get('X-CSRF-Token')
+        form_token = request.form.get('csrf_token')
+        json_token = None
+        if request.is_json:
+            json_token = request.get_json(silent=True).get('csrf_token')
+        
+        # Validate token with constant-time comparison
+        valid_token = False
+        for t in (header_token, form_token, json_token):
+            if t and hmac.compare_digest(token, t):
+                valid_token = True
+                break
+        return valid_token
+    return True
 
 
 def verify_access(token):
@@ -101,9 +134,33 @@ def verify_access(token):
 def install_auth(server):
     load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
     server.template_folder = str(Path(__file__).parent / "templates")
+    server.secret_key = server.secret_key or secrets.token_hex(32)
+
+    # Rate limiting state (in-memory, per IP)
+    rate_limit_state = {}
+    RATE_LIMIT_WINDOW = 60  # seconds
+    MAX_ATTEMPTS = 5
+
+    def check_rate_limit(key):
+        """Simple in-memory rate limiter."""
+        now = time.time()
+        if key not in rate_limit_state:
+            rate_limit_state[key] = []
+        # Remove old entries
+        rate_limit_state[key] = [t for t in rate_limit_state[key] if now - t < RATE_LIMIT_WINDOW]
+        if len(rate_limit_state[key]) >= MAX_ATTEMPTS:
+            return False
+        rate_limit_state[key].append(now)
+        return True
 
     @server.before_request
     def protect():
+        # Rate limiting for auth endpoints
+        if request.path in {"/auth/session", "/login", "/signup"}:
+            client_ip = request.remote_addr or "unknown"
+            if not check_rate_limit(f"{request.path}:{client_ip}"):
+                return jsonify(error="rate_limited"), 429
+
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             try:
                 _, _, origin, _ = settings()
@@ -142,6 +199,12 @@ def install_auth(server):
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; "
+            "connect-src 'self' https://*.supabase.co;"
+        )
         return response
 
     @server.get("/auth/config")
@@ -150,7 +213,7 @@ def install_auth(server):
             url, key, _, _ = settings()
         except AuthError as error:
             return jsonify(error=error.code), error.status
-        return jsonify(url=url, anonKey=key)
+        return jsonify(url=url, anonKey=key, csrfToken=generate_csrf_token())
 
     @server.get("/healthz")
     def health():

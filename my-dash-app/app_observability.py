@@ -16,7 +16,6 @@ import dash_bootstrap_components as dbc
 import dash_ag_grid as dag
 import plotly.graph_objects as go
 import pandas as pd
-from google.cloud import bigquery
 
 # 1. Multi-Page Registration (Aligns with Section 3 and 4)
 dash.register_page(
@@ -31,15 +30,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ANALYTICS_LAYER = PROJECT_ROOT / "analytics_layer"
 MANIFEST_PATH = ANALYTICS_LAYER / "target" / "manifest.json"
 
-
-# 3. BigQuery Client Initialization
-def get_bigquery_client() -> bigquery.Client:
-    key_file_path = os.environ.get("GCP_KEY_PATH")
-    project_id = os.environ.get("GCP_PROJECT_ID", "quantum-echo-data-eng-prod")
-
-    if key_file_path and os.path.exists(key_file_path):
-        return bigquery.Client.from_service_account_json(key_file_path, project=project_id)
-    return bigquery.Client(project=project_id)
+# 3. BigQuery Client Initialization - delegate to shared data_loader
+from data_loader import load_dbt_execution_logs, load_pipeline_health_summary
 
 
 # 4. Manifest Telemetry Layer Parsing Utilities
@@ -53,7 +45,7 @@ def load_manifest() -> dict:
 def parse_model_coverage(manifest: dict) -> list[dict]:
     nodes = manifest.get("nodes", {})
     models = {}
-    
+
     for node_id, node in nodes.items():
         if node.get("resource_type") == "model":
             models[node_id] = {
@@ -125,41 +117,14 @@ def parse_model_dependencies(manifest: dict) -> dict:
     return dict(dependencies)
 
 
-# 5. Optimized Data Loaders (Fixes SELECT * Violation in Section 5)
-def load_pipeline_health_summary() -> pd.DataFrame:
-    client = get_bigquery_client()
-    # Explicit column query setup to limit data processing charges
-    query = """
-        SELECT 
-            pipeline_name, last_run_status, total_nodes, failed_nodes, 
-            last_run_timestamp, freshness_status 
-        FROM `quantum-echo-data-eng-prod.audit_metadata.v_latest_pipeline_health`
-    """
-    return client.query(query).to_dataframe()
-
-
-def load_dbt_execution_logs(limit: int = 200) -> pd.DataFrame:
-    client = get_bigquery_client()
-    query = f"""
-        SELECT
-            execution_id, run_timestamp, resource_type, node_name,
-            target_table, column_name, status, execution_time_seconds,
-            rows_affected, error_message
-        FROM `quantum-echo-data-eng-prod.audit_metadata.dbt_execution_logs`
-        ORDER BY run_timestamp DESC
-        LIMIT {limit}
-    """
-    return client.query(query).to_dataframe()
-
-
-# 6. Standalone Layout Structure Shell (Conforms to Sections 5 and 6)
+# 5. Standalone Layout Structure Shell (Conforms to Sections 5 and 6)
 layout = dbc.Container([
     dcc.Store(id='observability-manifest-cache', storage_type='session'),
-    
+
     dbc.Row([
-        dbc.Col(html.H2("📊 Pipeline Observability Console", className="mb-4 text-primary"), width=12)
+        dbc.Col(html.H2("Pipeline Observability Console", className="mb-4 text-primary"), width=12)
     ]),
-    
+
     # Placeholder for the UI components to be fully expanded below
     html.Div(id="observability-viewport-content")
 ], fluid=True)
