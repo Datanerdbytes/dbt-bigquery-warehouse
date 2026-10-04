@@ -32,6 +32,11 @@ PUBLIC_ASSETS = {
 }
 
 
+def is_public_asset(path: str) -> bool:
+    """Check if path is a public asset (all /assets/ paths)."""
+    return path.startswith("/assets/")
+
+
 class AuthError(Exception):
     def __init__(self, code, status):
         self.code, self.status = code, status
@@ -182,7 +187,7 @@ def install_auth(server):
                 else:
                     return redirect("/dashboard")
             return render_template("landing.html")
-        if request.path in PUBLIC or request.path in PUBLIC_ASSETS:
+        if request.path in PUBLIC or is_public_asset(request.path):
             return None
         try:
             g.auth_user, _ = verify_access(request.cookies.get(COOKIE))
