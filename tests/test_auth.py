@@ -71,9 +71,11 @@ class AuthTests(unittest.TestCase):
         with patch.object(auth, "urlopen") as remote:
             for path in ["/login", "/signup", "/auth/callback", "/healthz"]:
                 self.assertEqual(self.client.get(path).status_code, 200)
-            self.assertEqual(
-                set(self.client.get("/auth/config").json), {"url", "anonKey"}
-            )
+            response = self.client.get("/auth/config")
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("url", response.json)
+            self.assertIn("anonKey", response.json)
+            self.assertIn("csrfToken", response.json)
             remote.assert_not_called()
         self.loader.assert_not_called()
 
