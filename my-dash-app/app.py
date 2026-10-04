@@ -18,13 +18,14 @@ from dash import (
 )
 import dash_bootstrap_components as dbc
 import dash_ag_grid as dag
+import numpy as np
 import pandas as pd
 from flask_caching import Cache
 from utils.cache import cache
 from components.sidebar import create_sidebar
 from components.panels import create_grid
 from components.header import create_header
-from utils.helpers import filter_dataframe
+from utils.helpers import filter_dataframe, validate_filter_data
 from data_loader import load_and_prep_data
 
 # Register authentication before Dash request hooks.
@@ -116,6 +117,12 @@ def toggle_and_render_export_modal(
         if not filter_data:
             return True, html.Div(
                 "No filter parameters selected.", className="text-muted p-3 text-center"
+            )
+
+        # Input validation to prevent SQL injection and malformed data
+        if not validate_filter_data(filter_data):
+            return True, html.Div(
+                "Invalid filter parameters.", className="text-muted p-3 text-center"
             )
 
         start_date = filter_data.get("start_date")
@@ -270,17 +277,17 @@ def toggle_and_render_export_modal(
                 .reset_index()
             )
 
-            def classify_rfm(row):
-                if row["frequency"] >= 3 and row["recency"] <= 30:
-                    return "Champions"
-                elif row["frequency"] >= 2 and row["recency"] <= 60:
-                    return "Loyal Customers"
-                elif row["recency"] > 90:
-                    return "Hibernating / Lost"
-                else:
-                    return "Promising / Recent"
-
-            rfm["Segment"] = rfm.apply(classify_rfm, axis=1)
+            import numpy as np
+            # Vectorized RFM classification instead of row-by-row apply()
+            rfm["Segment"] = np.select(
+                [
+                    (rfm["frequency"] >= 3) & (rfm["recency"] <= 30),
+                    (rfm["frequency"] >= 2) & (rfm["recency"] <= 60),
+                    rfm["recency"] > 90,
+                ],
+                ["Champions", "Loyal Customers", "Hibernating / Lost"],
+                default="Promising / Recent",
+            )
             rfm_summary = (
                 rfm.groupby("Segment")
                 .agg(
@@ -469,6 +476,10 @@ def execute_csv_download(n_clicks, filter_data, pathname):
     selected_category = filter_data.get("category", "ALL")
     selected_country = filter_data.get("country", "ALL")
 
+    # Input validation to prevent SQL injection and malformed data
+    if not validate_filter_data(filter_data):
+        return no_update
+
     df_merged, _, _, _, _ = load_and_prep_data()
     filtered_df = filter_dataframe(
         df_merged, start_date, end_date, selected_category, selected_country
@@ -601,4 +612,4 @@ def toggle_sidebar(n_clicks, current_class):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)

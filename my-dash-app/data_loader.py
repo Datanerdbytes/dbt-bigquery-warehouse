@@ -1,4 +1,5 @@
 import os
+import logging
 from pathlib import Path
 from dotenv import load_dotenv
 from google.cloud import bigquery
@@ -7,14 +8,24 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine, URL
 from utils.cache import cache
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_DRIVER = "ODBC Driver 18 for SQL Server"
+
+
+def require_env(name: str) -> str:
+    """Get required environment variable or raise RuntimeError."""
+    value = os.environ.get(name)
+    if not value:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
 
 
 def get_bigquery_client():
     """Helper function to initialize the BigQuery client from environment variables."""
     load_dotenv()
     key_file_path = os.environ.get("GCP_KEY_PATH")
-    project_id = os.environ.get("GCP_PROJECT_ID", "quantum-echo-data-eng-prod")
+    project_id = require_env("GCP_PROJECT_ID")
 
     if key_file_path and os.path.exists(key_file_path):
         return bigquery.Client.from_service_account_json(
@@ -23,11 +34,12 @@ def get_bigquery_client():
     return bigquery.Client(project=project_id)
 
 
-@cache.memoize()
+@cache.memoize(timeout=3600)
 def load_and_prep_data():
     client = get_bigquery_client()
 
-    query_sales = """
+    project_id = require_env("GCP_PROJECT_ID")
+    query_sales = f"""
         SELECT 
             product_key, 
             customer_key,
@@ -36,25 +48,26 @@ def load_and_prep_data():
             quantity,
             gross_sales_amount, 
             unit_price 
-        FROM `quantum-echo-data-eng-prod.gold.fct_sales`
+        FROM `{project_id}.gold.fct_sales`
         WHERE order_date >= DATE '2010-01-01'
+        LIMIT 1000000
     """
 
-    query_products = """
+    query_products = f"""
         SELECT 
             product_key,
             product_name, 
             category 
-        FROM `quantum-echo-data-eng-prod.gold.dim_products`
+        FROM `{project_id}.gold.dim_products`
     """
 
-    query_customers = """
+    query_customers = f"""
         SELECT 
             customer_key,
             first_name, 
             last_name,
             country
-        FROM `quantum-echo-data-eng-prod.gold.dim_customers`
+        FROM `{project_id}.gold.dim_customers`
     """
 
     df_sales = client.query(query_sales).to_dataframe()
@@ -62,26 +75,21 @@ def load_and_prep_data():
     df_customers = client.query(query_customers).to_dataframe()
 
     # Keep the schema intact even when a source returns no rows.
-    df_sales = pd.DataFrame() if df_sales is None else df_sales
-    df_products = pd.DataFrame() if df_products is None else df_products
-    df_customers = pd.DataFrame() if df_customers is None else df_customers
-    df_sales = df_sales.reindex(
-        columns=[
-            "product_key",
-            "customer_key",
-            "order_date",
-            "order_number",
-            "quantity",
-            "gross_sales_amount",
-            "unit_price",
-        ]
-    )
-    df_products = df_products.reindex(
-        columns=["product_key", "product_name", "category"]
-    )
-    df_customers = df_customers.reindex(
-        columns=["customer_key", "first_name", "last_name", "country"]
-    )
+    for df, expected_cols in [
+        (df_sales, ["product_key", "customer_key", "order_date", "order_number", "quantity", "gross_sales_amount", "unit_price"]),
+        (df_products, ["product_key", "product_name", "category"]),
+        (df_customers, ["customer_key", "first_name", "last_name", "country"]),
+    ]:
+        if df is None or df.empty:
+            df = pd.DataFrame(columns=expected_cols)
+        else:
+            df = df.reindex(columns=expected_cols)
+        if df is df_sales:
+            df_sales = df
+        elif df is df_products:
+            df_products = df
+        else:
+            df_customers = df
 
     df_sales["order_date"] = pd.to_datetime(df_sales["order_date"], errors="coerce")
 
@@ -89,8 +97,10 @@ def load_and_prep_data():
         df_customers, on="customer_key", how="left"
     )
 
-    df_merged["order_date"] = pd.to_datetime(df_merged["order_date"], errors="coerce")
-    df_merged = df_merged[df_merged["order_date"].dt.year >= 2010].copy()
+    # Convert order_date once; filter in one pass
+    order_dates = pd.to_datetime(df_merged["order_date"], errors="coerce")
+    df_merged["order_date"] = order_dates
+    df_merged = df_merged[order_dates.dt.year >= 2010].copy()
 
     min_data_date = None
     max_data_date = None
@@ -127,7 +137,7 @@ def load_pipeline_health_summary():
     return client.query(query).to_dataframe()
 
 
-@cache.memoize()
+@cache.memoize(timeout=3600)
 def load_model_coverage_details():
     """Fetches per-model test coverage details for drill-down."""
     client = get_bigquery_client()
@@ -150,7 +160,7 @@ def load_model_coverage_details():
     return client.query(query).to_dataframe()
 
 
-@cache.memoize()
+@cache.memoize(timeout=3600)
 def load_column_coverage_details():
     """Fetches column-level test coverage details."""
     client = get_bigquery_client()
@@ -281,13 +291,6 @@ def load_env(env_file: Path | None = None) -> None:
         os.environ.setdefault(key, value)
 
 
-def require_env(name: str) -> str:
-    value = os.environ.get(name)
-    if not value:
-        raise RuntimeError(f"Missing required environment variable: {name}")
-    return value
-
-
 def build_engine() -> Engine:
     server = require_env("DB_SERVER")
     database = require_env("DB_DATABASE")
@@ -304,8 +307,8 @@ def build_engine() -> Engine:
         f"DATABASE={database};"
         f"UID={username};"
         f"PWD={password};"
-        f"Encrypt=no;"
-        f"TrustServerCertificate=yes;"
+        f"Encrypt=yes;"
+        f"TrustServerCertificate=no;"
     )
 
     connection_url = URL.create("mssql+pyodbc", query={"odbc_connect": odbc_str})
@@ -318,7 +321,7 @@ def verify_connection(engine: Engine) -> None:
         row = conn.execute(
             text("SELECT DB_NAME() AS db, SUSER_SNAME() AS usr")
         ).fetchone()
-    print(f"Connected to '{row.db}' as '{row.usr}'")
+        logger.info(f"Connected to '{row.db}' as '{row.usr}'")
 
 
 @cache.memoize()
@@ -376,7 +379,7 @@ def load_table_ingestion_logs(
 
         return df
     except Exception as e:
-        print(f"Warning: Could not load table ingestion logs from BigQuery: {e}")
+        logger.warning(f"Could not load table ingestion logs from BigQuery: {e}")
         return pd.DataFrame(
             columns=[
                 "log_id",

@@ -79,9 +79,14 @@ def load_coverage_data(client: bigquery.Client):
     today = datetime.now(timezone.utc).date().isoformat()
     delete_query = f"""
         DELETE FROM `{table_id}`
-        WHERE DATE(calculated_at) = '{today}'
+        WHERE DATE(calculated_at) = @today
     """
-    client.query(delete_query).result()
+    query_job_config = bigquery.QueryJobConfig(
+        query_parameters=[
+            bigquery.ScalarQueryParameter("today", "STRING", today),
+        ]
+    )
+    client.query(delete_query, job_config=query_job_config).result()
     print(f"Cleared existing data for {today}")
 
     # Load new data

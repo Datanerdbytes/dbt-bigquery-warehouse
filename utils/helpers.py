@@ -1,6 +1,62 @@
 # utils/helpers.py
+import re
 import pandas as pd
 from dash import html
+
+
+def sanitize_string(value):
+    """Strip whitespace and reject control characters."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if any(ord(c) < 32 or ord(c) == 127 for c in value):
+        return None
+    return value if value else None
+
+
+def validate_date(value):
+    """Validate a YYYY-MM-DD date string."""
+    try:
+        parts = value.split("-")
+        if len(parts) != 3:
+            return None
+        year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
+        if not (1900 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31):
+            return None
+        # Basic day/month sanity check
+        import datetime
+        datetime.date(year, month, day)
+        return value
+    except (ValueError, TypeError):
+        return None
+
+
+def validate_filter_data(filter_data):
+    """Validate incoming filter data against allowed values and formats."""
+    if not isinstance(filter_data, dict):
+        return False
+
+    # Validate date range
+    start_date = filter_data.get("start_date")
+    end_date = filter_data.get("end_date")
+    if not start_date or not end_date:
+        return False
+    if not (validate_date(start_date) and validate_date(end_date)):
+        return False
+
+    # Validate category and country - plain ASCII alphanumerics only
+    category = filter_data.get("category", "ALL")
+    country = filter_data.get("country", "ALL")
+    if category != "ALL":
+        category = sanitize_string(category)
+        if not category or not re.fullmatch(r"[A-Za-z0-9\- ]+", category):
+            return False
+    if country != "ALL":
+        country = sanitize_string(country)
+        if not country or not re.fullmatch(r"[A-Za-z0-9\- ]+", country):
+            return False
+
+    return True
 
 
 def dataframe_value(df, column, default=0):
