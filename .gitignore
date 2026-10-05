@@ -25,3 +25,6 @@ cache-directory/
 docs/.DS_Store
 node_modules/
 !.env.example
+
+# Codebase Indexing file
+.kilo/

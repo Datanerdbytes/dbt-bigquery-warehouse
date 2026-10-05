@@ -1,3 +1,4 @@
+import functools
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -10,6 +11,7 @@ from utils.cache import cache
 DEFAULT_DRIVER = "ODBC Driver 18 for SQL Server"
 
 
+@functools.lru_cache(maxsize=1)
 def get_bigquery_client():
     """Helper function to initialize the BigQuery client from environment variables."""
     load_dotenv()
@@ -24,7 +26,7 @@ def get_bigquery_client():
 
 
 @cache.memoize()
-def load_and_prep_data():
+def load_and_prep_data(limit: int = 10000):
     client = get_bigquery_client()
 
     query_sales = """
@@ -38,6 +40,7 @@ def load_and_prep_data():
             unit_price 
         FROM `quantum-echo-data-eng-prod.gold.fct_sales`
         WHERE order_date >= DATE '2010-01-01'
+        LIMIT @limit
     """
 
     query_products = """
@@ -57,7 +60,11 @@ def load_and_prep_data():
         FROM `quantum-echo-data-eng-prod.gold.dim_customers`
     """
 
-    df_sales = client.query(query_sales).to_dataframe()
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[bigquery.ScalarQueryParameter("limit", "INT64", limit)]
+    )
+
+    df_sales = client.query(query_sales, job_config=job_config).to_dataframe()
     df_products = client.query(query_products).to_dataframe()
     df_customers = client.query(query_customers).to_dataframe()
 
@@ -198,10 +205,10 @@ def load_source_freshness():
 
 
 @cache.memoize()
-def load_dbt_execution_logs(limit=200):
+def load_dbt_execution_logs(limit: int = 200):
     """Fetches detailed dbt test and model execution logs."""
     client = get_bigquery_client()
-    query = f"""
+    query = """
         SELECT
             execution_id,
             run_timestamp,
@@ -215,9 +222,12 @@ def load_dbt_execution_logs(limit=200):
             error_message
         FROM `quantum-echo-data-eng-prod.audit_metadata.dbt_execution_logs`
         ORDER BY run_timestamp DESC
-        LIMIT {limit}
+        LIMIT @limit
     """
-    return client.query(query).to_dataframe()
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[bigquery.ScalarQueryParameter("limit", "INT64", limit)]
+    )
+    return client.query(query, job_config=job_config).to_dataframe()
 
 
 # BigQuery Cost & Query Monitoring
