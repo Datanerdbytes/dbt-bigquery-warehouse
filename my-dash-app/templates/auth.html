@@ -27,27 +27,24 @@
     <script defer src="/assets/auth.bundle.js"></script>
   </head>
   <body class="auth-page auth-dedicated">
-    <a class="auth-home-link" href="/">← Back to Quantum Echo</a>
     <main class="auth-shell">
       <div class="auth-panel">
         <div class="auth-card">
-          <a class="auth-brand" href="/"
-            >Quantum Echo<span>Analytics workspace</span></a
-          >
+          <div class="auth-head">
+            <a class="auth-brand" href="/"
+              >Quantum Echo<span>Analytics workspace</span></a
+            >
+            <a class="auth-home-link" href="/">← Back</a>
+          </div>
           <div id="auth-loading" role="status">
             Connecting to your workspace…
           </div>
           <section id="auth-content" hidden>
-            <p class="auth-eyebrow">YOUR ANALYTICS WORKSPACE</p>
-            <h1>
+            <h1 class="auth-heading">
+              <span class="auth-eyebrow">YOUR ANALYTICS WORKSPACE</span>
               {{ 'Create your account' if mode == 'signup' else 'Welcome back'
               }}
             </h1>
-            <p class="auth-intro">
-              {{ 'Get started with secure access to your team’s insights.' if
-              mode == 'signup' else 'Sign in to explore your data and monitor
-              your pipelines.' }}
-            </p>
             <div class="auth-providers">
               <button type="button" data-provider="google">
                 <svg
@@ -139,7 +136,7 @@
           <div id="auth-message" role="alert" tabindex="-1" hidden></div>
           <button id="auth-signout" type="button" hidden>Sign out</button
           ><a id="auth-back" href="/login" hidden>Back to sign in</a>
-          <p class="auth-note">Access is limited to approved team members.</p>
+          <p class="auth-note">Approved team members only.</p>
           <noscript>Enable JavaScript and reload to sign in securely.</noscript>
         </div>
       </div>
