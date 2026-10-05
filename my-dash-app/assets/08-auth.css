@@ -62,15 +62,11 @@ html[data-auth-ready="true"] #auth-session-loading {
   letter-spacing: -0.03em;
   margin: 8px 0;
 }
-.auth-intro,
 .auth-note,
 .auth-hint {
   color: var(--dashboard-muted);
   line-height: 1.5;
   font-size: 14px;
-}
-.auth-intro {
-  margin-bottom: 24px;
 }
 .auth-providers {
   display: grid;
@@ -828,22 +824,99 @@ html[data-auth-ready="true"] #auth-session-loading {
   background: var(--dashboard-surface);
 }
 .auth-dedicated .auth-panel {
-  padding: 32px 28px;
+  padding: 20px 28px 16px;
 }
 .auth-home-link {
-  position: absolute;
-  top: 24px;
-  left: 32px;
   color: var(--dashboard-muted);
-  font-size: 14px;
+  font-size: 13px;
   text-decoration: none;
-  padding: 12px 0;
+  padding: 6px 0;
+  white-space: nowrap;
 }
 .auth-home-link:hover {
   color: var(--dashboard-accent);
 }
+
+/* Compact dedicated sign-in surface: fits one viewport without scrolling. */
+.auth-dedicated .auth-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.auth-dedicated .auth-brand {
+  margin-bottom: 0;
+  font-size: 17px;
+}
+.auth-dedicated .auth-brand span {
+  font-size: 11px;
+  margin-top: 2px;
+}
+.auth-dedicated .auth-heading {
+  font-size: 24px;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  margin: 0 0 6px;
+}
+.auth-dedicated .auth-heading .auth-eyebrow {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 10px;
+}
+.auth-dedicated .auth-providers {
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.auth-dedicated .auth-providers button {
+  gap: 8px;
+  padding: 10px 8px;
+  font-size: 13px !important;
+}
+.auth-dedicated .auth-provider-icon {
+  width: 17px;
+  height: 17px;
+}
+.auth-dedicated .auth-divider {
+  margin: 14px 0 2px;
+}
+.auth-dedicated .auth-card label {
+  margin: 12px 0 6px;
+  font-size: 13px;
+}
+.auth-dedicated .auth-card input,
+.auth-dedicated .auth-card button {
+  min-height: 44px;
+}
+.auth-dedicated .auth-card input {
+  padding: 10px 12px;
+}
+.auth-dedicated .auth-card .auth-primary {
+  margin-top: 16px;
+}
+.auth-dedicated .auth-switch,
+.auth-dedicated .auth-note {
+  margin-top: 14px;
+}
+.auth-dedicated .auth-note {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.auth-dedicated .auth-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
 .auth-dedicated {
-  padding-top: 88px;
+  place-content: safe center;
+  padding: 24px 20px;
+}
+@media (max-width: 639px) {
+  .auth-dedicated .auth-panel {
+    padding: 20px;
+  }
+  .auth-dedicated .auth-providers {
+    grid-template-columns: 1fr;
+  }
 }
 @media (max-width: 1199px) {
   .landing-header {
@@ -922,9 +995,6 @@ html[data-auth-ready="true"] #auth-session-loading {
   }
   .landing-page .auth-trend {
     height: auto;
-  }
-  .auth-home-link {
-    left: 24px;
   }
 }
 @media (min-width: 960px) {
