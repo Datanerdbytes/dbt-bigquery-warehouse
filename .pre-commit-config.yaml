@@ -44,7 +44,7 @@
 #         pass_filenames: false
 
 # --------------------------------------------------------------------
-#  restructured .pre-commit-config.yaml
+# .pre-commit-config.yaml
 # --------------------------------------------------------------------
 
 repos:
@@ -52,14 +52,19 @@ repos:
   # General Repository Hygiene
   # ==================================================
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v6.0.0
     hooks:
       - id: check-yaml
+
       - id: check-json
         exclude: ^node_modules/
+
       - id: check-toml
+
       - id: end-of-file-fixer
+
       - id: trailing-whitespace
+
       - id: check-added-large-files
 
       # Prevent unresolved Git merge conflicts from being committed
@@ -74,6 +79,7 @@ repos:
       # Detect broken symbolic links
       - id: check-symlinks
 
+
   # ==================================================
   # Security
   # ==================================================
@@ -86,11 +92,12 @@ repos:
           - ".secrets.baseline"
         exclude: src/services/email.spec.py
 
+
   # ==================================================
   # dbt Model Quality
   # ==================================================
   - repo: https://github.com/dbt-checkpoint/dbt-checkpoint
-    rev: v1.0.0
+    rev: v2.0.10
     hooks:
       # Require descriptions for dbt models
       - id: check-model-has-description
@@ -115,29 +122,25 @@ repos:
           - "--manifest"
           - "analytics_layer/target/manifest.json"
 
+
+  # ==================================================
+  # Python Linting & Formatting - Ruff
+  # ==================================================
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      # Python linting
+      - id: ruff-check
+
+      # Python formatting
+      - id: ruff-format
+
+
   # ==================================================
   # Local Project Quality Checks
   # ==================================================
   - repo: local
     hooks:
-      # ------------------------------------------------
-      # Python Linting
-      # ------------------------------------------------
-      - id: ruff-check
-        name: Ruff Check
-        entry: uv run ruff check
-        language: system
-        types: [python]
-
-      # ------------------------------------------------
-      # Python Formatting
-      # ------------------------------------------------
-      - id: ruff-format
-        name: Ruff Format
-        entry: uv run ruff format --check
-        language: system
-        types: [python]
-
       # ------------------------------------------------
       # Python Tests
       # ------------------------------------------------
