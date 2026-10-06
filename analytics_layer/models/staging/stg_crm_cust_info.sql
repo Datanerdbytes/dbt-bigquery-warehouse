@@ -19,7 +19,7 @@ ranked_records AS (
         *,
         -- drop duplicates
         row_number() OVER (
-            PARTITION BY cast(cst_id AS int64) 
+            PARTITION BY cast(cst_id AS int64)
             ORDER BY cast(cst_create_date AS timestamp) DESC
         ) AS row_num
     FROM source
@@ -31,15 +31,15 @@ SELECT
     trim(cst_key) AS cst_key,
     trim(cst_firstname) AS cst_firstname,
     trim(cst_lastname) AS cst_lastname,
-   
+
     CASE
         WHEN upper(trim(cst_marital_status)) = 'S' THEN 'Single'
-        WHEN upper(trim(cst_marital_status)) = 'M' THEN 'Married' 
+        WHEN upper(trim(cst_marital_status)) = 'M' THEN 'Married'
     END AS cst_marital_status,
 
     CASE
         WHEN upper(trim(cst_gndr)) = 'F' THEN 'Female'
-        WHEN upper(trim(cst_gndr)) = 'M' THEN 'Male' 
+        WHEN upper(trim(cst_gndr)) = 'M' THEN 'Male'
     END AS cst_gndr,
 
     cast(cst_create_date AS date) AS cst_create_date,

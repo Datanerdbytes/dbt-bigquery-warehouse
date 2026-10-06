@@ -99,7 +99,7 @@ sources:
           This product catalog source provides the reference dimension used
           to enrich customer and transactional data in downstream silver
           models. Quality checks remain warning-level until the associated
-          transformation logic is fully validated. 
+          transformation logic is fully validated.
         columns:
           - name: prd_id
             description: "Product ID (BIGINT). Primary key candidate."
@@ -322,7 +322,7 @@ sources:
           bronze-layer model preserves the source records for downstream
           customer enrichment and reporting in the silver layer.
         columns:
-          - name: cid 
+          - name: cid
             description: >
               Raw customer identifier from the ERP A101 location source. This
               value is retained in the bronze layer for downstream customer
@@ -331,7 +331,7 @@ sources:
               - not_null:
                   config:
                     severity: warn
-              - unique: 
+              - unique:
                   config:
                     severity: warn
               - is_clean_trimmed:
@@ -369,7 +369,7 @@ sources:
               - is_clean_trimmed:
                   config:
                     severity: warn
-          - name: cat 
+          - name: cat
             description: >
               Raw product category name from the ERP G1V2 source. This
               value is retained in the bronze layer for downstream product
@@ -379,17 +379,17 @@ sources:
                   config:
                     severity: warn
 
-          - name: subcat 
+          - name: subcat
             description: >
               Raw ERP product category name from the ERP G1V2 source. This
               value is retained in the bronze layer for downstream product
               categorization and reporting in the silver layer.
             data_tests:
               - is_clean_trimmed:
-                  config: 
+                  config:
                     severity: warn
 
-          - name: maintenance 
+          - name: maintenance
             description: >
               Raw product subcategory name from the ERP G1V2 source. This
               value is retained in the bronze layer for downstream product
@@ -398,4 +398,3 @@ sources:
               - is_clean_trimmed:
                   config:
                     severity: warn
-                   

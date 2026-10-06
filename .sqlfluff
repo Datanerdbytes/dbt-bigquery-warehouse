@@ -23,3 +23,7 @@ capitalisation_policy = lower
 
 [sqlfluff:rules:aliasing.expression]
 allow_implicit = False
+
+[sqlfluff:templater:dbt]
+project_dir = ./analytics_layer
+profiles_dir = ~/.dbt

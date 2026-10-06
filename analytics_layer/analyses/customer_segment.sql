@@ -11,7 +11,7 @@
 */
 
 WITH customer_spending AS (
-    SELECT 
+    SELECT
         customer_key,
         sum(gross_sales_amount) AS total_spending,
         min(order_date) AS first_order,
@@ -24,7 +24,7 @@ WITH customer_spending AS (
 customer_segments AS (
     SELECT
         customer_key,
-        CASE 
+        CASE
             WHEN lifespan_months >= 12 AND total_spending > 5000 THEN 'VIP'
             WHEN lifespan_months >= 12 AND total_spending <= 5000 THEN 'Regular'
             ELSE 'New'
@@ -32,15 +32,9 @@ customer_segments AS (
     FROM customer_spending
 )
 
-SELECT 
+SELECT
     customer_segment,
     count(customer_key) AS total_customers
 FROM customer_segments
 GROUP BY customer_segment
 ORDER BY total_customers DESC
-
-
-
-
-
-

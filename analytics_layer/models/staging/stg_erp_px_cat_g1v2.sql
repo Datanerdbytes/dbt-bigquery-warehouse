@@ -3,8 +3,8 @@ WITH source AS (
 ),
 
 transformed_erp AS (
-    SELECT 
-        CASE 
+    SELECT
+        CASE
             WHEN id = 'CO_PD' THEN 'CO_PE'
             ELSE id
         END AS id,

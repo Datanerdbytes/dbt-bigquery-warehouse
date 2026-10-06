@@ -29,8 +29,8 @@ total_customer_by_gender AS (
 ),
 
 product_metrics_by_category AS (
-    SELECT 
-        category, 
+    SELECT
+        category,
         count(product_key) AS total_products,
         round(avg(cost), 2) AS avg_cost
     FROM {{ ref('dim_products') }}
@@ -38,7 +38,7 @@ product_metrics_by_category AS (
 ),
 
 total_revenue_by_category AS (
-    SELECT 
+    SELECT
         p.category,
         sum(s.gross_sales_amount) AS total_revenue
     FROM {{ ref('fct_sales') }} s
@@ -49,7 +49,7 @@ total_revenue_by_category AS (
 
 -- Renamed duplicate CTE to avoid name collision
 top_customers_by_revenue AS (
-    SELECT 
+    SELECT
         c.customer_id,
         c.first_name,
         c.last_name,
@@ -58,14 +58,14 @@ top_customers_by_revenue AS (
     FROM {{ ref('fct_sales') }} s
     LEFT JOIN {{ ref('dim_customers') }} c
         ON s.customer_key = c.customer_key
-    GROUP BY 
+    GROUP BY
         c.customer_id,
         c.first_name,
         c.last_name
 ),
 
 total_sold_items_by_country AS (
-    SELECT 
+    SELECT
         c.country,
         sum(s.quantity) AS total_sold_items
     FROM {{ ref('fct_sales') }} s
@@ -76,5 +76,5 @@ total_sold_items_by_country AS (
 )
 
 -- Select from whichever CTE you want to inspect
-SELECT * 
+SELECT *
 FROM product_metrics_by_category

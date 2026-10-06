@@ -19,14 +19,14 @@ erp_cat AS (
 ),
 
 joined AS (
-    SELECT 
+    SELECT
         -- Primary Surrogate Key for Dim & Fact joins
         {{ dbt_utils.generate_surrogate_key(['pi.prd_id']) }} AS product_key,
-        
+
         -- Business/Natural Keys
         pi.prd_id AS product_id,
         pi.prd_key AS product_number,
-        
+
         -- Attributes
         pi.prd_nm AS product_name,
         pi.cat_id AS category_id,
@@ -37,10 +37,10 @@ joined AS (
         pi.prd_line AS product_line,
         pi.prd_start_dt AS start_date
     FROM crm_prd pi
-    LEFT JOIN erp_cat pc   
+    LEFT JOIN erp_cat pc
         ON pi.cat_id = pc.id
     WHERE pi.prd_end_dt IS null -- Filter active products
 )
 
-SELECT *    
+SELECT *
 FROM joined

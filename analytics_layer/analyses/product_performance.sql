@@ -11,7 +11,7 @@
 */
 
 WITH yearly_product_sales AS (
-    SELECT 
+    SELECT
         date_trunc(s.order_date, year) AS order_year,
         p.product_name,
         CAST(sum(s.gross_sales_amount) AS int64) AS current_sales
@@ -23,7 +23,7 @@ WITH yearly_product_sales AS (
 ),
 
 average_product_sales AS (
-    SELECT 
+    SELECT
         order_year,
         product_name,
         current_sales,
@@ -44,24 +44,23 @@ sales_metrics_calculated AS (
     FROM average_product_sales
 )
 
-SELECT 
+SELECT
     order_year,
     product_name,
     current_sales,
     avg_sales,
     diff_avg,
-    CASE 
+    CASE
         WHEN diff_avg > 0 THEN 'Above Avg'
         WHEN diff_avg < 0 THEN 'Below Avg'
         ELSE 'Avg'
     END AS avg_change,
     py_sales,
     diff_py,
-    CASE 
+    CASE
         WHEN diff_py > 0 THEN 'Increase'
         WHEN diff_py < 0 THEN 'Decrease'
         ELSE 'No Change'
     END AS py_change
 FROM sales_metrics_calculated
 ORDER BY product_name ASC, order_year ASC
-

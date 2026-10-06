@@ -8,7 +8,7 @@ transformed AS (
         replace(cid, '-', '') AS cid,
 
         -- Standardize Country Names
-        CASE 
+        CASE
             WHEN trim(cntry) = 'DE' THEN 'Germany'
             WHEN trim(cntry) IN ('US', 'USA') THEN 'United States'
             WHEN trim(cntry) = '' THEN null
