@@ -43,10 +43,3 @@ UNION ALL
 SELECT 'Total Products (Catalog)', total_products FROM product_metrics
 UNION ALL
 SELECT 'Total Customers (Registered)', total_customers FROM customer_metrics
-
-
-
-
-
-
-

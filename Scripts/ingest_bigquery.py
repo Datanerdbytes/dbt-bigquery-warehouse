@@ -1,4 +1,5 @@
 import os
+import re
 import pandas as pd
 import time
 import uuid
@@ -33,7 +34,7 @@ if not USERNAME or not PASSWORD:
 credentials = service_account.Credentials.from_service_account_file(KEY_PATH)
 
 bq_client = bigquery.Client(
-    project=GCP_PROJECT_ID, 
+    project=GCP_PROJECT_ID,
     credentials=credentials
 )
 
@@ -45,13 +46,47 @@ db_engine = create_engine(sql_conn_str, pool_pre_ping=True)
 
 # 4. Tables to Ingest
 TABLES_TO_INGEST = [
-    'crm_cust_info', 
-    'crm_prd_info', 
-    'crm_sales_details', 
-    'erp_cust_az12', 
-    'erp_loc_a101', 
+    'crm_cust_info',
+    'crm_prd_info',
+    'crm_sales_details',
+    'erp_cust_az12',
+    'erp_loc_a101',
     'erp_px_cat_g1v2'
 ]
+
+# Strict allowlist for table names. Prevents SQL injection via identifier
+# interpolation: only ASCII letters, digits, and underscores are permitted,
+# and the first character must be a letter or underscore.
+TABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validate_table_name(table_name: str) -> str:
+    """Validate *table_name* against the strict allowlist.
+
+    Raises ``ValueError`` if the name contains characters that could be used
+    for SQL injection (semicolons, quotes, whitespace, dots, etc.).
+    """
+    if not isinstance(table_name, str) or not TABLE_NAME_RE.fullmatch(table_name):
+        raise ValueError(
+            f"Invalid table name: {table_name!r}. "
+            "Only letters, digits, and underscores are allowed, "
+            "starting with a letter or underscore."
+        )
+    return table_name
+
+
+def _build_query(table_name: str) -> str:
+    """Return a parameterized SELECT for *table_name*.
+
+    The table name is validated against the allowlist and then embedded as a
+    properly quoted SQL Server identifier (using square brackets), which is
+    safe because the allowlist guarantees the name contains no ``]``
+    characters.  Values are never interpolated into the query string.
+    """
+    safe_name = _validate_table_name(table_name)
+    # SQL Server identifier quoting: [table_name].  The allowlist guarantees
+    # the name contains only [A-Za-z0-9_], so no bracket can appear inside.
+    return f"SELECT * FROM bronze.[{safe_name}]"
 
 def extract_and_load():
     execution_id = str(uuid.uuid4())  # Generate a unique execution ID for this run
@@ -62,7 +97,7 @@ def extract_and_load():
         destination_table = f"{GCP_PROJECT_ID}.{TARGET_DATASET}.{table_name}"
 
         try:
-            query = f"SELECT * FROM bronze.{table_name}"
+            query = _build_query(table_name)
             print("Reading data from SQL Server...")
             with db_engine.connect() as conn:
                 df = pd.read_sql(query, con=conn)
@@ -77,7 +112,7 @@ def extract_and_load():
             load_job = bq_client.load_table_from_dataframe(
                 df, destination_table, job_config=job_config
             )
-            
+
             load_job.result()
             duration = time.time() - start_time
             print(f"Successfully loaded {table_name} into BigQuery!")

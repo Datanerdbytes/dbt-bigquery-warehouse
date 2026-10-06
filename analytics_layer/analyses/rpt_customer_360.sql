@@ -11,7 +11,7 @@
 */
 
 WITH dataset_anchor AS (
-    SELECT 
+    SELECT
         customer_key,
         order_number,
         product_key,
@@ -24,7 +24,7 @@ WITH dataset_anchor AS (
 ),
 
 customer_sales_aggregated AS (
-    SELECT 
+    SELECT
         customer_key,
         max(max_dataset_date) AS anchor_date, -- Carry the global max date forward
         count(DISTINCT order_number) AS total_orders,
@@ -39,14 +39,14 @@ customer_sales_aggregated AS (
 ),
 
 joined AS (
-    SELECT 
+    SELECT
         c.customer_key,
         c.customer_number,
         concat(c.first_name, ' ', c.last_name) AS customer_name,
-        
+
         -- Age relative to when the dataset ended (Anchor Date)
         DATE_DIFF(s.anchor_date, c.birthdate, YEAR) AS age,
-        
+
         s.anchor_date,
         s.total_orders,
         s.total_sales,
@@ -59,13 +59,13 @@ joined AS (
         ON s.customer_key = c.customer_key
 )
 
-SELECT 
+SELECT
     customer_key,
     customer_number,
     customer_name,
     age,
-    
-    CASE 
+
+    CASE
         WHEN age < 20 THEN 'Under 20'
         WHEN age BETWEEN 20 AND 29 THEN '20-29'
         WHEN age BETWEEN 30 AND 39 THEN '30-39'
@@ -73,18 +73,18 @@ SELECT
         ELSE '50 and above'
     END AS age_group,
 
-    CASE 
+    CASE
         WHEN lifespan_months >= 12 AND total_sales > 5000 THEN 'VIP'
         WHEN lifespan_months >= 12 AND total_sales <= 5000 THEN 'Regular'
         ELSE 'New'
     END AS customer_segment,
 
     last_order_date,
-    
+
     -- Recency relative to the latest dataset activity (Anchor Date)
     DATE_DIFF(anchor_date, last_order_date, DAY) AS recency_days,
     DATE_DIFF(anchor_date, last_order_date, MONTH) AS recency_months,
-    
+
     total_orders,
     total_sales,
     total_quantity,

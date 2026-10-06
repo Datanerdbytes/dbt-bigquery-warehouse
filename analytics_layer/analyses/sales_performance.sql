@@ -10,10 +10,10 @@
 }
 */
 
-WITH 
+WITH
 
 sales_performance AS (
-    SELECT 
+    SELECT
         EXTRACT(YEAR FROM order_date) AS order_year,
         sum(gross_sales_amount) AS total_sales,
         count(DISTINCT customer_key) AS total_customers,

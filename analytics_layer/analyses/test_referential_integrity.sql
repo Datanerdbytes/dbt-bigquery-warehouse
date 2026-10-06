@@ -20,8 +20,8 @@ INNER JOIN {{ ref('dim_customers') }} c
     ON f.customer_key = c.customer_key
 INNER JOIN {{ ref('dim_products') }} p
     ON f.product_key = p.product_key
-GROUP BY 
-    c.country, 
+GROUP BY
+    c.country,
     p.category
 ORDER BY total_revenue DESC
 LIMIT 10

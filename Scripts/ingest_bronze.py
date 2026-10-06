@@ -148,7 +148,7 @@ def log_table_ingestion_to_bigquery(
     }]
 
     df_log = pd.DataFrame(log_record)
-    
+
     # Append the row to BigQuery
     job_config = bigquery.LoadJobConfig(
         write_disposition=bigquery.WriteDisposition.WRITE_APPEND

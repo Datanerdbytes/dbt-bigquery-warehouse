@@ -15,9 +15,9 @@ WITH source AS (
 ),
 
 parsed_erp AS (
-    SELECT 
-        CASE 
-            WHEN cid LIKE 'NAS%' THEN SUBSTRING(cid, 4)  
+    SELECT
+        CASE
+            WHEN cid LIKE 'NAS%' THEN SUBSTRING(cid, 4)
             ELSE cid
         END AS cid,
 
@@ -33,12 +33,12 @@ parsed_erp AS (
     FROM source
 )
 
-SELECT 
+SELECT
     cid,
     -- Replaces future birth dates with NULL
-    CASE 
-        WHEN bdate > CURRENT_DATE() THEN null 
-        ELSE bdate 
+    CASE
+        WHEN bdate > CURRENT_DATE() THEN null
+        ELSE bdate
     END AS bdate,
     gen,
     CURRENT_TIMESTAMP() AS ingested_at

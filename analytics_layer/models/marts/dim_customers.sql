@@ -23,7 +23,7 @@ erp_loc AS (
 ),
 
 joined AS  (
-    SELECT 
+    SELECT
         {{ dbt_utils.generate_surrogate_key(['c.cst_id']) }} AS customer_key,
         c.cst_id AS customer_id,
         c.cst_key AS customer_number,

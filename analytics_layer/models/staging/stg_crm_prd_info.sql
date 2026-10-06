@@ -26,13 +26,13 @@ cleaned_and_renamed AS (
             WHEN 'M' THEN 'Mountain'
             WHEN 'R' THEN 'Road'
             WHEN 'S' THEN 'Standard'
-            WHEN 'T' THEN 'Touring' 
+            WHEN 'T' THEN 'Touring'
         END AS prd_line,
 
         SAFE_CAST(prd_start_dt AS date) AS prd_start_dt,
-        
+
         DATE_SUB(
-            SAFE_CAST(LEAD(prd_start_dt) OVER (PARTITION BY prd_key ORDER BY prd_start_dt) AS date), 
+            SAFE_CAST(LEAD(prd_start_dt) OVER (PARTITION BY prd_key ORDER BY prd_start_dt) AS date),
             INTERVAL 1 DAY
         ) AS prd_end_dt,
         CURRENT_TIMESTAMP() AS ingested_at

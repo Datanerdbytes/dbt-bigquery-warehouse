@@ -1,0 +1,44 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-added-large-files
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: src/services/email.spec.py
+
+  - repo: https://github.com/dbt-checkpoint/dbt-checkpoint
+    rev: v1.0.0
+    hooks:
+      - id: check-model-has-description
+        files: ^analytics_layer/models/.*\.sql$
+        args: ['--manifest', 'analytics_layer/target/manifest.json']
+      - id: check-model-has-tests
+        files: ^analytics_layer/models/.*\.sql$
+        args: ['--test-cnt', '1', '--manifest', 'analytics_layer/target/manifest.json']
+      - id: check-model-has-properties-file
+        files: ^analytics_layer/models/.*\.sql$
+        args: ['--manifest', 'analytics_layer/target/manifest.json']
+
+  - repo: local
+    hooks:
+      - id: run-pytest
+        name: Run Pytest
+        entry: uv run pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: sqlfluff-lint
+        name: SQLFluff Lint (dbt models)
+        entry: uv run sqlfluff lint analytics_layer/models/
+        language: system
+        files: ^analytics_layer/models/.*\.sql$
+        pass_filenames: false

@@ -22,7 +22,7 @@ models:
         data_tests:
           - unique
           - not_null
-          
+
       - name: product_id
         description: "Natural business key for the product."
         data_tests:
@@ -67,3 +67,16 @@ models:
           - dbt_utils.expression_is_true:
               arguments:
                 expression: ">= 0"
+
+  - name: product_360
+    description: "Comprehensive 360-degree view aggregating product performance metrics, dimensions, and operational availability."
+    columns:
+      - name: product_key
+        description: "Primary key (surrogate key) mapping back to dim_products."
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_products')
+                field: product_key

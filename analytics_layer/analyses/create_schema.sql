@@ -48,7 +48,7 @@
 
 -- CREATE OR REPLACE VIEW `quantum-echo-data-eng-prod.audit_metadata.v_latest_pipeline_health` AS
 -- WITH latest_dbt AS (
---     SELECT 
+--     SELECT
 --         COUNTIF(status = 'pass') AS passed_tests,
 --         COUNTIF(status IN ('fail', 'error')) AS failed_tests,
 --         COUNTIF(status = 'warn') AS warning_tests,
@@ -58,14 +58,14 @@
 --     WHERE run_timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR)
 -- ),
 -- latest_ingestion AS (
---     SELECT 
+--     SELECT
 --         COUNTIF(status = 'STALE') AS stale_tables_count,
 --         MAX(freshness_lag_minutes) AS max_lag_minutes,
 --         MAX(check_timestamp) AS last_ingestion_check
 --     FROM `quantum-echo-data-eng-prod.audit_metadata.ingestion_freshness_logs`
 --     WHERE check_timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR)
 -- )
--- SELECT 
+-- SELECT
 --     dbt.last_dbt_run,
 --     dbt.passed_tests,
 --     dbt.failed_tests,
@@ -74,7 +74,7 @@
 --     ing.stale_tables_count,
 --     ing.max_lag_minutes,
 --     ing.last_ingestion_check,
---     CASE 
+--     CASE
 --         WHEN dbt.failed_tests > 0 OR ing.stale_tables_count > 0 THEN 'CRITICAL'
 --         WHEN dbt.warning_tests > 0 OR ing.max_lag_minutes > 120 THEN 'WARNING'
 --         ELSE 'HEALTHY'
@@ -87,4 +87,3 @@
 -- ) VALUES (
 --     'exec_001', CURRENT_TIMESTAMP(), 'test', 'not_null_dim_customers_customer_id', 'dim_customers', 'customer_id', 'pass', 0.45, 0, NULL
 -- );
-

@@ -11,7 +11,7 @@ from google.oauth2 import service_account
 load_dotenv(find_dotenv())
 
 # Paths and BigQuery Configuration
-DBT_RUN_RESULTS_PATH = "analytics_layer/target/run_results.json" 
+DBT_RUN_RESULTS_PATH = "analytics_layer/target/run_results.json"
 PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 KEY_PATH = os.getenv("GCP_KEY_PATH")
 
@@ -27,7 +27,7 @@ def get_bigquery_client() -> bigquery.Client:
         # Create explicit service account credentials object
         credentials = service_account.Credentials.from_service_account_file(KEY_PATH)
         return bigquery.Client(credentials=credentials, project=PROJECT_ID)
-    
+
     # Fallback to Google Application Default Credentials
     print("⚠️ KEY_PATH not found or not provided. Falling back to default environment credentials.")
     return bigquery.Client(project=PROJECT_ID)
@@ -46,12 +46,12 @@ def parse_and_upload_run_results():
     metadata = data.get("metadata", {})
     invocation_id = metadata.get("invocation_id", str(uuid.uuid4()))
     generated_at_str = metadata.get("generated_at")
-    
+
     # Format ISO timestamp
     run_timestamp = generated_at_str if generated_at_str else datetime.utcnow().isoformat()
 
     rows_to_insert = []
-    
+
     for item in data.get("results", []):
         unique_id = item.get("unique_id", "")
         unique_id_parts = unique_id.split(".")
@@ -87,7 +87,7 @@ def parse_and_upload_run_results():
 
     # Stream rows into BigQuery using authenticated client
     errors = client.insert_rows_json(table_ref, rows_to_insert)
-    
+
     if not errors:
         print(f"✅ Successfully ingested {len(rows_to_insert)} records into {table_ref}!")
     else:

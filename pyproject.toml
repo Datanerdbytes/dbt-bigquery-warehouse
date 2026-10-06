@@ -18,6 +18,7 @@ dependencies = [
     "google-cloud-bigquery-storage>=2.41.0",
     "pandas>=3.0.5",
     "plotly>=7.0.0",
+    "pre-commit>=4.6.2",
     "pyarrow>=25.0.1",
     "pycountry==24.6.1",
     "pyodbc>=5.3.0",
@@ -35,7 +36,11 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "dbt-bigquery>=1.12.0",
     "pyright>=1.1.414",
+    "pytest>=9.1.1",
+    "sqlfluff>=4.3.0",
+    "sqlfluff-templater-dbt>=4.3.0",
 ]
 
 [tool.pyright]
@@ -48,9 +53,9 @@ venv = ".venv"
 typeCheckingMode = "basic"
 
 # Complete silencing of third-party type inference bugs
-reportArgumentType = "none"         
-reportCallIssue = "none"           
-reportAttributeAccessIssue = "none" 
+reportArgumentType = "none"
+reportCallIssue = "none"
+reportAttributeAccessIssue = "none"
 reportOptionalMemberAccess = "none"
 reportGeneralTypeIssues = "none"
 reportPrivateUsage = "none"

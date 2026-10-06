@@ -462,7 +462,7 @@ CSSOM.parse = function parse(token) {
 							hasAncestors = false;
 						}
 					}
-					
+
 					if (!hasAncestors) {
 						currentScope.__ends = i + 1;
 						styleSheet.cssRules.push(currentScope);

@@ -2,7 +2,7 @@
 
 select *
 from {{ model }}
-where 
+where
 {% for comp_col in compare_columns %}
   (
     {{ column_name }} >= {{ comp_col }}
@@ -13,4 +13,3 @@ where
 {% endfor %}
 
 {% endtest %}
-

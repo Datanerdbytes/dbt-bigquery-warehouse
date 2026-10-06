@@ -1,5 +1,5 @@
 USE master;
-GO 
+GO
 
 -- Force disconnect active users if it exists, then drop
 IF EXISTS (SELECT 1 FROM sys.databases WHERE name = 'Demo_Database')
@@ -11,10 +11,10 @@ DROP DATABASE IF EXISTS Demo_Database;
 GO
 
 CREATE DATABASE Demo_Database;
-GO 
+GO
 
 USE Demo_Database;
-GO 
+GO
 
 -- Create Schemas
 IF SCHEMA_ID('bronze') IS NULL EXEC('CREATE SCHEMA bronze');
