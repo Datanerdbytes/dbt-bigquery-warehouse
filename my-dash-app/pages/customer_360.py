@@ -5,7 +5,7 @@ import dash_bootstrap_components as dbc
 import plotly.express as px
 import pandas as pd
 from utils.helpers import create_trend_badge, filter_dataframe, format_compact_number
-from data_loader import load_and_prep_data
+from data_loader import get_prepared_dataset
 from components.filter_bar import create_filter_bar
 from components.kpi_bar import create_kpi_bar
 from components.panels import loading, panel, chart_panel, create_grid
@@ -80,7 +80,7 @@ def layout():
     Output("c360-filter-bar-container", "children"), Input("c360-page-loaded", "id")
 )
 def populate_c360_filter_bar(_):
-    df_merged, _, _, _, _ = load_and_prep_data()
+    df_merged = get_prepared_dataset()
     return create_filter_bar(
         df_merged,
         date_picker_id="c360-date-picker",
@@ -167,7 +167,7 @@ def update_customer_kpis(filter_data):
             "",
         )
 
-    df_merged, _, _, _, _ = load_and_prep_data()
+    df_merged = get_prepared_dataset()
 
     curr_start = pd.to_datetime(start_date)
     curr_end = pd.to_datetime(end_date)
@@ -298,7 +298,7 @@ def update_rfm_segments(filter_data):
     selected_category = filter_data.get("category")
     selected_country = filter_data.get("country")
 
-    df_merged, _, _, _, _ = load_and_prep_data()
+    df_merged = get_prepared_dataset()
     filtered_df = filter_dataframe(
         df_merged, start_date, end_date, selected_category, selected_country
     )
@@ -382,7 +382,7 @@ def update_spend_distribution(filter_data):
     selected_category = filter_data.get("category")
     selected_country = filter_data.get("country")
 
-    df_merged, _, _, _, _ = load_and_prep_data()
+    df_merged = get_prepared_dataset()
     filtered_df = filter_dataframe(
         df_merged, start_date, end_date, selected_category, selected_country
     )
@@ -444,7 +444,7 @@ def update_top_customers_table(filter_data):
     selected_category = filter_data.get("category")
     selected_country = filter_data.get("country")
 
-    df_merged, _, _, _, _ = load_and_prep_data()
+    df_merged = get_prepared_dataset()
     filtered_df = filter_dataframe(
         df_merged, start_date, end_date, selected_category, selected_country
     )
@@ -500,7 +500,7 @@ def update_customer_trend(filter_data):
     selected_category = filter_data.get("category")
     selected_country = filter_data.get("country")
 
-    df_merged, _, _, _, _ = load_and_prep_data()
+    df_merged = get_prepared_dataset()
     filtered_df = filter_dataframe(
         df_merged, start_date, end_date, selected_category, selected_country
     )

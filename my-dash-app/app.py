@@ -25,7 +25,7 @@ from components.sidebar import create_sidebar
 from components.panels import create_grid
 from components.header import create_header
 from utils.helpers import filter_dataframe
-from data_loader import load_and_prep_data
+from data_loader import get_prepared_dataset
 
 # Register authentication before Dash request hooks.
 server = Flask(__name__)
@@ -123,7 +123,7 @@ def toggle_and_render_export_modal(
         selected_category = filter_data.get("category", "ALL")
         selected_country = filter_data.get("country", "ALL")
 
-        df_merged, _, _, _, _ = load_and_prep_data()
+        df_merged = get_prepared_dataset()
         filtered_df = filter_dataframe(
             df_merged, start_date, end_date, selected_category, selected_country
         )
@@ -469,7 +469,7 @@ def execute_csv_download(n_clicks, filter_data, pathname):
     selected_category = filter_data.get("category", "ALL")
     selected_country = filter_data.get("country", "ALL")
 
-    df_merged, _, _, _, _ = load_and_prep_data()
+    df_merged = get_prepared_dataset()
     filtered_df = filter_dataframe(
         df_merged, start_date, end_date, selected_category, selected_country
     )

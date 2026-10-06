@@ -7,7 +7,7 @@
 
 ## 2. Tech Stack & Environment
 - **Language:** Python 3.12 locally and in Docker; `pyproject.toml` requires Python >=3.12
-- **Python Dependencies:** Root `pyproject.toml` and `uv.lock`, managed with uv
+- **Python Dependencies:** Root `pyproject.toml` and `uv.lock`, managed with uv. There is no `my-dash-app/requirements.txt`.
 - **Core Framework:** Plotly Dash
 - **Underlying Engine:** Flask, including Flask-Caching
 - **Authentication:** Supabase Auth with `@supabase/supabase-js`, OAuth PKCE, and Flask server-side authorization
@@ -75,7 +75,7 @@ demo-database/
 │       ├── overview.py              # /dashboard
 │       ├── customer_360.py          # /customers
 │       └── pipeline_health.py       # /pipeline-health
-├── utils/                          # Shared root package, imported by app and scripts
+├── utils/                           # Shared root package, imported by app and scripts
 │   ├── __init__.py
 │   ├── cache.py
 │   ├── helpers.py
@@ -125,6 +125,8 @@ demo-database/
 ## 5. Callbacks, Data, and Performance
 - Do not pass massive datasets through `dcc.Store`. Use it only for lightweight state such as IDs, UI toggles, or query filters, with a maximum of 5 MB.
 - For large datasets, expensive queries, heavy computations, or API requests, use Flask-Caching and `@cache.memoize()`. Include relevant query parameters in cache keys.
+- Fetch the merged dataset through `data_loader.get_prepared_dataset()`. It reuses one process-local copy per cache TTL so a single filter change does not fan out into repeated deserialization. The frame it returns is shared by every caller: treat it as read-only and build derived frames with `filter_dataframe()` or `.copy()` instead of mutating it.
+- Monetary columns (`gross_sales_amount`, `unit_price`) are normalized to `float64` at load time. Do not reintroduce `Decimal`/object dtypes into downstream KPI math.
 - Ensure every callback `Input`, `Output`, and `State` ID exists in the layout when the callback fires. For dynamic or multi-page layouts, set `suppress_callback_exceptions=True`.
 - Use `prevent_initial_call=True` for callbacks that should not run on page load, such as button-triggered actions.
 - Return `dash.no_update` when an output should remain unchanged. Use `raise PreventUpdate` when the entire callback should be skipped.
@@ -133,6 +135,7 @@ demo-database/
 - Use background callbacks for work that takes more than a few seconds, with `background=True` and a configured manager such as `manager=background_callback_manager`.
 - Return output types appropriate to the component: strings or component lists for `children`, dictionaries for figures, and lists of dictionaries for `AgGrid` `rowData` and `columnDefs`.
 - Avoid blocking `time.sleep` loops in callbacks. Use `dcc.Interval` for asynchronous polling or an external task queue for long-running work.
+- The in-process dataset cache is a single-slot cache keyed by `limit`, so alternating `limit` values reload the dataset. Keep all callers on one limit unless a distinct size is genuinely required.
 
 ## 6. Layout and Styling
 - Use the [ui-ux-pro-max skill](/Users/roelsomido/.codex/skills/ui-ux-pro-max/SKILL.md) when designing, building, reviewing, or fixing interfaces. Read the skill before UI work and apply its guidance for accessibility, interaction, responsive layout, typography, color, and visual consistency. Skip it for purely non-visual backend work.
@@ -180,9 +183,16 @@ defaultColDef={"filter": True, "sortable": True}
 ## 10. Production Safety
 - The workspace is connected to the production Google Cloud environment `quantum-echo-data-eng-prod`.
 - Never run destructive commands such as `bq rm`, `dbt clean`, or commands that drop production datasets without explicit, multi-turn user confirmation.
+- `gcp-key.json` and `.env` are gitignored local credential files. Never commit them, paste their contents into docs, logs, or chat, or reference them from layout code or `dcc.Store`.
 
-## 11. Authentication & Access Control
+## 11. Tests
+- Python tests are offline `unittest` suites under `tests/`, discovered from the repository root. They must never construct a production BigQuery client; `tests/test_dashboard_regressions.py` patches `google.cloud.bigquery.Client` to raise on access and stubs `cache.init_app`.
+- Run the full Python suite with `.venv/bin/python -B -m unittest discover -s tests -v` from the repository root.
+- Run the browser authentication tests with `npm run test:auth` after rebuilding the bundle with `npm run build:auth`.
+- When a test needs the dashboard dataset, patch `get_prepared_dataset` with a DataFrame, not the lower-level `load_and_prep_data` tuple. The exception is a test of the cache wrapper itself, which patches `load_and_prep_data` to assert load counts, TTL expiry, and identity reuse.
+- Add regression coverage for behavior you change. New caching, dtype, and filter-safety behavior needs a test that fails without the change.
 
+## 12. Authentication & Access Control
 - Keep authentication in the existing Dash/Flask application; do not introduce Next.js routing or SSR middleware. See [Supabase authentication setup](docs/supabase-auth.md).
 - Register `install_auth(server)` from `my-dash-app/auth.py` before constructing Dash so authorization runs before Dash request hooks, data callbacks, and exports.
 - Serve `/login`, `/signup`, and `/auth/callback` as Flask-rendered pages outside the dashboard layout. Product Overview lives at `/dashboard`; authenticated `/` requests redirect there. Keep navigation and route-dependent callbacks consistent.

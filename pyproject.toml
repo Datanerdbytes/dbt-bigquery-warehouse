@@ -32,3 +32,25 @@ demo-database = "demo_database:main"
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.414",
+]
+
+[tool.pyright]
+include = ["my-dash-app", "Scripts"]
+exclude = ["**/node_modules", "**/.venv", "**/analytics_layer"]
+venvPath = "."
+venv = ".venv"
+
+# Type Checking Strictness
+typeCheckingMode = "basic"
+
+# Complete silencing of third-party type inference bugs
+reportArgumentType = "none"         
+reportCallIssue = "none"           
+reportAttributeAccessIssue = "none" 
+reportOptionalMemberAccess = "none"
+reportGeneralTypeIssues = "none"
+reportPrivateUsage = "none"

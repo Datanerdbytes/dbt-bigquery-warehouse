@@ -52,14 +52,8 @@ class RevenueChartTests(unittest.TestCase):
     def render(self, view, filters=None, frame=None):
         with patch.object(
             self.overview,
-            "load_and_prep_data",
-            return_value=(
-                self.frame if frame is None else frame,
-                None,
-                None,
-                None,
-                None,
-            ),
+            "get_prepared_dataset",
+            return_value=self.frame if frame is None else frame,
         ):
             return self.overview.update_category_pie(
                 self.filters if filters is None else filters, view
@@ -99,8 +93,8 @@ class RevenueChartTests(unittest.TestCase):
         for frame in [pd.DataFrame(), None]:
             with patch.object(
                 self.overview,
-                "load_and_prep_data",
-                return_value=(frame, None, None, None, None),
+                "get_prepared_dataset",
+                return_value=frame,
             ):
                 fig, *_ = self.overview.update_category_pie(self.filters, "map")
                 self.assertEqual(fig.layout.title.text, "No data for selected period")
@@ -111,7 +105,7 @@ class RevenueChartTests(unittest.TestCase):
     def test_layout_and_defaults(self):
         with patch.object(
             self.overview,
-            "load_and_prep_data",
+            "get_prepared_dataset",
             side_effect=AssertionError("Layout queried data"),
         ):
             layout = self.overview.layout()
