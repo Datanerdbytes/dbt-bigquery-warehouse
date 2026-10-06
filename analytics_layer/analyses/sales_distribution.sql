@@ -20,7 +20,7 @@ WITH category_sales AS (
     GROUP BY p.category
 )
 
-SELECT 
+SELECT
     category,
     total_sales,
     sum(total_sales) OVER() AS overall_sales,

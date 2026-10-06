@@ -709,5 +709,5 @@ Navigate to `http://localhost:8080/login`. The Node build stage compiles authent
 
 ## 📄 License & Attribution
 
-Developed by **QuantumEcho** ([datanerdbytes@gmail.com](mailto:datanerdbytes@gmail.com)).  
+Developed by **QuantumEcho** ([datanerdbytes@gmail.com](mailto:datanerdbytes@gmail.com)).
 Internal enterprise analytics & pipeline observability platform. All rights reserved.

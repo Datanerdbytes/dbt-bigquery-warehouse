@@ -8,5 +8,3 @@ where {{ column_name }} != trim({{ column_name }})
    or {{ column_name }} like '%  %'  -- Optional: also catches double spaces in the middle
 
 {% endtest %}
-
-

@@ -6,4 +6,3 @@ where {{ column_name }} >= {{ end_date_column }}
   and {{ end_date_column }} is not null
 
 {% endtest %}
-

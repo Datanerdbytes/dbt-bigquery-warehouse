@@ -33,7 +33,7 @@ if not USERNAME or not PASSWORD:
 credentials = service_account.Credentials.from_service_account_file(KEY_PATH)
 
 bq_client = bigquery.Client(
-    project=GCP_PROJECT_ID, 
+    project=GCP_PROJECT_ID,
     credentials=credentials
 )
 
@@ -45,11 +45,11 @@ db_engine = create_engine(sql_conn_str, pool_pre_ping=True)
 
 # 4. Tables to Ingest
 TABLES_TO_INGEST = [
-    'crm_cust_info', 
-    'crm_prd_info', 
-    'crm_sales_details', 
-    'erp_cust_az12', 
-    'erp_loc_a101', 
+    'crm_cust_info',
+    'crm_prd_info',
+    'crm_sales_details',
+    'erp_cust_az12',
+    'erp_loc_a101',
     'erp_px_cat_g1v2'
 ]
 
@@ -77,7 +77,7 @@ def extract_and_load():
             load_job = bq_client.load_table_from_dataframe(
                 df, destination_table, job_config=job_config
             )
-            
+
             load_job.result()
             duration = time.time() - start_time
             print(f"Successfully loaded {table_name} into BigQuery!")

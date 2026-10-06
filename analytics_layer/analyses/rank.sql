@@ -11,33 +11,33 @@
 */
 
 WITH top_performing_products AS (
-    SELECT 
+    SELECT
         p.product_name,
         sum(gross_sales_amount) AS total_revenue,
         row_number() OVER (ORDER BY sum(gross_sales_amount) DESC ) AS product_rank
     FROM {{ ref('fct_sales') }} s
-    LEFT JOIN {{ ref('dim_products') }} p 
+    LEFT JOIN {{ ref('dim_products') }} p
     ON s.product_key = p.product_key
     GROUP BY p.product_name
 
 ),
 
 worst_performing_products AS (
-    SELECT 
+    SELECT
         p.product_name,
         sum(gross_sales_amount) AS total_revenue,
         row_number() OVER (ORDER BY sum(gross_sales_amount) ) AS product_rank
     FROM {{ ref('fct_sales') }} s
-    LEFT JOIN {{ ref('dim_products') }} p 
+    LEFT JOIN {{ ref('dim_products') }} p
     ON s.product_key = p.product_key
     GROUP BY p.product_name
 
 ),
 
 top_performing_customers AS (
-    SELECT 
+    SELECT
         c.customer_key,
-        c.first_name, 
+        c.first_name,
         c.last_name,
         sum(gross_sales_amount)  AS total_revenue,
         row_number() OVER ( ORDER BY sum(gross_sales_amount)  DESC) AS customer_rank
@@ -45,15 +45,15 @@ top_performing_customers AS (
     LEFT JOIN {{ ref('dim_customers') }} c
     ON s.customer_key = c.customer_key
     GROUP BY  c.customer_key,
-              c.first_name, 
+              c.first_name,
               c.last_name
     LIMIT 10
 ),
 
 lowest_performing_customers AS (
-    SELECT 
+    SELECT
         c.customer_key,
-        c.first_name, 
+        c.first_name,
         c.last_name,
         count(DISTINCT order_number)  AS total_orders,
         row_number() OVER ( ORDER BY count(DISTINCT order_number)) AS customer_rank
@@ -61,7 +61,7 @@ lowest_performing_customers AS (
     LEFT JOIN {{ ref('dim_customers') }} c
     ON s.customer_key = c.customer_key
     GROUP BY  c.customer_key,
-              c.first_name, 
+              c.first_name,
               c.last_name
 )
 

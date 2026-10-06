@@ -107,7 +107,7 @@ Happy modeling!
 Runtime Error
   No dbt_project.yml found at expected path /Users/roelsomido/demo-database/dbt_project.yml
   Verify that each entry within packages.yml (and their transitive dependencies) contains a file named dbt_project.yml
-  
+
 [0m21:28:37.065141 [debug] [MainThread]: Resource report: {"command_name": "compile", "command_success": false, "command_wall_clock_time": 0.071301915, "process_in_blocks": "0", "process_kernel_time": 0.144638, "process_mem_max_rss": "121389056", "process_out_blocks": "0", "process_user_time": 0.714505}
 [0m21:28:37.065453 [debug] [MainThread]: Command `dbt compile` failed at 21:28:37.065394 after 0.07 seconds
 [0m21:28:37.065653 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10e298ec0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10e29a000>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10e2c1670>]}
@@ -123,7 +123,7 @@ Runtime Error
 Runtime Error
   No dbt_project.yml found at expected path /Users/roelsomido/demo-database/dbt_project.yml
   Verify that each entry within packages.yml (and their transitive dependencies) contains a file named dbt_project.yml
-  
+
 [0m16:34:26.212949 [debug] [MainThread]: Resource report: {"command_name": "run", "command_success": false, "command_wall_clock_time": 0.08430512, "process_in_blocks": "0", "process_kernel_time": 0.173121, "process_mem_max_rss": "117374976", "process_out_blocks": "0", "process_user_time": 0.787141}
 [0m16:34:26.213240 [debug] [MainThread]: Command `dbt run` failed at 16:34:26.213188 after 0.08 seconds
 [0m16:34:26.213438 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10dd519a0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10dd51010>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10dd535f0>]}

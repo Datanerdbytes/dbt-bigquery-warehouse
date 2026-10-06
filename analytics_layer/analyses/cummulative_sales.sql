@@ -11,7 +11,7 @@
 */
 
 WITH monthly_sales AS (
-    SELECT 
+    SELECT
         date_trunc(order_date, year) AS order_date,
         CAST(sum(gross_sales_amount) AS int64) AS total_sales,
         CAST(avg(unit_price) AS int64) AS avg_price
@@ -21,7 +21,7 @@ WITH monthly_sales AS (
 ),
 
 running_sales AS (
-    SELECT 
+    SELECT
         order_date,
         total_sales,
         CAST(sum(total_sales) OVER (ORDER BY order_date ASC) AS int64) AS running_total_sales,
@@ -30,6 +30,6 @@ running_sales AS (
     FROM monthly_sales
 )
 
-SELECT * 
+SELECT *
 FROM running_sales
 ORDER BY order_date ASC

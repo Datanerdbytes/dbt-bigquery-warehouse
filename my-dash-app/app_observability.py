@@ -52,7 +52,7 @@ def parse_model_coverage() -> list[dict]:
     manifest = load_manifest()
     nodes = manifest.get("nodes", {})
     models = {}
-    
+
     for node_id, node in nodes.items():
         if node.get("resource_type") == "model":
             models[node_id] = {
@@ -133,11 +133,11 @@ def parse_model_dependencies() -> dict:
 # 6. Standalone Layout Structure Shell (Conforms to Sections 5 and 6)
 layout = dbc.Container([
     dcc.Store(id='observability-manifest-cache', storage_type='session'),
-    
+
     dbc.Row([
         dbc.Col(html.H2("📊 Pipeline Observability Console", className="mb-4 text-primary"), width=12)
     ]),
-    
+
     # Placeholder for the UI components to be fully expanded below
     html.Div(id="observability-viewport-content")
 ], fluid=True)

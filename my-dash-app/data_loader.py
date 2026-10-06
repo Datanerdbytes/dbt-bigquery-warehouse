@@ -22,7 +22,7 @@ def get_bigquery_client():
     """Helper function to initialize the BigQuery client from environment variables."""
     load_dotenv()
     key_file_path = os.environ.get("GCP_KEY_PATH")
-    project_id = os.environ.get("GCP_PROJECT_ID", "quantum-echo-data-eng-prod")
+    project_id = os.environ.get("GCP_PROJECT_ID")
 
     if key_file_path and os.path.exists(key_file_path):
         return bigquery.Client.from_service_account_json(
@@ -36,31 +36,31 @@ def load_and_prep_data(limit: int = 10000):
     client = get_bigquery_client()
 
     query_sales = """
-        SELECT 
-            product_key, 
+        SELECT
+            product_key,
             customer_key,
-            order_date, 
+            order_date,
             order_number,
             quantity,
-            gross_sales_amount, 
-            unit_price 
+            gross_sales_amount,
+            unit_price
         FROM `quantum-echo-data-eng-prod.gold.fct_sales`
         WHERE order_date >= DATE '2010-01-01'
         LIMIT @limit
     """
 
     query_products = """
-        SELECT 
+        SELECT
             product_key,
-            product_name, 
-            category 
+            product_name,
+            category
         FROM `quantum-echo-data-eng-prod.gold.dim_products`
     """
 
     query_customers = """
-        SELECT 
+        SELECT
             customer_key,
-            first_name, 
+            first_name,
             last_name,
             country
         FROM `quantum-echo-data-eng-prod.gold.dim_customers`
@@ -395,7 +395,7 @@ def load_table_ingestion_logs(
     try:
         client = get_bigquery_client()
         query = """
-            SELECT 
+            SELECT
                 CAST(log_id AS STRING) AS log_id,
                 run_timestamp,
                 resource_type,
