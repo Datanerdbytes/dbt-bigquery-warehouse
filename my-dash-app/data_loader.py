@@ -366,8 +366,8 @@ def build_engine() -> Engine:
         f"DATABASE={database};"
         f"UID={username};"
         f"PWD={password};"
-        f"Encrypt=no;"
-        f"TrustServerCertificate=yes;"
+        f"Encrypt=yes;"
+        f"TrustServerCertificate=no;"
     )
 
     connection_url = URL.create("mssql+pyodbc", query={"odbc_connect": odbc_str})
@@ -376,11 +376,32 @@ def build_engine() -> Engine:
 
 
 def verify_connection(engine: Engine) -> None:
-    with engine.connect() as conn:
-        row = conn.execute(
-            text("SELECT DB_NAME() AS db, SUSER_SNAME() AS usr")
-        ).fetchone()
-    print(f"Connected to '{row.db}' as '{row.usr}'")
+    """Validate the connection enforces TLS with certificate verification.
+
+    Fails fast and loudly if the physical link is not encrypted or if
+    certificate validation was bypassed.
+    """
+    from sqlalchemy.exc import OperationalError
+
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT DB_NAME() AS db, SUSER_SNAME() AS usr")
+            ).fetchone()
+            encrypted = conn.execute(
+                text("SELECT SESSIONPROPERTY('Encrypted') AS IsEncrypted")
+            ).fetchone()
+    except OperationalError as exc:
+        raise RuntimeError(
+            f"Failed to establish a secure TLS-encrypted connection: {exc}"
+        ) from exc
+
+    if not encrypted or not encrypted[0]:
+        raise RuntimeError(
+            "SQL Server connection is NOT encrypted. TLS enforcement failed."
+        )
+
+    print(f"Connected to '{row.db}' as '{row.usr}' (TLS encrypted)")
 
 
 @cache.memoize()

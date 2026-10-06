@@ -6,7 +6,7 @@ import uuid
 from urllib.parse import quote_plus
 from utils.audit_logger import log_execution_to_bigquery
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, exc as sqla_exc
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
@@ -40,7 +40,7 @@ bq_client = bigquery.Client(
 
 sql_conn_str = (
     f"mssql+pyodbc://{USERNAME}:{encoded_password}@{SERVER}/{DATABASE}?"
-    f"driver={DRIVER}&TrustServerCertificate=yes"
+    f"driver={DRIVER}&encrypt=TLS&TrustServerCertificate=no"
 )
 db_engine = create_engine(sql_conn_str, pool_pre_ping=True)
 
@@ -87,9 +87,40 @@ def _build_query(table_name: str) -> str:
     # SQL Server identifier quoting: [table_name].  The allowlist guarantees
     # the name contains only [A-Za-z0-9_], so no bracket can appear inside.
     return f"SELECT * FROM bronze.[{safe_name}]"
+def validate_tls_connection():
+    """Verify the database connection enforces TLS with certificate validation.
+
+    Fails fast and loudly if the connection cannot be established under the
+    strict encrypted=TLS / TrustServerCertificate=no policy.
+    """
+    try:
+        with db_engine.connect() as conn:
+            # Verify encryption is active on the physical link
+            result = conn.exec_driver_sql(
+                "SELECT SESSIONPROPERTY('Encrypted') AS IsEncrypted"
+            ).fetchone()
+            if not result or not result[0]:
+                raise RuntimeError(
+                    "SQL Server connection is NOT encrypted. "
+                    "TLS enforcement failed."
+                )
+            print("✓ Database connection validated with TLS encryption.")
+    except sqla_exc.OperationalError as exc:
+        raise RuntimeError(
+            f"Failed to establish a secure TLS-encrypted database connection: {exc}"
+        ) from exc
+    except Exception as exc:
+        if "certificate" in str(exc).lower() or "ssl" in str(exc).lower():
+            raise RuntimeError(
+                f"TLS certificate validation failed: {exc}"
+            ) from exc
+        raise
 
 def extract_and_load():
     execution_id = str(uuid.uuid4())  # Generate a unique execution ID for this run
+
+    # Enforce secure TLS connections with certificate validation before ingestion
+    validate_tls_connection()
 
     for table_name in TABLES_TO_INGEST:
         print(f"\n--- Processing table: {table_name} ---")
