@@ -98,7 +98,7 @@ def build_engine() -> Engine:
         f"UID={username};"
         f"PWD={password};"
         f"Encrypt=yes;"
-        f"TrustServerCertificate=yes;"
+        f"TrustServerCertificate=no;"
     )
 
     connection_url = URL.create(
@@ -110,11 +110,32 @@ def build_engine() -> Engine:
 
 
 def verify_connection(engine: Engine) -> None:
-    with engine.connect() as conn:
-        row = conn.execute(
-            text("SELECT DB_NAME() AS db, SUSER_SNAME() AS usr")
-        ).fetchone()
-    print(f"Connected to '{row.db}' as '{row.usr}'")
+    """Validate the connection enforces TLS with certificate verification.
+
+    Fails fast and loudly if the physical link is not encrypted or if
+    certificate validation was bypassed.
+    """
+    from sqlalchemy.exc import OperationalError
+
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT DB_NAME() AS db, SUSER_SNAME() AS usr")
+            ).fetchone()
+            encrypted = conn.execute(
+                text("SELECT SESSIONPROPERTY('Encrypted') AS IsEncrypted")
+            ).fetchone()
+    except OperationalError as exc:
+        raise RuntimeError(
+            f"Failed to establish a secure TLS-encrypted connection: {exc}"
+        ) from exc
+
+    if not encrypted or not encrypted[0]:
+        raise RuntimeError(
+            "SQL Server connection is NOT encrypted. TLS enforcement failed."
+        )
+
+    print(f"Connected to '{row.db}' as '{row.usr}' (TLS encrypted)")
 
 
 def log_table_ingestion_to_bigquery(
