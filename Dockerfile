@@ -32,5 +32,16 @@ COPY --from=auth-build /build/my-dash-app/assets/showcase.bundle.js /app/my-dash
 # 6. Set working directory to my-dash-app where app.py lives
 WORKDIR /app/my-dash-app
 
-# 7. Run via Gunicorn production WSGI server (JSON Array format)
+# 7. Drop container privileges: create a non-root system user and switch to it
+#    so the Gunicorn process never runs as root. The cache-directory is the only
+#    runtime write path (Flask-Caching FileSystemCache), so it is pre-created and
+#    handed to the app user while the rest of the image stays root-owned.
+RUN addgroup --system app \
+    && adduser --system --ingroup app app \
+    && mkdir -p /app/my-dash-app/cache-directory \
+    && chown -R app:app /app/my-dash-app/cache-directory
+
+USER app
+
+# 8. Run via Gunicorn production WSGI server (JSON Array format)
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "8", "app:server"]
