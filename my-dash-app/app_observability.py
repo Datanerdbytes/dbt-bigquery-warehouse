@@ -31,7 +31,8 @@ dash.register_page(
 # 2. Strict Path Mapping (Aligns with Section 3 and 8)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ANALYTICS_LAYER = PROJECT_ROOT / "analytics_layer"
-MANIFEST_PATH = ANALYTICS_LAYER / "target" / "manifest.json"
+ALLOWED_MANIFEST_ROOT = ANALYTICS_LAYER / "target"
+MANIFEST_PATH = ALLOWED_MANIFEST_ROOT / "manifest.json"
 
 
 # 3. BigQuery Client Initialization
@@ -41,10 +42,20 @@ MANIFEST_PATH = ANALYTICS_LAYER / "target" / "manifest.json"
 # 4. Manifest Telemetry Layer Parsing Utilities
 @functools.lru_cache(maxsize=1)
 def load_manifest() -> dict:
-    if not MANIFEST_PATH.exists():
+    try:
+        manifest_path = MANIFEST_PATH.resolve()
+        if not manifest_path.is_file() or ALLOWED_MANIFEST_ROOT.resolve() not in manifest_path.parents:
+            return {}
+        with open(manifest_path, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
         return {}
-    with open(MANIFEST_PATH, "r") as f:
-        return json.load(f)
+    except PermissionError:
+        return {}
+    except json.JSONDecodeError:
+        return {}
+    except OSError:
+        return {}
 
 
 @functools.lru_cache(maxsize=1)
