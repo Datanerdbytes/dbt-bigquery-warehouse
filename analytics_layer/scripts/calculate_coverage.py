@@ -11,10 +11,30 @@ from datetime import datetime
 from typing import Dict, List, Any
 
 
-def load_manifest(manifest_path: str) -> Dict[str, Any]:
-    """Load and parse dbt manifest.json"""
-    with open(manifest_path, 'r') as f:
-        return json.load(f)
+ALLOWED_MANIFEST_ROOT = Path(__file__).resolve().parent.parent / "target"
+MANIFEST_PATH = ALLOWED_MANIFEST_ROOT / "manifest.json"
+
+
+def load_manifest() -> Dict[str, Any]:
+    """Load and parse dbt manifest.json from the allowed target directory."""
+    manifest_path = MANIFEST_PATH.resolve()
+    allowed_root = ALLOWED_MANIFEST_ROOT.resolve()
+
+    if allowed_root not in manifest_path.parents and manifest_path != allowed_root:
+        raise ValueError("Manifest path is not within the allowed target directory.")
+
+    if not manifest_path.is_file():
+        raise FileNotFoundError("Manifest file does not exist.")
+
+    try:
+        with open(manifest_path, 'r') as f:
+            return json.load(f)
+    except PermissionError as exc:
+        raise RuntimeError("Unable to read manifest due to permission restrictions.") from exc
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("Manifest file is not valid JSON.") from exc
+    except OSError as exc:
+        raise RuntimeError("Unable to read manifest.") from exc
 
 
 def calculate_coverage(manifest: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -128,13 +148,13 @@ def flatten_for_bigquery(coverage_results: List[Dict[str, Any]]) -> List[Dict[st
 def main():
     manifest_path = Path(__file__).parent.parent / 'target' / 'manifest.json'
 
-    if not manifest_path.exists():
-        print(f"Manifest not found at {manifest_path}")
-        print("Run 'dbt parse' or 'dbt compile' first")
+    try:
+        manifest = load_manifest()
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        print("Manifest could not be loaded. Run 'dbt parse' or 'dbt compile' first.")
         return 1
 
-    print(f"Loading manifest from {manifest_path}...")
-    manifest = load_manifest(str(manifest_path))
+    print("Loading manifest from configured target path...")
 
     print("Calculating coverage...")
     coverage = calculate_coverage(manifest)

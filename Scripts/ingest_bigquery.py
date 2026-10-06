@@ -26,23 +26,32 @@ GCP_PROJECT_ID = os.getenv('GCP_PROJECT_ID')
 KEY_PATH = os.getenv('GCP_KEY_PATH')
 TARGET_DATASET = os.getenv('TARGET_DATASET', 'bronze')
 
-# Safety check to ensure credentials loaded properly
-if not USERNAME or not PASSWORD:
-    raise ValueError("Missing database credentials in .env file!")
+def _init_clients():
+    """Create and return the BigQuery and SQL Server clients.
 
-# 3. Authenticate and Initialize Clients
-credentials = service_account.Credentials.from_service_account_file(KEY_PATH)
+    Validates that database credentials are present before proceeding.
+    Raises ``ValueError`` if credentials are missing — deferred from
+    import time so the module (and its validation helper) remain
+    importable in offline/CI environments without a ``.env`` file.
+    """
+    if not USERNAME or not PASSWORD:
+        raise ValueError("Missing database credentials in .env file!")
 
-bq_client = bigquery.Client(
-    project=GCP_PROJECT_ID,
-    credentials=credentials
-)
+    credentials = service_account.Credentials.from_service_account_file(KEY_PATH)
 
-sql_conn_str = (
-    f"mssql+pyodbc://{USERNAME}:{encoded_password}@{SERVER}/{DATABASE}?"
-    f"driver={DRIVER}&encrypt=TLS&TrustServerCertificate=no"
-)
-db_engine = create_engine(sql_conn_str, pool_pre_ping=True)
+    bq_client = bigquery.Client(
+        project=GCP_PROJECT_ID,
+        credentials=credentials
+    )
+
+    sql_conn_str = (
+        f"mssql+pyodbc://{USERNAME}:{encoded_password}@{SERVER}/{DATABASE}?"
+        f"driver={DRIVER}&encrypt=TLS&TrustServerCertificate=no"
+    )
+    db_engine = create_engine(sql_conn_str, pool_pre_ping=True)
+
+    return credentials, bq_client, db_engine
+
 
 # 4. Tables to Ingest
 TABLES_TO_INGEST = [
@@ -87,7 +96,9 @@ def _build_query(table_name: str) -> str:
     # SQL Server identifier quoting: [table_name].  The allowlist guarantees
     # the name contains only [A-Za-z0-9_], so no bracket can appear inside.
     return f"SELECT * FROM bronze.[{safe_name}]"
-def validate_tls_connection():
+
+
+def validate_tls_connection(db_engine):
     """Verify the database connection enforces TLS with certificate validation.
 
     Fails fast and loudly if the connection cannot be established under the
@@ -116,11 +127,15 @@ def validate_tls_connection():
             ) from exc
         raise
 
+
 def extract_and_load():
     execution_id = str(uuid.uuid4())  # Generate a unique execution ID for this run
 
+    # Initialize clients (validates credentials and establishes connections)
+    credentials, bq_client, db_engine = _init_clients()
+
     # Enforce secure TLS connections with certificate validation before ingestion
-    validate_tls_connection()
+    validate_tls_connection(db_engine)
 
     for table_name in TABLES_TO_INGEST:
         print(f"\n--- Processing table: {table_name} ---")
