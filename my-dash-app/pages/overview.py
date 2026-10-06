@@ -1,26 +1,25 @@
 import dash
-import dash_ag_grid as dag
+import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
+from components.filter_bar import create_filter_bar
+from components.kpi_bar import create_kpi_bar
+from components.panels import chart_panel, create_grid, loading, panel
+from components.revenue_chart import map_figure, normalize_view, revenue_menu
 from dash import (
-    Dash,
-    html,
-    dcc,
-    callback,
     Input,
     Output,
     State,
+    callback,
     callback_context,
+    dcc,
+    html,
     no_update,
 )
-import dash_bootstrap_components as dbc
-from utils.helpers import filter_dataframe, calculate_pop_badge, format_compact_number
 from data_loader import get_prepared_dataset
-from components.kpi_bar import create_kpi_bar
-from components.filter_bar import create_filter_bar
-from components.panels import loading, panel, chart_panel, create_grid
 from theme import COLORS, style_figure
-from components.revenue_chart import revenue_menu, map_figure, normalize_view
+
+from utils.helpers import calculate_pop_badge, filter_dataframe, format_compact_number
 
 # Register Page
 dash.register_page(__name__, path="/dashboard", name="Product Overview")

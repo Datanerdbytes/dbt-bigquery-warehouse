@@ -1,7 +1,7 @@
 """Shared, query-free panels and grid defaults for all dashboard pages."""
 
-from dash import dcc, html
 import dash_ag_grid as dag
+from dash import dcc, html
 from theme import COLORS
 
 

@@ -1,7 +1,5 @@
-import dash
-from dash import html, dcc
-import dash_bootstrap_components as dbc
 import pandas as pd
+from dash import dcc, html
 
 
 def create_filter_bar(

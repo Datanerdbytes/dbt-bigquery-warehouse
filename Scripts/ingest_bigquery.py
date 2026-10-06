@@ -1,30 +1,34 @@
 import os
 import re
-import pandas as pd
 import time
 import uuid
 from urllib.parse import quote_plus
-from utils.audit_logger import log_execution_to_bigquery
+
+import pandas as pd
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, exc as sqla_exc
 from google.cloud import bigquery
 from google.oauth2 import service_account
+from sqlalchemy import create_engine
+from sqlalchemy import exc as sqla_exc
+
+from utils.audit_logger import log_execution_to_bigquery
 
 # 1. Load environment variables from .env file
 load_dotenv()
 
 # 2. Retrieve variables from environment
-SERVER = os.getenv('DB_SERVER', '127.0.0.1')
-DATABASE = os.getenv('DB_DATABASE', 'Demo_Database')
-USERNAME = os.getenv('DB_USERNAME', 'sa')
-PASSWORD = os.getenv('DB_PASSWORD')
-DRIVER = os.getenv('DB_DRIVER', 'ODBC Driver 18 for SQL Server')
+SERVER = os.getenv("DB_SERVER", "127.0.0.1")
+DATABASE = os.getenv("DB_DATABASE", "Demo_Database")
+USERNAME = os.getenv("DB_USERNAME", "sa")
+PASSWORD = os.getenv("DB_PASSWORD")
+DRIVER = os.getenv("DB_DRIVER", "ODBC Driver 18 for SQL Server")
 
 encoded_password = quote_plus(PASSWORD) if PASSWORD else ""
 
-GCP_PROJECT_ID = os.getenv('GCP_PROJECT_ID')
-KEY_PATH = os.getenv('GCP_KEY_PATH')
-TARGET_DATASET = os.getenv('TARGET_DATASET', 'bronze')
+GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
+KEY_PATH = os.getenv("GCP_KEY_PATH")
+TARGET_DATASET = os.getenv("TARGET_DATASET", "bronze")
+
 
 def _init_clients():
     """Create and return the BigQuery and SQL Server clients.
@@ -39,10 +43,7 @@ def _init_clients():
 
     credentials = service_account.Credentials.from_service_account_file(KEY_PATH)
 
-    bq_client = bigquery.Client(
-        project=GCP_PROJECT_ID,
-        credentials=credentials
-    )
+    bq_client = bigquery.Client(project=GCP_PROJECT_ID, credentials=credentials)
 
     sql_conn_str = (
         f"mssql+pyodbc://{USERNAME}:{encoded_password}@{SERVER}/{DATABASE}?"
@@ -55,12 +56,12 @@ def _init_clients():
 
 # 4. Tables to Ingest
 TABLES_TO_INGEST = [
-    'crm_cust_info',
-    'crm_prd_info',
-    'crm_sales_details',
-    'erp_cust_az12',
-    'erp_loc_a101',
-    'erp_px_cat_g1v2'
+    "crm_cust_info",
+    "crm_prd_info",
+    "crm_sales_details",
+    "erp_cust_az12",
+    "erp_loc_a101",
+    "erp_px_cat_g1v2",
 ]
 
 # Strict allowlist for table names. Prevents SQL injection via identifier
@@ -112,8 +113,7 @@ def validate_tls_connection(db_engine):
             ).fetchone()
             if not result or not result[0]:
                 raise RuntimeError(
-                    "SQL Server connection is NOT encrypted. "
-                    "TLS enforcement failed."
+                    "SQL Server connection is NOT encrypted. TLS enforcement failed."
                 )
             print("✓ Database connection validated with TLS encryption.")
     except sqla_exc.OperationalError as exc:
@@ -122,9 +122,7 @@ def validate_tls_connection(db_engine):
         ) from exc
     except Exception as exc:
         if "certificate" in str(exc).lower() or "ssl" in str(exc).lower():
-            raise RuntimeError(
-                f"TLS certificate validation failed: {exc}"
-            ) from exc
+            raise RuntimeError(f"TLS certificate validation failed: {exc}") from exc
         raise
 
 
@@ -151,7 +149,7 @@ def extract_and_load():
 
             job_config = bigquery.LoadJobConfig(
                 write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
-                autodetect=True
+                autodetect=True,
             )
 
             print(f"Loading into BigQuery: '{destination_table}'...")
@@ -171,7 +169,7 @@ def extract_and_load():
                 target_table=destination_table,
                 status="pass",
                 duration_sec=duration,
-                rows_affected=len(df)
+                rows_affected=len(df),
             )
 
         except Exception as exc:
@@ -187,8 +185,9 @@ def extract_and_load():
                 status="fail",
                 duration_sec=duration,
                 rows_affected=0,
-                error_msg=str(exc)
+                error_msg=str(exc),
             )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     extract_and_load()

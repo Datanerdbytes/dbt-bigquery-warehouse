@@ -154,14 +154,14 @@ demo-database/
 - When creating `dag.AgGrid`, set these properties:
 
 ```python
-dashGridOptions={
+dashGridOptions = {
     "theme": "themeBalham",
     "animateRows": True,
     "pagination": True,
     "paginationPageSize": 10,
 }
-columnSize="responsiveSizeToFit"
-defaultColDef={"filter": True, "sortable": True}
+columnSize = "responsiveSizeToFit"
+defaultColDef = {"filter": True, "sortable": True}
 ```
 
 ## 8. Observability and New Pages

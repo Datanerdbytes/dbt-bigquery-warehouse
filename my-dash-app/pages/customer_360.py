@@ -1,15 +1,15 @@
 import dash
-import dash_ag_grid as dag
-from dash import html, dcc, callback, Input, Output
 import dash_bootstrap_components as dbc
-import plotly.express as px
 import pandas as pd
-from utils.helpers import create_trend_badge, filter_dataframe, format_compact_number
-from data_loader import get_prepared_dataset
+import plotly.express as px
 from components.filter_bar import create_filter_bar
 from components.kpi_bar import create_kpi_bar
-from components.panels import loading, panel, chart_panel, create_grid
+from components.panels import chart_panel, create_grid, loading, panel
+from dash import Input, Output, callback, html
+from data_loader import get_prepared_dataset
 from theme import COLORS, style_figure
+
+from utils.helpers import create_trend_badge, filter_dataframe
 
 # Register Page
 dash.register_page(__name__, path="/customers", name="Customer 360")
@@ -260,7 +260,7 @@ def update_customer_kpis(filter_data):
             className="text-start",
         ),
         html.Div(
-            f"• Units/Cust: {(curr_summary['total_units'].sum()/curr_cust):,.1f}",
+            f"• Units/Cust: {(curr_summary['total_units'].sum() / curr_cust):,.1f}",
             className="text-start",
         ),
     ]

@@ -32,28 +32,27 @@ dcc.Loading(
     id="kpi-loading",
     type="circle",
     color="#10b981",
-    children=create_kpi_bar([
-        ("TOTAL SALES", "kpi-sales"),
-        ("TOTAL ORDERS", "kpi-orders"),
-        ("TOTAL QUANTITY", "kpi-quantity"),
-        ("TOTAL CUSTOMERS", "kpi-customers"),
-    ]),
+    children=create_kpi_bar(
+        [
+            ("TOTAL SALES", "kpi-sales"),
+            ("TOTAL ORDERS", "kpi-orders"),
+            ("TOTAL QUANTITY", "kpi-quantity"),
+            ("TOTAL CUSTOMERS", "kpi-customers"),
+        ]
+    ),
     fullscreen=False,
-    className="mb-3"
+    className="mb-3",
 )
 ```
 
 #### Graph/Chart Components
 ```python
 dcc.Loading(
-    id="sales-trend-loading",         # Format: {chart-name}-loading
+    id="sales-trend-loading",  # Format: {chart-name}-loading
     type="circle",
     color="#10b981",
-    children=dcc.Graph(
-        id="sales-trend-graph",
-        config={"displayModeBar": False}
-    ),
-    fullscreen=False
+    children=dcc.Graph(id="sales-trend-graph", config={"displayModeBar": False}),
+    fullscreen=False,
 )
 ```
 
@@ -64,7 +63,7 @@ dcc.Loading(
     type="circle",
     color="#10b981",
     children=html.Div(id="modal-product-table-container"),
-    fullscreen=False
+    fullscreen=False,
 )
 ```
 
@@ -115,6 +114,6 @@ dcc.Loading(
     type="circle",
     color="#10b981",
     children=dcc.Graph(id="new-chart-graph", config={"displayModeBar": False}),
-    fullscreen=False
+    fullscreen=False,
 )
 ```

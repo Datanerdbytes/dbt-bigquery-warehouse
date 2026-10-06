@@ -3,29 +3,28 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import dash
-from flask import Flask
+import dash_bootstrap_components as dbc
+import pandas as pd
 from auth import install_auth
+from components.header import create_header
+from components.panels import create_grid
+from components.sidebar import create_sidebar
 from dash import (
     Dash,
-    html,
-    dcc,
-    callback,
     Input,
     Output,
     State,
+    callback,
     callback_context,
+    dcc,
+    html,
     no_update,
 )
-import dash_bootstrap_components as dbc
-import dash_ag_grid as dag
-import pandas as pd
-from flask_caching import Cache
-from utils.cache import cache
-from components.sidebar import create_sidebar
-from components.panels import create_grid
-from components.header import create_header
-from utils.helpers import filter_dataframe
 from data_loader import get_prepared_dataset
+from flask import Flask
+
+from utils.cache import cache
+from utils.helpers import filter_dataframe
 
 # Register authentication before Dash request hooks.
 server = Flask(__name__)

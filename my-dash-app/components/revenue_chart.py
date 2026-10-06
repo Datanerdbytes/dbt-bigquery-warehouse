@@ -1,10 +1,10 @@
 """Presentation and geographic aggregation for the overview revenue pilot."""
 
+import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
 import pycountry
 from dash import html
-import dash_bootstrap_components as dbc
 from theme import COLORS, style_figure
 
 

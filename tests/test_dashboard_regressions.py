@@ -2,11 +2,11 @@
 
 import importlib
 import json
+import sys
 import time
+import unittest
 from decimal import Decimal
 from pathlib import Path
-import sys
-import unittest
 from unittest.mock import Mock, patch
 
 import pandas as pd
@@ -17,11 +17,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "my-dash-app"))
 
-import data_loader
 import auth
+import data_loader
 from components import header
+
 from utils.cache import cache
-from utils.helpers import filter_dataframe, dataframe_value
+from utils.helpers import dataframe_value, filter_dataframe
 
 
 class DashboardRegressionTests(unittest.TestCase):

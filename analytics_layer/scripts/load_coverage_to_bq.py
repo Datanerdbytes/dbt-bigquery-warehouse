@@ -3,11 +3,13 @@
 Load test coverage data to BigQuery.
 """
 
-import os
 import json
+import os
+from datetime import UTC
 from pathlib import Path
-from google.cloud import bigquery
+
 from dotenv import load_dotenv
+from google.cloud import bigquery
 
 
 def get_bigquery_client():
@@ -16,7 +18,9 @@ def get_bigquery_client():
     project_id = os.environ.get("GCP_PROJECT_ID", "quantum-echo-data-eng-prod")
 
     if key_file_path and os.path.exists(key_file_path):
-        return bigquery.Client.from_service_account_json(key_file_path, project=project_id)
+        return bigquery.Client.from_service_account_json(
+            key_file_path, project=project_id
+        )
     return bigquery.Client(project=project_id)
 
 
@@ -43,8 +47,7 @@ def create_coverage_table(client: bigquery.Client):
 
     table = bigquery.Table(table_id, schema=schema)
     table.time_partitioning = bigquery.TimePartitioning(
-        type_=bigquery.TimePartitioningType.DAY,
-        field="calculated_at"
+        type_=bigquery.TimePartitioningType.DAY, field="calculated_at"
     )
     table.clustering_fields = ["model_name", "schema"]
 
@@ -58,14 +61,14 @@ def create_coverage_table(client: bigquery.Client):
 
 def load_coverage_data(client: bigquery.Client):
     """Load coverage data from JSON to BigQuery."""
-    json_path = Path(__file__).parent.parent / 'target' / 'test_coverage.json'
+    json_path = Path(__file__).parent.parent / "target" / "test_coverage.json"
 
     if not json_path.exists():
         print(f"Coverage JSON not found at {json_path}")
         print("Run calculate_coverage.py first")
         return
 
-    with open(json_path, 'r') as f:
+    with open(json_path) as f:
         rows = json.load(f)
 
     if not rows:
@@ -75,8 +78,9 @@ def load_coverage_data(client: bigquery.Client):
     table_id = "quantum-echo-data-eng-prod.audit_metadata.dbt_test_coverage"
 
     # Delete existing data for today's partition (re-run safe)
-    from datetime import datetime, timezone
-    today = datetime.now(timezone.utc).date().isoformat()
+    from datetime import datetime
+
+    today = datetime.now(UTC).date().isoformat()
     delete_query = f"""
         DELETE FROM `{table_id}`
         WHERE DATE(calculated_at) = '{today}'
@@ -92,8 +96,9 @@ def load_coverage_data(client: bigquery.Client):
 
     # Convert to newline-delimited JSON
     import io
-    json_lines = '\n'.join(json.dumps(row) for row in rows)
-    json_file = io.BytesIO(json_lines.encode('utf-8'))
+
+    json_lines = "\n".join(json.dumps(row) for row in rows)
+    json_file = io.BytesIO(json_lines.encode("utf-8"))
 
     job = client.load_table_from_file(json_file, table_id, job_config=job_config)
     job.result()
@@ -114,5 +119,5 @@ def main():
     print("Done!")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

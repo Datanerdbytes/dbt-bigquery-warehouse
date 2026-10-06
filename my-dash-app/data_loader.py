@@ -2,11 +2,13 @@ import functools
 import os
 import time
 from pathlib import Path
+
+import pandas as pd
 from dotenv import load_dotenv
 from google.cloud import bigquery
-import pandas as pd
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine, URL
+from sqlalchemy.engine import URL, Engine
+
 from utils.cache import cache
 
 DEFAULT_DRIVER = "ODBC Driver 18 for SQL Server"
@@ -134,7 +136,6 @@ def load_and_prep_data(limit: int = 10000):
 
 def _dataset_cache_ttl_seconds() -> float:
     """Resolve the dataset hot-cache TTL from the Flask-Caching configuration."""
-    timeout = DEFAULT_CACHE_TIMEOUT
     config = getattr(cache, "config", None) or {}
     try:
         configured = config.get("CACHE_DEFAULT_TIMEOUT", DEFAULT_CACHE_TIMEOUT)

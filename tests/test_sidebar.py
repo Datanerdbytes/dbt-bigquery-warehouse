@@ -1,9 +1,9 @@
 """Account identity must be built separately for each authenticated request."""
 
 import json
-from pathlib import Path
 import sys
 import unittest
+from pathlib import Path
 
 from flask import Flask, g
 from plotly.utils import PlotlyJSONEncoder
@@ -23,7 +23,9 @@ class SidebarAccountTests(unittest.TestCase):
                 }
                 serialized = json.dumps(create_account_menu(), cls=PlotlyJSONEncoder)
                 self.assertIn(username, serialized)
-                other = "second-analyst" if username == "first-analyst" else "first-analyst"
+                other = (
+                    "second-analyst" if username == "first-analyst" else "first-analyst"
+                )
                 self.assertNotIn(other, serialized)
 
     def test_email_fallback_and_layout_without_request(self):

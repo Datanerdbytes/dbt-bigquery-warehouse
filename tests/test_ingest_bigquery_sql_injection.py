@@ -84,9 +84,7 @@ class TestTableInterpolationIsSafe(unittest.TestCase):
         module = _import_module()
         sql = module._build_query("crm_cust_info")
         # The query must use a quoted identifier (square brackets).
-        self.assertEqual(
-            sql, "SELECT * FROM bronze.[crm_cust_info]"
-        )
+        self.assertEqual(sql, "SELECT * FROM bronze.[crm_cust_info]")
         # The raw name must not appear unquoted in the SQL.
         self.assertNotIn("FROM bronze.crm_cust_info", sql)
 
@@ -104,9 +102,8 @@ class TestTableInterpolationIsSafe(unittest.TestCase):
             "drop;table",
             "drop table",
         ]:
-            with self.subTest(name=bad):
-                with self.assertRaises(ValueError):
-                    module._build_query(bad)
+            with self.subTest(name=bad), self.assertRaises(ValueError):
+                module._build_query(bad)
 
     def test_validate_table_name_returns_input_on_success(self):
         module = _import_module()

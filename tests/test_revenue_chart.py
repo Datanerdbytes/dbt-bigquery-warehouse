@@ -2,8 +2,8 @@
 
 import importlib
 import sys
-from pathlib import Path
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
@@ -18,6 +18,7 @@ from components.revenue_chart import (
     normalize_view,
     revenue_menu,
 )
+
 from utils.cache import cache
 
 

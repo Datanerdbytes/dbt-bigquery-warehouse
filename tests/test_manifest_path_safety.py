@@ -1,8 +1,6 @@
-import importlib.util
 import json
 import sys
 from pathlib import Path
-from types import ModuleType
 
 import pytest
 
@@ -10,7 +8,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from analytics_layer.scripts import calculate_coverage as coverage_module
-from analytics_layer.scripts.calculate_coverage import load_manifest as coverage_load_manifest
+from analytics_layer.scripts.calculate_coverage import (
+    load_manifest as coverage_load_manifest,
+)
 
 
 def test_load_manifest_valid_path(tmp_path, monkeypatch):
@@ -36,7 +36,9 @@ def test_load_manifest_missing_path_does_not_leak_path(tmp_path, monkeypatch):
     assert str(missing) not in str(exc_info.value)
 
 
-def test_load_manifest_traversal_outside_target_does_not_leak_path(tmp_path, monkeypatch):
+def test_load_manifest_traversal_outside_target_does_not_leak_path(
+    tmp_path, monkeypatch
+):
     traversal = tmp_path / ".." / "secret.txt"
     monkeypatch.setattr(coverage_module, "MANIFEST_PATH", traversal)
     monkeypatch.setattr(coverage_module, "ALLOWED_MANIFEST_ROOT", tmp_path)
@@ -63,6 +65,7 @@ def test_load_manifest_invalid_json_does_not_leak_path(tmp_path, monkeypatch):
 def _run_observability_snippet(code: str):
     import subprocess
     import textwrap
+
     result = subprocess.run(
         [sys.executable, "-c", textwrap.dedent(code)],
         cwd=ROOT,

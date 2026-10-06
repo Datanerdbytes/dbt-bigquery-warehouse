@@ -4,12 +4,13 @@ import base64
 import io
 import json
 import os
-from pathlib import Path
 import sys
 import time
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
 from urllib.error import HTTPError, URLError
+
 from flask import Flask
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "my-dash-app"))

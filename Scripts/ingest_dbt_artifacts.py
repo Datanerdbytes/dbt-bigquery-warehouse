@@ -1,9 +1,10 @@
-from typing import Any, cast
 import json
 import os
 import uuid
 from datetime import datetime
-from dotenv import load_dotenv, find_dotenv
+from typing import Any, cast
+
+from dotenv import find_dotenv, load_dotenv
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
@@ -18,6 +19,7 @@ KEY_PATH = os.getenv("GCP_KEY_PATH")
 DATASET_ID = "audit_metadata"
 TABLE_ID = "dbt_execution_logs"
 
+
 def get_bigquery_client() -> bigquery.Client:
     """Helper to initialize authenticated BigQuery client."""
     if not PROJECT_ID:
@@ -29,15 +31,20 @@ def get_bigquery_client() -> bigquery.Client:
         return bigquery.Client(credentials=credentials, project=PROJECT_ID)
 
     # Fallback to Google Application Default Credentials
-    print("⚠️ KEY_PATH not found or not provided. Falling back to default environment credentials.")
+    print(
+        "⚠️ KEY_PATH not found or not provided. Falling back to default environment credentials."
+    )
     return bigquery.Client(project=PROJECT_ID)
+
 
 def parse_and_upload_run_results():
     if not os.path.exists(DBT_RUN_RESULTS_PATH):
-        print(f"❌ Error: {DBT_RUN_RESULTS_PATH} not found. Run 'dbt test' or 'dbt run' first.")
+        print(
+            f"❌ Error: {DBT_RUN_RESULTS_PATH} not found. Run 'dbt test' or 'dbt run' first."
+        )
         return
 
-    with open(DBT_RUN_RESULTS_PATH, "r") as f:
+    with open(DBT_RUN_RESULTS_PATH) as f:
         data: dict[str, Any] = cast(dict[str, Any], json.load(f))
 
     # Initialize client ONCE using helper
@@ -48,7 +55,9 @@ def parse_and_upload_run_results():
     generated_at_str = metadata.get("generated_at")
 
     # Format ISO timestamp
-    run_timestamp = generated_at_str if generated_at_str else datetime.utcnow().isoformat()
+    run_timestamp = (
+        generated_at_str if generated_at_str else datetime.utcnow().isoformat()
+    )
 
     rows_to_insert = []
 
@@ -74,8 +83,10 @@ def parse_and_upload_run_results():
             "column_name": column_name,
             "status": item.get("status", "unknown"),
             "execution_time_seconds": round(float(item.get("execution_time", 0.0)), 2),
-            "rows_affected": item.get("failures", 0) if item.get("failures") is not None else 0,
-            "error_message": item.get("message")
+            "rows_affected": item.get("failures", 0)
+            if item.get("failures") is not None
+            else 0,
+            "error_message": item.get("message"),
         }
         rows_to_insert.append(row)
 
@@ -89,9 +100,12 @@ def parse_and_upload_run_results():
     errors = client.insert_rows_json(table_ref, rows_to_insert)
 
     if not errors:
-        print(f"✅ Successfully ingested {len(rows_to_insert)} records into {table_ref}!")
+        print(
+            f"✅ Successfully ingested {len(rows_to_insert)} records into {table_ref}!"
+        )
     else:
         print(f"❌ Encountered errors while inserting rows: {errors}")
+
 
 if __name__ == "__main__":
     parse_and_upload_run_results()

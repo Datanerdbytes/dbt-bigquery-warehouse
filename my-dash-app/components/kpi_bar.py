@@ -1,5 +1,5 @@
-from dash import html
 import dash_bootstrap_components as dbc
+from dash import html
 
 
 def create_kpi_card(title, card_id):

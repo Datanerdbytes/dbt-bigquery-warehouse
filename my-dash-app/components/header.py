@@ -1,10 +1,11 @@
 import logging
 
-from dash import html, dcc, callback, Input, Output, State, no_update
 import dash_bootstrap_components as dbc
-from data_loader import load_pipeline_health_summary
-from utils.helpers import dataframe_value
 from components.panels import loading
+from dash import Input, Output, State, callback, dcc, html, no_update
+from data_loader import load_pipeline_health_summary
+
+from utils.helpers import dataframe_value
 
 logger = logging.getLogger(__name__)
 

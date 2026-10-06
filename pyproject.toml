@@ -39,6 +39,7 @@ dev = [
     "dbt-bigquery>=1.12.0",
     "pyright>=1.1.414",
     "pytest>=9.1.1",
+    "ruff>=0.16.10",
     "sqlfluff>=4.3.0",
     "sqlfluff-templater-dbt>=4.3.0",
 ]
@@ -59,3 +60,26 @@ reportAttributeAccessIssue = "none"
 reportOptionalMemberAccess = "none"
 reportGeneralTypeIssues = "none"
 reportPrivateUsage = "none"
+
+[tool.ruff]
+extend-exclude = [
+    ".agents",
+    "Notebooks",
+]
+force-exclude = true
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "B",
+    "UP",
+]
+
+ignore = [
+    "E501",  # Line length is handled by Ruff formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["E402"]

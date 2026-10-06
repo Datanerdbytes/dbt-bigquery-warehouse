@@ -1,6 +1,6 @@
+import dash_bootstrap_components as dbc
 from dash import html
 from flask import g, has_request_context
-import dash_bootstrap_components as dbc
 
 
 def create_account_menu():

@@ -27,15 +27,14 @@ import os
 import sys
 import time
 import uuid
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 
 import pandas as pd
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine, URL
 from google.cloud import bigquery
-
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import URL, Engine
 
 # ----- Configuration --------------------------------------------------------
 
@@ -54,6 +53,7 @@ SCHEMA_PREFIX_MAP = {
 
 
 # ----- Helpers --------------------------------------------------------------
+
 
 def load_env(env_file: Path | None = None) -> None:
     """Best-effort .env loader. We keep this dependency-free so the script
@@ -101,10 +101,7 @@ def build_engine() -> Engine:
         f"TrustServerCertificate=no;"
     )
 
-    connection_url = URL.create(
-        "mssql+pyodbc",
-        query={"odbc_connect": odbc_str}
-    )
+    connection_url = URL.create("mssql+pyodbc", query={"odbc_connect": odbc_str})
 
     return create_engine(connection_url, pool_pre_ping=True, fast_executemany=True)
 
@@ -147,7 +144,7 @@ def log_table_ingestion_to_bigquery(
     destination_rows: int,
     duration_seconds: float,
     status: str,
-    error_message: str | None = None
+    error_message: str | None = None,
 ) -> None:
     """Record table ingestion metrics directly into BigQuery audit metadata."""
     project_id = require_env("GCP_PROJECT_ID")
@@ -155,18 +152,20 @@ def log_table_ingestion_to_bigquery(
     table_id = f"{project_id}.audit_metadata.table_ingestion_logs"
 
     # Prepare data payload
-    log_record = [{
-        "log_id": str(uuid.uuid4()),
-        "run_timestamp": run_timestamp.isoformat(),
-        "resource_type": resource_type,
-        "table_name": table_name,
-        "target_table": target_table,
-        "source_rows": source_rows,
-        "destination_rows": destination_rows,
-        "duration_seconds": duration_seconds,
-        "status": status,
-        "error_message": error_message or ""
-    }]
+    log_record = [
+        {
+            "log_id": str(uuid.uuid4()),
+            "run_timestamp": run_timestamp.isoformat(),
+            "resource_type": resource_type,
+            "table_name": table_name,
+            "target_table": target_table,
+            "source_rows": source_rows,
+            "destination_rows": destination_rows,
+            "duration_seconds": duration_seconds,
+            "status": status,
+            "error_message": error_message or "",
+        }
+    ]
 
     df_log = pd.DataFrame(log_record)
 
@@ -221,8 +220,8 @@ def ingest_csv(engine: Engine, csv_path: Path, schema: str, table: str) -> int:
 def main(argv: list[str]) -> int:
     load_env()
 
-    source_root = Path(argv[1]) if len(argv) > 1 else Path(
-        os.environ.get("SOURCE_FOLDER", "")
+    source_root = (
+        Path(argv[1]) if len(argv) > 1 else Path(os.environ.get("SOURCE_FOLDER", ""))
     )
     if not source_root:
         print("Usage: python ingest_bronze.py <source_folder>", file=sys.stderr)
@@ -242,14 +241,16 @@ def main(argv: list[str]) -> int:
 
     for csv_path, table in pairs:
         start_time = time.time()
-        run_timestamp = datetime.now(timezone.utc)
+        run_timestamp = datetime.now(UTC)
         target_table_name = f"{schema}.{table}"
         source_name = csv_path.name
 
         try:
             rows = ingest_csv(engine, csv_path, schema, table)
             duration = time.time() - start_time
-            print(f"  ok   {source_name:<30} -> {target_table_name:<25} ({rows:,} rows)")
+            print(
+                f"  ok   {source_name:<30} -> {target_table_name:<25} ({rows:,} rows)"
+            )
 
             # Log success directly to BigQuery audit metadata table
             log_table_ingestion_to_bigquery(
@@ -260,7 +261,7 @@ def main(argv: list[str]) -> int:
                 source_rows=rows,
                 destination_rows=rows,
                 duration_seconds=duration,
-                status="success"
+                status="success",
             )
 
         except Exception as exc:
@@ -278,7 +279,7 @@ def main(argv: list[str]) -> int:
                 destination_rows=0,
                 duration_seconds=duration,
                 status="fail",
-                error_message=str(exc)
+                error_message=str(exc),
             )
 
     print(f"Done. {len(pairs) - failures} succeeded, {failures} failed.")
