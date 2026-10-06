@@ -1,5 +1,6 @@
 import functools
 import os
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 from google.cloud import bigquery
@@ -9,6 +10,11 @@ from sqlalchemy.engine import Engine, URL
 from utils.cache import cache
 
 DEFAULT_DRIVER = "ODBC Driver 18 for SQL Server"
+DEFAULT_CACHE_TIMEOUT = 3600
+
+# Process-local hot copy of the merged dataset. This holds a shared, read-only
+# frame for every user, never per-user state. Callbacks must not mutate it.
+_DATASET_HOT_CACHE: dict = {"key": None, "value": None, "expires_at": 0.0}
 
 
 @functools.lru_cache(maxsize=1)
@@ -99,6 +105,14 @@ def load_and_prep_data(limit: int = 10000):
     df_merged["order_date"] = pd.to_datetime(df_merged["order_date"], errors="coerce")
     df_merged = df_merged[df_merged["order_date"].dt.year >= 2010].copy()
 
+    # BigQuery returns NUMERIC as object dtype holding Decimal values, which makes
+    # every aggregation slow. Normalize the monetary columns to float64 once so the
+    # chart and KPI aggregations use the vectorized numeric path.
+    for money_column in ("gross_sales_amount", "unit_price"):
+        df_merged[money_column] = pd.to_numeric(
+            df_merged[money_column], errors="coerce"
+        )
+
     min_data_date = None
     max_data_date = None
     if not df_merged.empty:
@@ -116,6 +130,44 @@ def load_and_prep_data(limit: int = 10000):
     ]
 
     return df_merged, min_data_date, max_data_date, category_options, country_options
+
+
+def _dataset_cache_ttl_seconds() -> float:
+    """Resolve the dataset hot-cache TTL from the Flask-Caching configuration."""
+    timeout = DEFAULT_CACHE_TIMEOUT
+    config = getattr(cache, "config", None) or {}
+    try:
+        configured = config.get("CACHE_DEFAULT_TIMEOUT", DEFAULT_CACHE_TIMEOUT)
+    except AttributeError:
+        configured = DEFAULT_CACHE_TIMEOUT
+    try:
+        resolved = float(configured)
+    except (TypeError, ValueError):
+        resolved = 0.0
+    return resolved if resolved > 0 else float(DEFAULT_CACHE_TIMEOUT)
+
+
+def get_prepared_dataset(limit: int = 10000) -> pd.DataFrame:
+    """Return the merged dataset, reusing one in-process copy per cache TTL.
+
+    ``load_and_prep_data`` is memoized on disk, so each call unpickles a full
+    DataFrame. A single filter change fans out into several independent Dash
+    callbacks, each of which used to pay that deserialization cost. Keeping one
+    process-local copy removes the repeated work.
+
+    The returned frame is shared by every caller, so treat it as read-only: build
+    derived frames with ``filter_dataframe`` or ``.copy()`` instead of mutating it.
+    """
+    key = (limit,)
+    now = time.monotonic()
+    if _DATASET_HOT_CACHE["key"] == key and now < _DATASET_HOT_CACHE["expires_at"]:
+        return _DATASET_HOT_CACHE["value"]
+
+    df_merged, _, _, _, _ = load_and_prep_data(limit=limit)
+    _DATASET_HOT_CACHE["key"] = key
+    _DATASET_HOT_CACHE["value"] = df_merged
+    _DATASET_HOT_CACHE["expires_at"] = now + _dataset_cache_ttl_seconds()
+    return df_merged
 
 
 @cache.memoize(timeout=60)

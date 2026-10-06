@@ -15,7 +15,7 @@ from dash import (
 )
 import dash_bootstrap_components as dbc
 from utils.helpers import filter_dataframe, calculate_pop_badge, format_compact_number
-from data_loader import load_and_prep_data
+from data_loader import get_prepared_dataset
 from components.kpi_bar import create_kpi_bar
 from components.filter_bar import create_filter_bar
 from components.panels import loading, panel, chart_panel, create_grid
@@ -180,7 +180,7 @@ def layout():
     Input("overview-page-loaded", "id"),
 )
 def populate_overview_filter_bar(_):
-    df_merged, _, _, _, _ = load_and_prep_data()
+    df_merged = get_prepared_dataset()
     return create_filter_bar(
         df_merged,
         date_picker_id="date-picker-range",
@@ -211,20 +211,18 @@ def update_filter_store(start_date, end_date, category, country):
 
 # --- KPI CALLBACK ---
 @callback(
-    [
-        Output("kpi-sales-value", "children"),
-        Output("kpi-orders-value", "children"),
-        Output("kpi-quantity-value", "children"),
-        Output("kpi-customers-value", "children"),
-        Output("kpi-sales-tooltip", "children"),
-        Output("kpi-orders-tooltip", "children"),
-        Output("kpi-quantity-tooltip", "children"),
-        Output("kpi-customers-tooltip", "children"),
-        Output("kpi-sales-badge", "children"),
-        Output("kpi-orders-badge", "children"),
-        Output("kpi-quantity-badge", "children"),
-        Output("kpi-customers-badge", "children"),
-    ],
+    Output("kpi-sales-value", "children"),
+    Output("kpi-orders-value", "children"),
+    Output("kpi-quantity-value", "children"),
+    Output("kpi-customers-value", "children"),
+    Output("kpi-sales-tooltip", "children"),
+    Output("kpi-orders-tooltip", "children"),
+    Output("kpi-quantity-tooltip", "children"),
+    Output("kpi-customers-tooltip", "children"),
+    Output("kpi-sales-badge", "children"),
+    Output("kpi-orders-badge", "children"),
+    Output("kpi-quantity-badge", "children"),
+    Output("kpi-customers-badge", "children"),
     Input("global-filter-store", "data"),
 )
 def update_all_kpis(filter_data):
@@ -239,8 +237,7 @@ def update_all_kpis(filter_data):
     if not start_date or not end_date:
         return (no_update,) * 12
 
-    # Retrieve cached dataset instantly from Flask-Caching
-    df_merged, _, _, _, _ = load_and_prep_data()
+    df_merged = get_prepared_dataset()
     filtered_df = filter_dataframe(
         df_merged, start_date, end_date, selected_category, selected_country
     )
@@ -392,7 +389,7 @@ def update_sales_trend(filter_data):
     if not start_date or not end_date:
         return no_update
 
-    df_merged, _, _, _, _ = load_and_prep_data()
+    df_merged = get_prepared_dataset()
     filtered_df = filter_dataframe(
         df_merged, start_date, end_date, selected_category, selected_country
     )
@@ -481,7 +478,7 @@ def update_category_pie(filter_data, view="donut"):
     if not start_date or not end_date:
         return result(style_figure(px.scatter(title="Select a date range")))
 
-    df_merged, _, _, _, _ = load_and_prep_data()
+    df_merged = get_prepared_dataset()
     filtered_df = filter_dataframe(
         df_merged, start_date, end_date, selected_category, selected_country
     )
@@ -541,7 +538,7 @@ def update_category_pie(filter_data, view="donut"):
 def update_top_products(filter_data):
     if not filter_data:
         return []
-    df_merged, *_ = load_and_prep_data()
+    df_merged = get_prepared_dataset()
     filtered = filter_dataframe(
         df_merged,
         filter_data.get("start_date"),
@@ -577,7 +574,7 @@ def update_regional_sales(filter_data):
     if not start_date or not end_date:
         return no_update
 
-    df_merged, _, _, _, _ = load_and_prep_data()
+    df_merged = get_prepared_dataset()
     filtered_df = filter_dataframe(
         df_merged, start_date, end_date, selected_category, selected_country
     )
@@ -675,7 +672,7 @@ def toggle_product_modal(
         selected_category = filter_data.get("category")
         selected_country = filter_data.get("country")
 
-        df_merged, _, _, _, _ = load_and_prep_data()
+        df_merged = get_prepared_dataset()
         filtered_df = filter_dataframe(
             df_merged, start_date, end_date, selected_category, selected_country
         )
@@ -805,7 +802,7 @@ def export_selected_product_details(n_clicks, product_title, filter_data):
     selected_category = filter_data.get("category", "ALL")
     selected_country = filter_data.get("country", "ALL")
 
-    df_merged, _, _, _, _ = load_and_prep_data()
+    df_merged = get_prepared_dataset()
     filtered_df = filter_dataframe(
         df_merged, start_date, end_date, selected_category, selected_country
     )

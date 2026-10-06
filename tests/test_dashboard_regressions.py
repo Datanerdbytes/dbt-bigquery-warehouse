@@ -2,6 +2,8 @@
 
 import importlib
 import json
+import time
+from decimal import Decimal
 from pathlib import Path
 import sys
 import unittest
@@ -123,6 +125,82 @@ class DashboardRegressionTests(unittest.TestCase):
             "WHERE order_date >= DATE '2010-01-01'",
             client.query.call_args_list[0].args[0],
         )
+
+    def test_decimal_amounts_are_normalized_to_float64(self):
+        sales, products, customers = self.frames(["2026-09-01", "2026-09-02"])
+        sales["gross_sales_amount"] = [Decimal("10.50"), Decimal("20.25")]
+        sales["unit_price"] = [Decimal("5.25"), Decimal("10.125")]
+        (df, *_), _ = self.load_sales((sales, products, customers))
+
+        self.assertEqual(df["gross_sales_amount"].dtype, "float64")
+        self.assertEqual(df["unit_price"].dtype, "float64")
+        self.assertEqual(df["gross_sales_amount"].sum(), 30.75)
+        self.assertEqual(df["unit_price"].sum(), 15.375)
+
+    def test_non_numeric_amounts_become_nan_not_strings(self):
+        sales, products, customers = self.frames(["2026-09-01"])
+        sales["gross_sales_amount"] = [None]
+        sales["unit_price"] = ["not-a-number"]
+        (df, *_), _ = self.load_sales((sales, products, customers))
+
+        self.assertEqual(df["gross_sales_amount"].dtype, "float64")
+        self.assertEqual(df["unit_price"].dtype, "float64")
+        self.assertTrue(df["gross_sales_amount"].isna().all())
+        self.assertTrue(df["unit_price"].isna().all())
+
+    def test_prepared_dataset_reuses_one_frame_per_ttl_window(self):
+        loader = Mock(side_effect=lambda limit=10000: (pd.DataFrame({"a": [1]}),) * 5)
+        data_loader._DATASET_HOT_CACHE.update(
+            {"key": None, "value": None, "expires_at": 0.0}
+        )
+        self.addCleanup(
+            data_loader._DATASET_HOT_CACHE.update,
+            {"key": None, "value": None, "expires_at": 0.0},
+        )
+
+        with patch.object(data_loader, "load_and_prep_data", loader):
+            first = data_loader.get_prepared_dataset()
+            second = data_loader.get_prepared_dataset()
+
+        self.assertEqual(loader.call_count, 1)
+        self.assertIs(first, second)
+
+        data_loader._DATASET_HOT_CACHE["expires_at"] = time.monotonic() - 1
+        with patch.object(data_loader, "load_and_prep_data", loader):
+            refreshed = data_loader.get_prepared_dataset()
+
+        self.assertEqual(loader.call_count, 2)
+        self.assertIsNot(first, refreshed)
+
+    def test_prepared_dataset_reloads_for_a_different_limit(self):
+        frame = pd.DataFrame({"a": [1, 2, 3, 4, 5]})
+        loader = Mock(side_effect=lambda limit=10000: (frame.head(limit),) * 5)
+        data_loader._DATASET_HOT_CACHE.update(
+            {"key": None, "value": None, "expires_at": 0.0}
+        )
+        self.addCleanup(
+            data_loader._DATASET_HOT_CACHE.update,
+            {"key": None, "value": None, "expires_at": 0.0},
+        )
+
+        with patch.object(data_loader, "load_and_prep_data", loader):
+            full = data_loader.get_prepared_dataset()
+            small = data_loader.get_prepared_dataset(limit=3)
+
+        self.assertEqual(loader.call_count, 2)
+        self.assertEqual(len(full), 5)
+        self.assertEqual(len(small), 3)
+
+    def test_filtered_views_do_not_mutate_the_shared_dataset(self):
+        frame = pd.DataFrame(
+            {
+                "order_date": pd.to_datetime(["2026-01-05", "2026-06-05"]),
+                "quantity": [1, 2],
+            }
+        )
+        original = frame.copy()
+        filter_dataframe(frame, "2026-01-01", "2026-03-31", None, None)
+        pd.testing.assert_frame_equal(frame, original)
 
     def test_missing_dimensions_do_not_discard_sales(self):
         sales, _, _ = self.frames(["2026-09-01"])
@@ -414,9 +492,7 @@ class DashboardRegressionTests(unittest.TestCase):
             category="Bikes",
             country="PH",
         )
-        with patch.object(
-            page, "load_and_prep_data", return_value=(df, None, None, [], [])
-        ):
+        with patch.object(page, "get_prepared_dataset", return_value=df):
             rows = page.update_top_products(filters)
             self.assertEqual(len(rows), 10)
             self.assertEqual(rows[0], dict(product_name="P11", units=11, revenue=110))
@@ -431,9 +507,7 @@ class DashboardRegressionTests(unittest.TestCase):
             category="ALL",
             country="ALL",
         )
-        with patch.object(
-            page, "load_and_prep_data", return_value=(df, None, None, [], [])
-        ):
+        with patch.object(page, "get_prepared_dataset", return_value=df):
             result = page.export_selected_product_details(
                 1, "Product Details: Bike", filters
             )
