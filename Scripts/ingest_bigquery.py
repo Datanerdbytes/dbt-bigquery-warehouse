@@ -12,9 +12,12 @@ from sqlalchemy import create_engine
 from sqlalchemy import exc as sqla_exc
 
 from utils.audit_logger import log_execution_to_bigquery
+from utils.logging_config import get_logger, sanitize_exception
 
 # 1. Load environment variables from .env file
 load_dotenv()
+
+logger = get_logger(__name__)
 
 # 2. Retrieve variables from environment
 SERVER = os.getenv("DB_SERVER", "127.0.0.1")
@@ -115,7 +118,7 @@ def validate_tls_connection(db_engine):
                 raise RuntimeError(
                     "SQL Server connection is NOT encrypted. TLS enforcement failed."
                 )
-            print("✓ Database connection validated with TLS encryption.")
+            logger.info("Database connection validated with TLS encryption.")
     except sqla_exc.OperationalError as exc:
         raise RuntimeError(
             f"Failed to establish a secure TLS-encrypted database connection: {exc}"
@@ -136,30 +139,30 @@ def extract_and_load():
     validate_tls_connection(db_engine)
 
     for table_name in TABLES_TO_INGEST:
-        print(f"\n--- Processing table: {table_name} ---")
+        logger.info("Processing table: %s", table_name)
         start_time = time.time()
         destination_table = f"{GCP_PROJECT_ID}.{TARGET_DATASET}.{table_name}"
 
         try:
             query = _build_query(table_name)
-            print("Reading data from SQL Server...")
+            logger.info("Reading data from SQL Server...")
             with db_engine.connect() as conn:
                 df = pd.read_sql(query, con=conn)
-            print(f"Extracted {len(df)} rows.")
+            logger.info("Extracted %d rows.", len(df))
 
             job_config = bigquery.LoadJobConfig(
                 write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
                 autodetect=True,
             )
 
-            print(f"Loading into BigQuery: '{destination_table}'...")
+            logger.info("Loading into BigQuery: %s", destination_table)
             load_job = bq_client.load_table_from_dataframe(
                 df, destination_table, job_config=job_config
             )
 
             load_job.result()
             duration = time.time() - start_time
-            print(f"Successfully loaded {table_name} into BigQuery!")
+            logger.info("Successfully loaded %s into BigQuery!", table_name)
 
             # Log success to BigQuery audit
             log_execution_to_bigquery(
@@ -174,7 +177,9 @@ def extract_and_load():
 
         except Exception as exc:
             duration = time.time() - start_time
-            print(f"❌ Failed to process {table_name}: {exc}")
+            logger.error(
+                "Failed to process %s: %s", table_name, sanitize_exception(exc)
+            )
 
             # Log failure to BigQuery audit
             log_execution_to_bigquery(
@@ -190,4 +195,7 @@ def extract_and_load():
 
 
 if __name__ == "__main__":
+    from utils.logging_config import setup_logging
+
+    setup_logging()
     extract_and_load()

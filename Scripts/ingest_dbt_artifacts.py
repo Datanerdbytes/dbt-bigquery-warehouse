@@ -8,8 +8,12 @@ from dotenv import find_dotenv, load_dotenv
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
+from utils.logging_config import get_logger, sanitize_exception
+
 # Locate and load .env from root or parent paths automatically
 load_dotenv(find_dotenv())
+
+logger = get_logger(__name__)
 
 # Paths and BigQuery Configuration
 DBT_RUN_RESULTS_PATH = "analytics_layer/target/run_results.json"
@@ -23,7 +27,7 @@ TABLE_ID = "dbt_execution_logs"
 def get_bigquery_client() -> bigquery.Client:
     """Helper to initialize authenticated BigQuery client."""
     if not PROJECT_ID:
-        raise ValueError("❌ GCP_PROJECT_ID is missing from environment/env variables.")
+        raise ValueError("GCP_PROJECT_ID is missing from environment/env variables.")
 
     if KEY_PATH and os.path.exists(KEY_PATH):
         # Create explicit service account credentials object
@@ -31,16 +35,16 @@ def get_bigquery_client() -> bigquery.Client:
         return bigquery.Client(credentials=credentials, project=PROJECT_ID)
 
     # Fallback to Google Application Default Credentials
-    print(
-        "⚠️ KEY_PATH not found or not provided. Falling back to default environment credentials."
+    logger.warning(
+        "KEY_PATH not found or not provided. Falling back to default environment credentials."
     )
     return bigquery.Client(project=PROJECT_ID)
 
 
 def parse_and_upload_run_results():
     if not os.path.exists(DBT_RUN_RESULTS_PATH):
-        print(
-            f"❌ Error: {DBT_RUN_RESULTS_PATH} not found. Run 'dbt test' or 'dbt run' first."
+        logger.error(
+            "%s not found. Run 'dbt test' or 'dbt run' first.", DBT_RUN_RESULTS_PATH
         )
         return
 
@@ -91,7 +95,7 @@ def parse_and_upload_run_results():
         rows_to_insert.append(row)
 
     if not rows_to_insert:
-        print("⚠️ No execution results found in file.")
+        logger.warning("No execution results found in file.")
         return
 
     table_ref = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}"
@@ -100,11 +104,14 @@ def parse_and_upload_run_results():
     errors = client.insert_rows_json(table_ref, rows_to_insert)
 
     if not errors:
-        print(
-            f"✅ Successfully ingested {len(rows_to_insert)} records into {table_ref}!"
+        logger.info(
+            "Successfully ingested %d records into %s", len(rows_to_insert), table_ref
         )
     else:
-        print(f"❌ Encountered errors while inserting rows: {errors}")
+        logger.error(
+            "Encountered errors while inserting rows: %s",
+            sanitize_exception(str(errors)),
+        )
 
 
 if __name__ == "__main__":
