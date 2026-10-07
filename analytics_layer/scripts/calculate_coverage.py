@@ -10,6 +10,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 ALLOWED_MANIFEST_ROOT = Path(__file__).resolve().parent.parent / "target"
 MANIFEST_PATH = ALLOWED_MANIFEST_ROOT / "manifest.json"
 
@@ -166,18 +170,19 @@ def main():
     try:
         manifest = load_manifest()
     except (FileNotFoundError, RuntimeError, ValueError):
-        print("Manifest could not be loaded. Run 'dbt parse' or 'dbt compile' first.")
+        logger.error(
+            "Manifest could not be loaded. Run 'dbt parse' or 'dbt compile' first."
+        )
         return 1
 
-    print("Loading manifest from configured target path...")
-
-    print("Calculating coverage...")
+    logger.info("Loading manifest from configured target path...")
+    logger.info("Calculating coverage...")
     coverage = calculate_coverage(manifest)
 
     # Print summary
-    print("\n" + "=" * 80)
-    print("TEST COVERAGE SUMMARY")
-    print("=" * 80)
+    logger.info("=" * 80)
+    logger.info("TEST COVERAGE SUMMARY")
+    logger.info("=" * 80)
 
     total_models = len(coverage)
     total_columns = sum(m["total_columns"] for m in coverage)
@@ -186,20 +191,25 @@ def main():
         round((total_tested / total_columns) * 100, 2) if total_columns > 0 else 0
     )
 
-    print(f"Models analyzed: {total_models}")
-    print(f"Total columns: {total_columns}")
-    print(f"Columns with tests: {total_tested}")
-    print(f"Overall column coverage: {overall_pct}%")
-    print()
+    logger.info("Models analyzed: %d", total_models)
+    logger.info("Total columns: %d", total_columns)
+    logger.info("Columns with tests: %d", total_tested)
+    logger.info("Overall column coverage: %.2f%%", overall_pct)
 
     for model in sorted(coverage, key=lambda x: x["model_name"]):
         status = (
-            "✅"
+            "OK"
             if model["column_coverage_pct"] == 100
-            else ("⚠️" if model["column_coverage_pct"] >= 50 else "❌")
+            else ("WARN" if model["column_coverage_pct"] >= 50 else "FAIL")
         )
-        print(
-            f"{status} {model['model_name']:30s} | {model['columns_with_tests']:2d}/{model['total_columns']:2d} cols ({model['column_coverage_pct']:5.1f}%) | {model['total_tests']} tests"
+        logger.info(
+            "%s %s | %d/%d cols (%.1f%%) | %d tests",
+            status,
+            model["model_name"],
+            model["columns_with_tests"],
+            model["total_columns"],
+            model["column_coverage_pct"],
+            model["total_tests"],
         )
 
     # Output flattened for BigQuery
@@ -210,7 +220,7 @@ def main():
     with open(output_path, "w") as f:
         json.dump(flat_rows, f, indent=2)
 
-    print(f"\nSaved {len(flat_rows)} column-level rows to {output_path}")
+    logger.info("Saved %d column-level rows to output", len(flat_rows))
 
     return 0
 

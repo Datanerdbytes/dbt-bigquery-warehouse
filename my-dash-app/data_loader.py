@@ -386,7 +386,7 @@ def verify_connection(engine: Engine) -> None:
 
     try:
         with engine.connect() as conn:
-            row = conn.execute(
+            conn.execute(
                 text("SELECT DB_NAME() AS db, SUSER_SNAME() AS usr")
             ).fetchone()
             encrypted = conn.execute(
@@ -402,7 +402,7 @@ def verify_connection(engine: Engine) -> None:
             "SQL Server connection is NOT encrypted. TLS enforcement failed."
         )
 
-    print(f"Connected to '{row.db}' as '{row.usr}' (TLS encrypted)")
+    print("Connected to database (TLS encrypted)")
 
 
 @cache.memoize()
@@ -459,8 +459,8 @@ def load_table_ingestion_logs(
             df["run_timestamp"] = pd.to_datetime(df["run_timestamp"])
 
         return df
-    except Exception as e:
-        print(f"Warning: Could not load table ingestion logs from BigQuery: {e}")
+    except Exception:
+        print("Warning: Could not load table ingestion logs from BigQuery.")
         return pd.DataFrame(
             columns=[
                 "log_id",

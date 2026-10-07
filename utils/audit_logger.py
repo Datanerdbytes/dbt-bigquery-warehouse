@@ -1,3 +1,10 @@
+"""BigQuery audit metadata logger.
+
+Streams pipeline execution logs into ``audit_metadata.dbt_execution_logs``.
+Uses structured logging with redaction to avoid leaking sensitive metadata
+in container logs or CI output.
+"""
+
 import os
 from datetime import UTC, datetime
 
@@ -9,9 +16,12 @@ from utils.helpers import (
     resolve_bq_table,
     validate_bq_write_target,
 )
+from utils.logging_config import get_logger, sanitize_exception
 
 # Ensure environment variables are available
 load_dotenv(find_dotenv())
+
+logger = get_logger(__name__)
 
 
 def log_execution_to_bigquery(
@@ -28,7 +38,7 @@ def log_execution_to_bigquery(
     project_id = os.getenv("GCP_PROJECT_ID")
 
     if not project_id:
-        print("⚠️ Skipped audit logging: GCP_PROJECT_ID is not set.")
+        logger.warning("Skipped audit logging: GCP_PROJECT_ID is not set.")
         return
 
     try:
@@ -62,7 +72,11 @@ def log_execution_to_bigquery(
 
         errors = client.insert_rows_json(table_ref, row)
         if errors:
-            print(f"⚠️ Metadata log insertion errors: {errors}")
+            logger.error(
+                "Metadata log insertion errors: %s", sanitize_exception(str(errors))
+            )
 
     except Exception as e:
-        print(f"⚠️ Failed to stream audit metadata to BigQuery: {e}")
+        logger.error(
+            "Failed to stream audit metadata to BigQuery: %s", sanitize_exception(e)
+        )

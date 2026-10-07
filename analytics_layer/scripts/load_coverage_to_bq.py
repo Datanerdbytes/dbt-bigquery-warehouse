@@ -12,6 +12,9 @@ from dotenv import load_dotenv
 from google.cloud import bigquery
 
 from utils.helpers import get_bq_project_id, resolve_bq_table, validate_bq_write_target
+from utils.logging_config import get_logger, sanitize_exception
+
+logger = get_logger(__name__)
 
 
 def get_bigquery_client():
@@ -55,9 +58,9 @@ def create_coverage_table(client: bigquery.Client):
 
     try:
         table = client.create_table(table, exists_ok=True)
-        print(f"Created/verified table {table_id}")
+        logger.info("Created/verified table %s", table_id)
     except Exception as e:
-        print(f"Error creating table: {e}")
+        logger.error("Error creating table: %s", sanitize_exception(e))
         raise
 
 
@@ -66,15 +69,15 @@ def load_coverage_data(client: bigquery.Client):
     json_path = Path(__file__).parent.parent / "target" / "test_coverage.json"
 
     if not json_path.exists():
-        print(f"Coverage JSON not found at {json_path}")
-        print("Run calculate_coverage.py first")
+        logger.error("Coverage JSON not found at %s", json_path)
+        logger.error("Run calculate_coverage.py first")
         return
 
     with open(json_path) as f:
         rows = json.load(f)
 
     if not rows:
-        print("No coverage data to load")
+        logger.warning("No coverage data to load")
         return
 
     table_id = resolve_bq_table("dbt_test_coverage")
@@ -89,7 +92,7 @@ def load_coverage_data(client: bigquery.Client):
         WHERE DATE(calculated_at) = '{today}'
     """
     client.query(delete_query).result()
-    print(f"Cleared existing data for {today}")
+    logger.info("Cleared existing data for %s", today)
 
     # Load new data
     job_config = bigquery.LoadJobConfig(
@@ -106,20 +109,20 @@ def load_coverage_data(client: bigquery.Client):
     job = client.load_table_from_file(json_file, table_id, job_config=job_config)
     job.result()
 
-    print(f"Loaded {len(rows)} rows to {table_id}")
+    logger.info("Loaded %d rows to %s", len(rows), table_id)
 
 
 def main():
-    print("Connecting to BigQuery...")
+    logger.info("Connecting to BigQuery...")
     client = get_bigquery_client()
 
-    print("Creating coverage table...")
+    logger.info("Creating coverage table...")
     create_coverage_table(client)
 
-    print("Loading coverage data...")
+    logger.info("Loading coverage data...")
     load_coverage_data(client)
 
-    print("Done!")
+    logger.info("Done!")
 
 
 if __name__ == "__main__":

@@ -36,6 +36,10 @@ from google.cloud import bigquery
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, Engine
 
+from utils.logging_config import get_logger, sanitize_exception
+
+logger = get_logger(__name__)
+
 # ----- Configuration --------------------------------------------------------
 
 DEFAULT_DRIVER = "ODBC Driver 18 for SQL Server"
@@ -116,7 +120,7 @@ def verify_connection(engine: Engine) -> None:
 
     try:
         with engine.connect() as conn:
-            row = conn.execute(
+            conn.execute(
                 text("SELECT DB_NAME() AS db, SUSER_SNAME() AS usr")
             ).fetchone()
             encrypted = conn.execute(
@@ -132,7 +136,7 @@ def verify_connection(engine: Engine) -> None:
             "SQL Server connection is NOT encrypted. TLS enforcement failed."
         )
 
-    print(f"Connected to '{row.db}' as '{row.usr}' (TLS encrypted)")
+    logger.info("Connected to database (TLS encrypted)")
 
 
 def log_table_ingestion_to_bigquery(
@@ -224,7 +228,7 @@ def main(argv: list[str]) -> int:
         Path(argv[1]) if len(argv) > 1 else Path(os.environ.get("SOURCE_FOLDER", ""))
     )
     if not source_root:
-        print("Usage: python ingest_bronze.py <source_folder>", file=sys.stderr)
+        logger.error("Usage: python ingest_bronze.py <source_folder>")
         return 2
 
     schema = "bronze"
@@ -233,10 +237,10 @@ def main(argv: list[str]) -> int:
 
     pairs = list(discover_csvs(source_root))
     if not pairs:
-        print(f"No CSVs found under {source_root}")
+        logger.warning("No CSVs found under %s", source_root)
         return 0
 
-    print(f"Found {len(pairs)} CSV file(s) under {source_root}")
+    logger.info("Found %d CSV file(s)", len(pairs))
     failures = 0
 
     for csv_path, table in pairs:
@@ -248,9 +252,7 @@ def main(argv: list[str]) -> int:
         try:
             rows = ingest_csv(engine, csv_path, schema, table)
             duration = time.time() - start_time
-            print(
-                f"  ok   {source_name:<30} -> {target_table_name:<25} ({rows:,} rows)"
-            )
+            logger.info("OK %s -> %s (%d rows)", source_name, target_table_name, rows)
 
             # Log success directly to BigQuery audit metadata table
             log_table_ingestion_to_bigquery(
@@ -267,7 +269,12 @@ def main(argv: list[str]) -> int:
         except Exception as exc:
             duration = time.time() - start_time
             failures += 1
-            print(f"  FAIL {source_name:<30} -> {target_table_name:<25} ({exc})")
+            logger.error(
+                "FAIL %s -> %s (%s)",
+                source_name,
+                target_table_name,
+                sanitize_exception(exc),
+            )
 
             # Log failure directly to BigQuery audit metadata table
             log_table_ingestion_to_bigquery(
@@ -282,7 +289,7 @@ def main(argv: list[str]) -> int:
                 error_message=str(exc),
             )
 
-    print(f"Done. {len(pairs) - failures} succeeded, {failures} failed.")
+    logger.info("Done. %d succeeded, %d failed.", len(pairs) - failures, failures)
     return 0 if failures == 0 else 1
 
 
