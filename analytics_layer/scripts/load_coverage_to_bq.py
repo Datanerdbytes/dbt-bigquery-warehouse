@@ -11,11 +11,13 @@ from pathlib import Path
 from dotenv import load_dotenv
 from google.cloud import bigquery
 
+from utils.helpers import get_bq_project_id, resolve_bq_table, validate_bq_write_target
+
 
 def get_bigquery_client():
     load_dotenv()
+    project_id = get_bq_project_id()
     key_file_path = os.environ.get("GCP_KEY_PATH")
-    project_id = os.environ.get("GCP_PROJECT_ID", "quantum-echo-data-eng-prod")
 
     if key_file_path and os.path.exists(key_file_path):
         return bigquery.Client.from_service_account_json(
@@ -26,7 +28,7 @@ def get_bigquery_client():
 
 def create_coverage_table(client: bigquery.Client):
     """Create the test_coverage table if it doesn't exist."""
-    table_id = "quantum-echo-data-eng-prod.audit_metadata.dbt_test_coverage"
+    table_id = resolve_bq_table("dbt_test_coverage")
 
     schema = [
         bigquery.SchemaField("model_name", "STRING", mode="REQUIRED"),
@@ -75,7 +77,8 @@ def load_coverage_data(client: bigquery.Client):
         print("No coverage data to load")
         return
 
-    table_id = "quantum-echo-data-eng-prod.audit_metadata.dbt_test_coverage"
+    table_id = resolve_bq_table("dbt_test_coverage")
+    validate_bq_write_target(table_id)
 
     # Delete existing data for today's partition (re-run safe)
     from datetime import datetime

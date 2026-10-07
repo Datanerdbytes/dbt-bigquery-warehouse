@@ -5,6 +5,11 @@ from dotenv import find_dotenv, load_dotenv
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
+from utils.helpers import (
+    resolve_bq_table,
+    validate_bq_write_target,
+)
+
 # Ensure environment variables are available
 load_dotenv(find_dotenv())
 
@@ -21,7 +26,6 @@ def log_execution_to_bigquery(
 ):
     """Streams pipeline execution logs into BigQuery audit_metadata.dbt_execution_logs."""
     project_id = os.getenv("GCP_PROJECT_ID")
-    key_path = os.getenv("GCP_KEY_PATH")
 
     if not project_id:
         print("⚠️ Skipped audit logging: GCP_PROJECT_ID is not set.")
@@ -29,6 +33,7 @@ def log_execution_to_bigquery(
 
     try:
         # Initialize BigQuery client
+        key_path = os.getenv("GCP_KEY_PATH")
         if key_path and os.path.exists(key_path):
             credentials = service_account.Credentials.from_service_account_file(
                 key_path
@@ -37,7 +42,8 @@ def log_execution_to_bigquery(
         else:
             client = bigquery.Client(project=project_id)
 
-        table_ref = f"{project_id}.audit_metadata.dbt_execution_logs"
+        table_ref = resolve_bq_table("dbt_execution_logs")
+        validate_bq_write_target(table_ref)
 
         row = [
             {
