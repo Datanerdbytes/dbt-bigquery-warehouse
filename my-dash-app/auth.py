@@ -119,7 +119,6 @@ def install_auth(server):
         get_remote_address,
         app=server,
         storage_uri="memory://",
-        default_limits=["200 per day", "50 per hour"],
     )
 
     # Register custom 429 error handler
