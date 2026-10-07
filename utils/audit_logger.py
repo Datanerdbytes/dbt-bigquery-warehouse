@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 
 from dotenv import find_dotenv, load_dotenv
 from google.cloud import bigquery
@@ -48,7 +48,7 @@ def log_execution_to_bigquery(
         row = [
             {
                 "execution_id": execution_id,
-                "run_timestamp": datetime.utcnow().isoformat(),
+                "run_timestamp": datetime.now(UTC).isoformat(),
                 "resource_type": resource_type,
                 "node_name": node_name,
                 "target_table": target_table,

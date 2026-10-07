@@ -11,6 +11,8 @@ from urllib.request import Request, urlopen
 
 from dotenv import load_dotenv
 from flask import g, jsonify, redirect, render_template, request
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 COOKIE = "qe_access_token"
 PUBLIC = {
@@ -33,6 +35,11 @@ class AuthError(Exception):
     def __init__(self, code, status):
         self.code, self.status = code, status
         super().__init__(code)
+
+
+# Generic error messages to prevent account enumeration
+GENERIC_AUTH_ERROR = "Invalid email or password"
+GENERIC_SESSION_ERROR = "Authentication failed"
 
 
 def settings():
@@ -98,9 +105,25 @@ def verify_access(token):
     return user, remaining
 
 
+def _rate_limit_exceeded_handler(e):
+    """Handler for rate limit exceeded - returns generic message."""
+    return jsonify(error=GENERIC_AUTH_ERROR), 429
+
+
 def install_auth(server):
     load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
     server.template_folder = str(Path(__file__).parent / "templates")
+
+    # Initialize rate limiter
+    limiter = Limiter(
+        get_remote_address,
+        app=server,
+        storage_uri="memory://",
+        default_limits=["200 per day", "50 per hour"],
+    )
+
+    # Register custom 429 error handler
+    server.register_error_handler(429, _rate_limit_exceeded_handler)
 
     @server.before_request
     def protect():
@@ -133,7 +156,7 @@ def install_auth(server):
                 if error.status in (401, 403):
                     return redirect("/login")
                 return render_template("auth.html", mode="unavailable"), 503
-            return jsonify(error=error.code), error.status
+            return jsonify(error=GENERIC_AUTH_ERROR), error.status
 
     @server.after_request
     def private(response):
@@ -145,6 +168,7 @@ def install_auth(server):
         return response
 
     @server.get("/auth/config")
+    @limiter.limit("30 per minute")
     def config():
         try:
             url, key, _, _ = settings()
@@ -159,6 +183,7 @@ def install_auth(server):
     @server.get("/login")
     @server.get("/signup")
     @server.get("/auth/callback")
+    @limiter.limit("5 per minute")
     def auth_page():
         return render_template(
             "auth.html",
@@ -166,6 +191,7 @@ def install_auth(server):
         )
 
     @server.route("/auth/session", methods=["POST", "DELETE", "GET"])
+    @limiter.limit("10 per minute")
     def session_bridge():
         if request.method == "GET":
             return jsonify(error="method_not_allowed"), 405
@@ -181,7 +207,7 @@ def install_auth(server):
         try:
             _, remaining = verify_access(token)
         except AuthError as error:
-            response = jsonify(error=error.code)
+            response = jsonify(error=GENERIC_AUTH_ERROR)
             response.status_code = error.status
             response.delete_cookie(
                 COOKIE, path="/", secure=secure, httponly=True, samesite="Lax"
