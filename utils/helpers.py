@@ -1,6 +1,43 @@
 # utils/helpers.py
+import os
+
 import pandas as pd
 from dash import html
+
+
+def get_bq_project_id() -> str:
+    if is_test_environment():
+        return "local_bq_project"
+    default_project = "local_bq_project"
+    return os.getenv("BQ_PROJECT_ID", default_project)
+
+
+def get_bq_dataset_name() -> str:
+    if is_test_environment():
+        return "sandbox_audit"
+    default_dataset = "sandbox_audit"
+    return os.getenv("BQ_DATASET_NAME", default_dataset)
+
+
+def is_test_environment() -> bool:
+    return os.getenv("NODE_ENV") == "test"
+
+
+def resolve_bq_table(table_name: str) -> str:
+    project_id = get_bq_project_id()
+    dataset_name = get_bq_dataset_name()
+    return f"{project_id}.{dataset_name}.{table_name}"
+
+
+def validate_bq_write_target(table_id: str) -> None:
+    project_id = get_bq_project_id()
+    dataset_name = get_bq_dataset_name()
+    expected_prefix = f"{project_id}.{dataset_name}."
+    if not table_id.startswith(expected_prefix):
+        raise RuntimeError(
+            f"Refusing BigQuery write to non-sanctioned target: {table_id}. "
+            f"Expected prefix: {expected_prefix}"
+        )
 
 
 def dataframe_value(df, column, default=0):
