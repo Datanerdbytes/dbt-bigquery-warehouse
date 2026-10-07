@@ -178,3 +178,90 @@ class AuthTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Max-Age=0", response.headers["Set-Cookie"])
         self.assertIn("no-store", response.headers["Cache-Control"])
+
+    def test_rate_limiting_on_auth_page(self):
+        """Test that auth pages are rate limited (5 per minute)."""
+        # Make 5 requests - should all succeed
+        for _ in range(5):
+            response = self.client.get("/login")
+            self.assertEqual(response.status_code, 200)
+        # 6th request should be rate limited
+        response = self.client.get("/login")
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.json["error"], auth.GENERIC_AUTH_ERROR)
+
+    def test_rate_limiting_on_session_bridge(self):
+        """Test that session bridge is rate limited (10 per minute)."""
+        # Mock Supabase to return 401 for invalid tokens
+        with patch.object(
+            auth, "urlopen", side_effect=HTTPError("url", 401, "", {}, None)
+        ):
+            # Make 10 requests - should all return 401 (not rate limited)
+            for _ in range(10):
+                response = self.client.post(
+                    "/auth/session",
+                    json={"access_token": "invalid"},
+                    headers={"Origin": ENV["AUTH_APP_ORIGIN"]},
+                )
+                self.assertEqual(response.status_code, 401)
+            # 11th request should be rate limited (429)
+            response = self.client.post(
+                "/auth/session",
+                json={"access_token": "invalid"},
+                headers={"Origin": ENV["AUTH_APP_ORIGIN"]},
+            )
+            self.assertEqual(response.status_code, 429)
+            self.assertEqual(response.json["error"], auth.GENERIC_AUTH_ERROR)
+
+    def test_rate_limiting_on_config(self):
+        """Test that config endpoint is rate limited (30 per minute)."""
+        # Make 30 requests - should all succeed
+        for _ in range(30):
+            response = self.client.get("/auth/config")
+            self.assertEqual(response.status_code, 200)
+        # 31st request should be rate limited
+        response = self.client.get("/auth/config")
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.json["error"], auth.GENERIC_AUTH_ERROR)
+
+    def test_account_enumeration_protection_generic_error(self):
+        """Test that auth errors return generic messages to prevent account enumeration."""
+        # Test with expired token
+        self.client.set_cookie(auth.COOKIE, token(int(time.time()) - 5))
+        with self.remote():
+            response = self.client.get("/_dash-layout")
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json["error"], auth.GENERIC_AUTH_ERROR)
+
+        # Test with unapproved email
+        with self.remote(dict(USER, email="other@example.com")):
+            response = self.client.get("/_dash-layout")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json["error"], auth.GENERIC_AUTH_ERROR)
+
+        # Test with unconfirmed email
+        with self.remote(dict(USER, email_confirmed_at=None)):
+            response = self.client.get("/_dash-layout")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json["error"], auth.GENERIC_AUTH_ERROR)
+
+        # Test with invalid token
+        with patch.object(
+            auth, "urlopen", side_effect=HTTPError("url", 401, "", {}, None)
+        ):
+            response = self.client.get("/_dash-layout")
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json["error"], auth.GENERIC_AUTH_ERROR)
+
+    def test_session_bridge_returns_generic_error_on_invalid_token(self):
+        """Test that session bridge returns generic error for invalid tokens."""
+        with patch.object(
+            auth, "urlopen", side_effect=HTTPError("url", 401, "", {}, None)
+        ):
+            response = self.client.post(
+                "/auth/session",
+                json={"access_token": "invalid"},
+                headers={"Origin": ENV["AUTH_APP_ORIGIN"]},
+            )
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json["error"], auth.GENERIC_AUTH_ERROR)
