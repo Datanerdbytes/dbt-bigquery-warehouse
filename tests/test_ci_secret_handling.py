@@ -9,7 +9,6 @@ Run from the repository root:
     .venv/bin/python -B -m unittest discover -s tests -v
 """
 
-import sys
 import unittest
 from pathlib import Path
 
@@ -20,11 +19,11 @@ WORKFLOW = ROOT / ".github" / "workflows" / "ci_pipeline.yml"
 
 # Synthetic marker used to detect accidental interpolation of the secret VALUE
 # (as opposed to the secret NAME) into workflow expressions.
-_SECRET_VALUE_MARKER = "GCP_SA_KEY_VALUE_PLACEHOLDER"
+_SECRET_VALUE_MARKER = "GCP_SA_KEY_VALUE_PLACEHOLDER"  # pragma: allowlist secret
 
 
 def _load_workflow():
-    with open(WORKFLOW, "r") as f:
+    with open(WORKFLOW) as f:
         return yaml.safe_load(f)
 
 
