@@ -6,8 +6,11 @@ authentication routes and the dashboard, with proper nonce handling for
 inline scripts and allowed external origins.
 """
 
+import importlib
+import re
 import sys
 import unittest
+from html.parser import HTMLParser
 from pathlib import Path
 from unittest.mock import patch
 
@@ -41,7 +44,8 @@ class TestCSPHeaders(unittest.TestCase):
         self.env_patcher.start()
 
         # Import and install auth
-        auth.install_auth(self.app)
+        with patch("auth.load_dotenv"):
+            auth.install_auth(self.app)
 
         self.client = self.app.test_client()
 
@@ -130,7 +134,8 @@ class TestCSPHeaders(unittest.TestCase):
         csp = self._get_csp_header(response)
 
         self.assertIn("supabase.co", csp, "Should allow Supabase connect-src")
-        self.assertIn("supabase.net", csp, "Should allow Supabase connect-src")
+        self.assertIn("connect-src 'self' https://test-project.supabase.co", csp)
+        self.assertNotIn("https://*", csp)
 
     def test_csp_allows_dash_cdn(self):
         """Test CSP allows Dash component CDN (jsdelivr, unpkg)."""
@@ -140,7 +145,7 @@ class TestCSPHeaders(unittest.TestCase):
         self.assertIn(
             "cdn.jsdelivr.net", csp, "Should allow jsDelivr CDN for Dash components"
         )
-        self.assertIn("unpkg.com", csp, "Should allow unpkg CDN for Dash components")
+        self.assertNotIn("unpkg.com", csp)
 
     def test_csp_inline_script_has_nonce(self):
         """Test that inline scripts in auth.html have nonce attribute."""
@@ -184,7 +189,13 @@ class TestCSPHeaders(unittest.TestCase):
         csp = self._get_csp_header(response)
 
         self.assertNotIn(
-            "'unsafe-inline'", csp, "Should not use unsafe-inline for scripts"
+            "'unsafe-inline'",
+            next(
+                part
+                for part in csp.split(";")
+                if part.strip().startswith("script-src ")
+            ),
+            "Should not use unsafe-inline for scripts",
         )
 
     def test_csp_frame_ancestors_deny(self):
@@ -215,19 +226,9 @@ class TestCSPHeaders(unittest.TestCase):
 
         self.assertIn("connect-src 'self'", csp)
 
-    def test_dashboard_csp_headers(self):
-        """Test CSP on dashboard routes (require auth)."""
-        # Mock authentication
-        with patch("auth.verify_access") as mock_verify:
-            mock_verify.return_value = ({"email": "test@example.com"}, "test-token")
-
-            # Test dashboard route
-            response = self.client.get(
-                "/dashboard", headers={"Cookie": "sb-access-token=test"}
-            )
-            # May redirect or return 200/401, but should have CSP if HTML
-            if response.content_type and "text/html" in response.content_type:
-                self.assertIn("Content-Security-Policy", response.headers)
+    def test_html_error_receives_csp(self):
+        response = self.client.get("/missing-public-asset")
+        self.assertIn("Content-Security-Policy", response.headers)
 
     def test_nonce_is_unique_per_request(self):
         """Test that each request gets a unique nonce."""
@@ -273,7 +274,8 @@ class TestCSPIntegration(unittest.TestCase):
         self.env_patcher.start()
 
         # Import and install auth
-        auth.install_auth(self.app)
+        with patch("auth.load_dotenv"):
+            auth.install_auth(self.app)
 
         self.client = self.app.test_client()
 
@@ -287,6 +289,7 @@ class TestCSPIntegration(unittest.TestCase):
 
         required_directives = [
             "default-src",
+            "object-src",
             "script-src",
             "style-src",
             "font-src",
@@ -299,6 +302,118 @@ class TestCSPIntegration(unittest.TestCase):
 
         for directive in required_directives:
             self.assertIn(directive, csp, f"Missing required directive: {directive}")
+
+
+class ScriptTags(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.scripts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script":
+            self.scripts.append(dict(attrs))
+
+
+class TestActualDashCSP(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from google.cloud import bigquery
+
+        from utils.cache import cache
+
+        with (
+            patch.object(
+                bigquery, "Client", side_effect=AssertionError("Cloud forbidden")
+            ),
+            patch.object(cache, "init_app"),
+            patch("auth.load_dotenv"),
+        ):
+            cls.dashboard = importlib.import_module("app")
+        cache.init_app(cls.dashboard.server, config={"CACHE_TYPE": "SimpleCache"})
+
+    def setUp(self):
+        self.client = self.dashboard.server.test_client()
+        self.addCleanup(patch.stopall)
+        patch("auth.verify_access", return_value=({"id": "fixture-user"}, 3600)).start()
+        patch.dict(
+            "os.environ",
+            {"NEXT_PUBLIC_SUPABASE_URL": "https://test-project.supabase.co"},
+        ).start()
+
+    def test_all_dash_bootstrap_scripts_share_response_nonce(self):
+        for path in ("/dashboard", "/customers", "/pipeline-health"):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200)
+                nonce = re.search(
+                    r"'nonce-([^']+)'", response.headers["Content-Security-Policy"]
+                )[1]
+                tags = ScriptTags()
+                tags.feed(response.get_data(as_text=True))
+                self.assertGreater(len(tags.scripts), 5)
+                self.assertTrue(
+                    any(tag.get("id") == "_dash-renderer" for tag in tags.scripts)
+                )
+                for tag in tags.scripts:
+                    self.assertEqual(tag.get("nonce"), nonce, tag)
+
+    def test_untrusted_app_entry_is_not_automatically_authorized(self):
+        with self.dashboard.server.test_request_context("/dashboard"):
+            from flask import g
+
+            g.csp_nonce = "synthetic-test-nonce"
+            html = self.dashboard.app.interpolate_index(
+                app_entry='<script id="untrusted">alert(1)</script>',
+                scripts='<script src="/trusted.js"></script>',
+                renderer='<script id="_dash-renderer">new DashRenderer();</script>',
+            )
+        tags = ScriptTags()
+        tags.feed(html)
+        untrusted = next(tag for tag in tags.scripts if tag.get("id") == "untrusted")
+        self.assertNotIn("nonce", untrusted)
+        self.assertTrue(
+            any(
+                tag.get("src") == "/trusted.js" and tag.get("nonce")
+                for tag in tags.scripts
+            )
+        )
+
+    def test_response_nonces_are_fresh_and_no_store(self):
+        responses = [self.client.get("/dashboard") for _ in range(2)]
+        nonces = [
+            re.search(r"'nonce-([^']+)'", r.headers["Content-Security-Policy"])[1]
+            for r in responses
+        ]
+        self.assertNotEqual(*nonces)
+        for response in responses:
+            self.assertIn("no-store", response.headers["Cache-Control"])
+            self.assertIn("Cookie", response.headers["Vary"])
+
+    def test_static_and_json_responses_have_no_document_policy(self):
+        for path in ("/assets/auth.bundle.js", "/healthz", "/_dash-layout"):
+            with self.subTest(path=path), self.client.get(path) as response:
+                self.assertEqual(response.status_code, 200)
+                self.assertNotIn("Content-Security-Policy", response.headers)
+
+    def test_invalid_config_does_not_inject_policy_sources(self):
+        for url in ("https://test.supabase.co;unsafe-source", "https://[invalid"):
+            with (
+                self.subTest(url=url),
+                patch.dict("os.environ", {"NEXT_PUBLIC_SUPABASE_URL": url}),
+            ):
+                response = self.client.get("/dashboard")
+                self.assertEqual(response.status_code, 200)
+                csp = response.headers["Content-Security-Policy"]
+            self.assertIn("connect-src 'self';", csp)
+            self.assertNotIn("unsafe-source", csp)
+
+    def test_unauthenticated_data_stays_blocked(self):
+        with patch(
+            "auth.verify_access", side_effect=auth.AuthError("session_required", 401)
+        ):
+            response = self.client.get("/_dash-layout")
+        self.assertEqual(response.status_code, 401)
+        self.assertNotIn("Content-Security-Policy", response.headers)
 
 
 if __name__ == "__main__":

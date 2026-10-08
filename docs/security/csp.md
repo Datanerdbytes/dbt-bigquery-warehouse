@@ -1,242 +1,143 @@
-# Content Security Policy Implementation
+# Content Security Policy for Flask and Dash
 
-## Overview
+## Enforcement and scope
 
-This document describes the Content Security Policy (CSP) implementation for the Quantum Echo Analytics Dashboard. The CSP is enforced on all HTML responses (auth pages, landing page, and dashboard routes) to mitigate XSS and script injection risks.
+`install_auth` generates a fresh 128-bit random nonce in `before_request` and
+sets an enforced `Content-Security-Policy` header in `after_request` for each
+HTML response. It preserves the existing authentication order, exact-Origin
+checks, cookies, private/no-store caching, and authorization before data access.
+Nonces come from `secrets.token_urlsafe(16)`, never request input or configuration.
 
-## CSP Policy
+Login, signup, callback, public landing, authenticated Dash pages, HTML redirects,
+and HTML errors receive CSP. JavaScript/CSS assets and JSON responses do not
+receive a document policy; their loading is governed by the requesting HTML.
+An asset URL returning an HTML error receives CSP like any other HTML response.
 
-The following CSP header is applied to all `text/html` responses:
+## Policy
 
-```http
-Content-Security-Policy:
-  default-src 'self';
-  script-src 'self' 'nonce-{nonce}' 'strict-dynamic' https://cdn.jsdelivr.net https://unpkg.com;
-  style-src 'self' 'nonce-{nonce}' https://fonts.googleapis.com https://cdn.jsdelivr.net;
-  font-src 'self' https://fonts.gstatic.com;
-  connect-src 'self' https://*.supabase.co https://*.supabase.net;
-  img-src 'self' data:;
-  frame-ancestors 'none';
-  base-uri 'self';
-  form-action 'self';
+```text
+default-src 'self';
+script-src 'self' 'nonce-<fresh-response-nonce>' 'strict-dynamic';
+style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net;
+font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net;
+connect-src 'self' https://<configured-Supabase-origin>;
+img-src 'self' data:;
+object-src 'none';
+frame-ancestors 'none';
+base-uri 'self';
+form-action 'self'
 ```
 
-### Directive Breakdown
+The Supabase origin is derived from `NEXT_PUBLIC_SUPABASE_URL`. Paths do not
+broaden the origin. Invalid/unsafe source expressions are omitted, leaving only
+`'self'`; there are no wildcard Supabase hosts or unrestricted HTTPS sources.
+Authentication configuration errors continue to fail closed.
 
-| Directive | Value | Purpose |
-|-----------|-------|---------|
-| `default-src` | `'self'` | Fallback for all other directives |
-| `script-src` | `'self' 'nonce-{nonce}' 'strict-dynamic' https://cdn.jsdelivr.net https://unpkg.com` | Allow scripts from same origin, nonce'd inline scripts, strict-dynamic for trusted scripts, and Dash CDN |
-| `style-src` | `'self' 'nonce-{nonce}' https://fonts.googleapis.com https://cdn.jsdelivr.net` | Allow styles from same origin, nonce'd inline styles, Google Fonts CSS, and Dash CDN |
-| `font-src` | `'self' https://fonts.gstatic.com` | Allow fonts from same origin and Google Fonts static files |
-| `connect-src` | `'self' https://*.supabase.co https://*.supabase.net` | Allow fetch/XHR to same origin and Supabase for auth |
-| `img-src` | `'self' data:` | Allow images from same origin and data URIs |
-| `frame-ancestors` | `'none'` | Prevent framing/clickjacking |
-| `base-uri` | `'self'` | Restrict `<base>` tag to same origin |
-| `form-action` | `'self'` | Restrict form submissions to same origin |
+### Trusted scripts and dynamic chunks
 
-## Nonce Generation
+- Jinja's `{{ csp_nonce }}` authorizes the auth template's timeout script and
+  auth bundle, and the landing template's showcase bundle.
+- Dash's index template uses `{%csp_nonce%}` for the manually included auth bundle.
+  Dash does not run Jinja context processors on its index, so an
+  `interpolate_index` override replaces that placeholder.
+- The override adds the response nonce to **only Dash-generated `config`,
+  `scripts`, and `renderer` fragments**. This covers component scripts, registered
+  clientside code (including Dash Pages), and the inline `DashRenderer` bootstrap.
+  It never stamps nonces onto the whole response or untrusted `app_entry` content.
+- `strict-dynamic` permits chunks loaded by trusted scripts, including Dash's
+  asynchronous graph/Plotly modules. Parser-inserted scripts need the nonce in
+  modern CSP3 browsers even if their URL is same-origin. `'self'` supplies a CSP2
+  fallback for local script files. Browsers without nonce support cannot run the
+  inline Dash bootstrap; they are not certified by these Chromium tests.
+- JavaScript `unsafe-inline`, `unsafe-eval`, inline event handlers, and broad
+  script host lists are not enabled. CSP is a defense against injection; it does
+  not establish that a trusted bundle's own code is safe.
 
-- **Algorithm**: `secrets.token_urlsafe(16)` — cryptographically unpredictable, 16 bytes (22 chars URL-safe base64)
-- **Scope**: Per-request, generated in Flask's `before_request` handler
-- **Storage**: Stored in `g.csp_nonce` for access in templates and `after_request`
-- **Freshness**: Unique nonce per response; never reused or derived from user input
+### Explicit CSS compatibility exception
 
-## Template Integration
+The policy permits inline **styles**, including runtime `<style>` elements and
+style attributes used by installed Dash components, React, and Plotly. A script
+nonce alone cannot authorize those styles. A nonce-only style policy blocks
+component-injected CSS and breaks styling. A local Chromium probe observed 59
+`style-src-elem` violations with the nonce-only style policy, including
+`dash_renderer` and `dash_core_components` runtime styles. This is a documented CSS exception,
+not a JavaScript exception or a claim that every resource uses a strict nonce.
+Bootstrap/theme/icon styles use jsDelivr; Google Fonts use the two font origins.
+A future component upgrade can revisit this exception with equivalent browser
+verification. `object-src 'none'` also blocks plugin/object content.
 
-### Auth Pages (`auth.html`)
+## Build and test setup
 
-```html
-<!-- Meta tag for JavaScript access -->
-<meta name="csp-nonce" content="{{ csp_nonce }}">
+Python uses the repository's Python 3.12 environment. `playwright` is pinned as a
+development-only npm dependency and its matching Chromium must be installed:
 
-<!-- Inline timeout script with nonce -->
-<script nonce="{{ csp_nonce }}">
-  setTimeout(function () { ... }, 10000);
-</script>
-
-<!-- External auth bundle with nonce -->
-<script nonce="{{ csp_nonce }}" defer src="/assets/auth.bundle.js"></script>
-```
-
-### Landing Page (`landing.html`)
-
-```html
-<meta name="csp-nonce" content="{{ csp_nonce }}">
-<script nonce="{{ csp_nonce }}" defer src="/assets/showcase.bundle.js"></script>
-```
-
-### Dashboard (`app.py` — Dash index string)
-
-```python
-DASH_INDEX_STRING = """<!DOCTYPE html>
-<html>
-    <head>
-        <meta name="csp-nonce" content="{{ csp_nonce }}">
-        <script nonce="{{ csp_nonce }}" defer src="/assets/auth.bundle.js"></script>
-        {%metas%}
-        {%css%}
-    </head>
-    <body>
-        {%app_entry%}
-        <footer>
-            {%config%}
-            {%scripts%}
-            {%renderer%}
-        </footer>
-    </body>
-</html>"""
-```
-
-## Flask Implementation
-
-### `my-dash-app/auth.py`
-
-1. **Nonce Generation** (`_generate_nonce`):
-   ```python
-   def _generate_nonce() -> str:
-       return secrets.token_urlsafe(16)
-   ```
-
-2. **Context Processor** (injects nonce into templates):
-   ```python
-   @server.context_processor
-   def inject_csp_nonce():
-       return {"csp_nonce": getattr(g, "csp_nonce", None)}
-   ```
-
-3. **Before Request** (generates fresh nonce):
-   ```python
-   @server.before_request
-   def protect():
-       g.csp_nonce = _generate_nonce()
-       # ... auth logic
-   ```
-
-4. **After Request** (applies CSP header):
-   ```python
-   @server.after_request
-   def private(response):
-       # ... existing security headers
-       if response.content_type and response.content_type.startswith("text/html"):
-           nonce = getattr(g, "csp_nonce", None)
-           if nonce:
-               csp_parts = [
-                   "default-src 'self'",
-                   f"script-src 'self' 'nonce-{nonce}' 'strict-dynamic' https://cdn.jsdelivr.net https://unpkg.com",
-                   f"style-src 'self' 'nonce-{nonce}' https://fonts.googleapis.com https://cdn.jsdelivr.net",
-                   "font-src 'self' https://fonts.gstatic.com",
-                   "connect-src 'self' https://*.supabase.co https://*.supabase.net",
-                   "img-src 'self' data:",
-                   "frame-ancestors 'none'",
-                   "base-uri 'self'",
-                   "form-action 'self'",
-               ]
-               response.headers["Content-Security-Policy"] = "; ".join(csp_parts)
-       return response
-   ```
-
-### `my-dash-app/app.py`
-
-- Context processor for Dash templates:
-  ```python
-  @app.context_processor
-  def inject_csp_nonce():
-      return {"csp_nonce": getattr(g, "csp_nonce", None)}
-  ```
-
-- Custom `index_string` with nonce for Dash's auto-injected scripts
-
-## Testing
-
-### Python Tests (`tests/test_csp.py`)
-
-18 tests verify:
-- CSP header presence on all auth routes (`/login`, `/signup`, `/auth/callback`, `/`)
-- Required directives present
-- Allowed external origins (Google Fonts, Supabase, Dash CDN)
-- Nonce in HTML matches CSP header
-- Nonce uniqueness per request
-- No `unsafe-inline` or `unsafe-eval`
-- Static assets (`/assets/*`) do not receive CSP header
-- Dashboard routes (when authenticated) have CSP
-
-Run with:
 ```bash
-.venv/bin/python -B -m pytest tests/test_csp.py -v
+npm ci
+npx playwright install chromium
+.venv/bin/python -B -m unittest discover -s tests -v
+npm run build:auth
+npm run test:auth
 ```
 
-### Browser Tests (`tests/csp-browser.test.mjs`)
+Use an isolated dependency directory/environment when dependencies in a worktree
+are shared with another agent. The repository currently tracks `node_modules`;
+never stage its unrelated installation changes. No shared Python environment
+synchronization is needed for this task.
 
-Browser-based verification using JSDOM to confirm:
-- Inline scripts without nonce are blocked
-- Nonce'd scripts execute correctly
-- External scripts from allowed origins load
-- External scripts from disallowed origins are blocked
-- CSP violation reports would be generated (in report-only mode)
+The existing esbuild script emits escaped strings instead of template literals.
+This preserves dependency string values containing tabs/newlines when repository
+whitespace hooks run and makes repeated builds stable. Both tracked bundles are
+built from source; neither is hand-edited. CI installs matching Chromium with
+`npx playwright install --with-deps chromium` before the browser tests. The
+secret-scanner baseline adds only the verified public literal `password` exposed
+by the changed bundle formatting; scanning remains enabled.
 
-Run with:
-```bash
-npm run test:auth  # Includes CSP browser tests
-```
+### What the verification proves
 
-## Route Coverage
+- `tests/test_csp.py` checks Flask headers, response nonce freshness, policy
+  sources, HTML error handling, and the **actual Dash** index on all page routes.
+  Every generated script has the matching response nonce, and an untrusted
+  `app_entry` script does not receive one. JSON/static responses and unauthorized
+  data requests retain their existing behavior.
+- `tests/csp-browser.test.mjs` launches headless Chromium against the real local
+  Flask/Dash app using the built auth/showcase bundles. Its six test groups cover
+  browser-enforced missing/wrong nonce rejection, blocked `eval`, allowed nonce
+  execution, freshness, password login, signup confirmation, Dash bootstrap and
+  dynamic graph chunks, Plotly rendering, callbacks, page navigation, refresh,
+  sign-out, OAuth launch/exchange, and canceled OAuth recovery.
+- Injection fixtures are inserted into the **HTTP HTML response**. DevTools
+  evaluation has privileged behavior and cannot itself prove CSP enforcement.
+  Tests assert actual `securitypolicyviolation` events with `enforce` disposition.
+- `tests/csp_test_server.py` binds only an ephemeral loopback port. It disables
+  dotenv loading, blocks BigQuery client construction, substitutes synthetic
+  DataFrames and Supabase user-verification responses, and uses an isolated
+  in-memory cache. Rate limiting is disabled only in this browser fixture so
+  independent test contexts do not exhaust a shared limit; production limiter
+  behavior remains exercised by the existing Python auth tests.
+- Browser requests to Supabase are intercepted with fake identities/tokens.
+  External CSS/fonts are fulfilled locally, and unexpected external requests
+  are aborted. No production data, real credentials, or real accounts are used.
+- Existing `auth-browser.test.mjs` retains detailed JSDOM auth-flow tests. JSDOM
+  does **not** enforce CSP; those tests are not described as enforcement evidence.
 
-| Route | CSP Enforced | Notes |
-|-------|--------------|-------|
-| `/login` | ✅ | Auth page with inline timeout script |
-| `/signup` | ✅ | Auth page with inline timeout script |
-| `/auth/callback` | ✅ | OAuth callback (may redirect) |
-| `/` (landing) | ✅ | Public page with showcase bundle |
-| `/dashboard` | ✅ | Protected dashboard (requires auth) |
-| `/customers` | ✅ | Protected page (requires auth) |
-| `/pipeline-health` | ✅ | Protected page (requires auth) |
-| `/assets/*` | ❌ | Static assets — no CSP (cacheable) |
-| `/auth/config` | ❌ | JSON API endpoint |
-| `/auth/session` | ❌ | JSON API endpoint |
-| `/healthz` | ❌ | Health check endpoint |
+These tests certify local Chromium behavior with synthetic data. They do not
+certify live OAuth providers, production CDN content, hosted CI, or a deployment.
+Re-run the gate after integration or dependency changes. The `interpolate_index`
+fragment contract must be reviewed when Dash changes (tested here with 4.4.1).
 
-## Exceptions and Notes
+## Release and rollback
 
-### Dash Component CDN
+CSP can affect client behavior, so review the tested worker commit and verify the
+combined integration candidate before release. This task does not change the
+Docker installation strategy or authorize deployment. The separate Docker
+lock-based installation concern remains outside its scope.
 
-Dash loads component scripts from `cdn.jsdelivr.net` and `unpkg.com`. These are explicitly allowed in `script-src` because:
-- They are required for Dash's dynamic component loading
-- They are served from trusted, versioned CDN URLs
-- `strict-dynamic` allows trusted scripts to load further scripts
+Revert the CSP worker commits through the normal reviewed workflow if required;
+retain authentication/authorization and other phase-1 security fixes. Do not
+replace CSP with broad JavaScript exceptions as an emergency compatibility fix.
 
-### Supabase Connections
+## References
 
-Supabase authentication requires connections to:
-- `https://*.supabase.co` — Main API endpoint
-- `https://*.supabase.net` — Realtime/WebSocket endpoints
-
-These are allowed in `connect-src` only (not in `script-src`).
-
-### No `unsafe-inline` or `unsafe-eval`
-
-The policy deliberately avoids:
-- `'unsafe-inline'` — All inline scripts/styles must have a matching nonce
-- `'unsafe-eval'` — Not needed by the application
-- Wildcard hosts (`https:`) — All external origins are explicitly listed
-
-## Deployment Notes
-
-- The CSP is enforced in production (not report-only)
-- Nonces are generated per-request — no caching of HTML with nonces
-- `Cache-Control: private, no-store` prevents HTML caching
-- `Vary: Cookie` ensures authenticated/unauthenticated responses are cached separately
-
-## Rollback Procedure
-
-If CSP breaks legitimate functionality:
-1. Temporarily switch to report-only mode by changing header to `Content-Security-Policy-Report-Only`
-2. Monitor violation reports
-3. Adjust policy or fix application code
-4. Re-enable enforcement
-
-## Future Considerations
-
-- Consider adding `script-src-attr` and `style-src-attr` for inline event handlers/styles if needed
-- Evaluate `trusted-types` for DOM XSS protection
-- Monitor Dash version upgrades for new CDN requirements
+- [MDN script-src](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/script-src)
+- [MDN style-src](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/style-src)
+- [Flask security headers](https://flask.palletsprojects.com/en/stable/web-security/)

@@ -12,7 +12,8 @@
   },
   "devDependencies": {
     "esbuild": "0.25.12",
-    "prettier": "3.6.2",
-    "jsdom": "26.1.0"
+    "jsdom": "26.1.0",
+    "playwright": "1.64.0",
+    "prettier": "3.6.2"
   }
 }

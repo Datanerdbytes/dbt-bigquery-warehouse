@@ -183,21 +183,37 @@ def install_auth(server):
         if response.content_type and response.content_type.startswith("text/html"):
             nonce = getattr(g, "csp_nonce", None)
             if nonce:
-                # Build CSP policy with nonce for inline scripts
+                # Runtime configuration is the only external auth connection.
+                # Reject invalid source expressions rather than broadening CSP.
+                configured = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "")
+                try:
+                    parsed = urlsplit(configured)
+                except ValueError:
+                    parsed = urlsplit("")
+                connect_origin = ""
+                if (
+                    parsed.scheme == "https"
+                    and parsed.hostname
+                    and not parsed.username
+                    and not parsed.password
+                    and not any(c.isspace() or c in ";'\\" for c in parsed.netloc)
+                ):
+                    connect_origin = f" https://{parsed.netloc}"
                 csp_parts = [
                     "default-src 'self'",
-                    "script-src 'self' 'nonce-{nonce}' 'strict-dynamic' https://cdn.jsdelivr.net https://unpkg.com",
-                    "style-src 'self' 'nonce-{nonce}' https://fonts.googleapis.com https://cdn.jsdelivr.net",
-                    "font-src 'self' https://fonts.gstatic.com",
-                    "connect-src 'self' https://*.supabase.co https://*.supabase.net",
+                    f"script-src 'self' 'nonce-{nonce}' 'strict-dynamic'",
+                    # Dash/Plotly inject styles at runtime and use style attrs.
+                    # This compatibility exception applies to CSS only.
+                    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
+                    "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
+                    f"connect-src 'self'{connect_origin}",
                     "img-src 'self' data:",
+                    "object-src 'none'",
                     "frame-ancestors 'none'",
                     "base-uri 'self'",
                     "form-action 'self'",
                 ]
-                response.headers["Content-Security-Policy"] = "; ".join(
-                    csp_parts
-                ).format(nonce=nonce)
+                response.headers["Content-Security-Policy"] = "; ".join(csp_parts)
 
         return response
 

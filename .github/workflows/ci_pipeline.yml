@@ -47,6 +47,7 @@ jobs:
       - name: Build and test dashboard authentication offline
         run: |
           npm ci
+          npx playwright install --with-deps chromium
           npm run build:auth
           npm run test:auth
           uv run python -B -m unittest discover -s tests -v
