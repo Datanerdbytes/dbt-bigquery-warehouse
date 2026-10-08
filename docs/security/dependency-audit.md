@@ -65,11 +65,11 @@ No vulnerabilities detected in production or development dependencies.
 ## Software Bill of Materials (SBOM)
 
 ### Python SBOM
-- **Location:** `sbom-python.json` (generated via `cyclonedx-py`)
+- **Location:** `sbom-python.json` (generated via `pip-audit` from the lockfile export)
 - **Format:** CycloneDX JSON
 - **Size:** ~275 KB
 - **Packages:** 215 dependencies catalogued
-- **Generated:** `uv run cyclonedx-py environment --of JSON --outfile sbom-python.json`
+- **Generated:** `uv tool run --from pip-audit==2.10.1 pip-audit -r audit-requirements.txt --no-deps --disable-pip --format=cyclonedx-json --output=sbom-python.json`
 
 ### Node.js SBOM
 - **Location:** `sbom-npm.json` (generated via `npm sbom`)
@@ -91,8 +91,8 @@ A new GitHub Actions workflow has been created at `.github/workflows/security_de
 - **Manual:** `workflow_dispatch` for ad-hoc runs
 
 ### Jobs
-1. **python-audit** — Runs `pip-audit`, generates Python SBOM, fails on HIGH/CRITICAL
-2. **npm-audit** — Runs `npm audit`, generates npm SBOM, fails on high/critical
+1. **python-audit** — Runs `pip-audit`, generates Python SBOM, fails on any known vulnerability or scanner error
+2. **npm-audit** — Runs `npm audit`, generates npm SBOM, fails on moderate-or-higher vulnerabilities or scanner errors
 3. **summary** — Aggregates results from both ecosystems
 
 ### Artifacts (90-day retention)
@@ -112,7 +112,7 @@ A new GitHub Actions workflow has been created at `.github/workflows/security_de
 
 ### For CI/CD
 1. The weekly scheduled workflow catches new CVEs in existing dependencies
-2. PR checks block merges introducing HIGH/CRITICAL vulnerabilities
+2. PR checks block any known Python vulnerability and moderate-or-higher npm vulnerabilities
 3. SBOM artifacts provide traceability for compliance audits
 
 ### For Dependencies
@@ -136,9 +136,9 @@ A new GitHub Actions workflow has been created at `.github/workflows/security_de
 
 ### Local Python Audit
 ```bash
-uv sync
-uv run pip-audit --format=json --output=pip-audit-results.json
-uv run cyclonedx-py environment --of JSON --outfile sbom-python.json
+uv export --locked --no-emit-project --output-file audit-requirements.txt
+uv tool run --from pip-audit==2.10.1 pip-audit -r audit-requirements.txt --no-deps --disable-pip --format=json --output=pip-audit-results.json
+uv tool run --from pip-audit==2.10.1 pip-audit -r audit-requirements.txt --no-deps --disable-pip --format=cyclonedx-json --output=sbom-python.json
 ```
 
 ### Local Node.js Audit
@@ -160,3 +160,7 @@ npm run test:auth
 
 **Scheduled:** Next Monday 06:00 UTC via GitHub Actions
 **Manual trigger:** Available in Actions → Security Dependency Audit → Run workflow
+
+## CI reporting correction (2026-10-09)
+
+The Python scan succeeded, but the workflow then requested the unsupported `text` output format. A jq precedence error and skipped artifact upload caused secondary failures. CI now audits the locked project graph with isolated audit tooling, captures the scanner exit status, retains available reports after failures, and reports missing artifacts explicitly. Python gating does not assume a severity field that pip-audit JSON does not provide. Audit reports retain 30 days; SBOMs retain 90 days.
