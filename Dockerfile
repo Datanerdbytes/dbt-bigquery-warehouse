@@ -21,8 +21,14 @@ RUN pip install --no-cache-dir uv gunicorn
 # 3. Copy dependency configs from project root
 COPY pyproject.toml uv.lock ./
 
-# 4. Install dependencies
-RUN uv pip install --system --no-cache -r pyproject.toml
+# 4. Install the locked runtime graph into the same system Python as Gunicorn.
+# --locked rejects manifest/lock drift; --no-deps prevents a fresh resolution.
+# The local package is omitted because the Dash app runs from copied source.
+RUN uv export --locked --no-dev --no-emit-project --format requirements-txt \
+        --output-file /tmp/runtime-requirements.txt \
+    && uv pip install --system --no-cache --no-deps --require-hashes \
+        -r /tmp/runtime-requirements.txt \
+    && rm /tmp/runtime-requirements.txt
 
 # 5. Copy the entire repository into /app
 COPY . .
@@ -34,13 +40,14 @@ WORKDIR /app/my-dash-app
 
 # 7. Drop container privileges: create a non-root system user and switch to it
 #    so the Gunicorn process never runs as root. The cache-directory is the only
-#    runtime write path (Flask-Caching FileSystemCache), so it is pre-created and
-#    handed to the app user while the rest of the image stays root-owned.
+#    data-cache write path (Flask-Caching FileSystemCache). Give the app user
+#    a writable home for Gunicorn runtime files; application source stays root-owned.
 RUN addgroup --system app \
-    && adduser --system --ingroup app app \
-    && mkdir -p /app/my-dash-app/cache-directory \
-    && chown -R app:app /app/my-dash-app/cache-directory
+    && adduser --system --ingroup app --home /home/app app \
+    && mkdir -p /home/app /app/my-dash-app/cache-directory \
+    && chown -R app:app /home/app /app/my-dash-app/cache-directory
 
+ENV HOME=/home/app
 USER app
 
 # 8. Run via Gunicorn production WSGI server (JSON Array format)

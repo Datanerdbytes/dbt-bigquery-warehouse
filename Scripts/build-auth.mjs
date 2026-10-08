@@ -6,6 +6,8 @@ await build({
   minify: true,
   sourcemap: false,
   target: ["es2020"],
+  // Keep string whitespace escaped so Git whitespace hooks preserve its value.
+  supported: { "template-literal": false },
   define: {
     "process.env.NEXT_PUBLIC_SUPABASE_URL": JSON.stringify(
       process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -23,4 +25,6 @@ await build({
   minify: true,
   sourcemap: false,
   target: ["es2020"],
+  // Keep string whitespace escaped so Git whitespace hooks preserve its value.
+  supported: { "template-literal": false },
 });

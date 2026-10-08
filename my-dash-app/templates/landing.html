@@ -3,18 +3,21 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Quantum Echo · Business analytics &amp; pipeline visibility</title>
+    <title>Quantum Echo · Business analytics & pipeline visibility</title>
     <meta
       name="description"
       content="Explore business performance and the data pipelines behind it. Quantum Echo brings sales analytics, customer insights, and pipeline observability into one workspace."
     />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&amp;display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap"
     />
     <link rel="stylesheet" href="/assets/00-theme.css" />
     <link rel="stylesheet" href="/assets/08-auth.css" />
-    <script defer src="/assets/showcase.bundle.js"></script>
+    {% if csp_nonce %}
+    <meta name="csp-nonce" content="{{ csp_nonce }}">
+    {% endif %}
+    <script nonce="{{ csp_nonce }}" defer src="/assets/showcase.bundle.js"></script>
   </head>
   <body class="landing-page">
     <a class="landing-skip-link" href="#landing-main"
@@ -38,7 +41,7 @@
     <main id="landing-main">{% include 'showcase.html' %}</main>
     <footer class="landing-footer">
       <span>Business clarity. Data confidence.</span
-      ><span>Built with BigQuery &amp; dbt</span>
+      ><span>Built with BigQuery & dbt</span>
     </footer>
   </body>
 </html>

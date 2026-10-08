@@ -188,7 +188,9 @@ class AuthTests(unittest.TestCase):
         # 6th request should be rate limited
         response = self.client.get("/login")
         self.assertEqual(response.status_code, 429)
-        self.assertEqual(response.json["error"], auth.GENERIC_AUTH_ERROR)
+        self.assertEqual(response.mimetype, "text/html")
+        self.assertIn('data-auth-page="rate_limited"', response.get_data(as_text=True))
+        self.assertIn("Content-Security-Policy", response.headers)
 
     def test_rate_limiting_on_session_bridge(self):
         """Test that session bridge is rate limited (10 per minute)."""
@@ -211,7 +213,46 @@ class AuthTests(unittest.TestCase):
                 headers={"Origin": ENV["AUTH_APP_ORIGIN"]},
             )
             self.assertEqual(response.status_code, 429)
-            self.assertEqual(response.json["error"], auth.GENERIC_AUTH_ERROR)
+            self.assertEqual(response.json["error"], "rate_limited")
+
+    def test_logout_remains_available_after_session_rate_limit(self):
+        headers = {"Origin": ENV["AUTH_APP_ORIGIN"]}
+        with patch.object(
+            auth, "verify_access", side_effect=auth.AuthError("session_expired", 401)
+        ):
+            for _ in range(10):
+                self.assertEqual(
+                    self.client.post(
+                        "/auth/session", json={}, headers=headers
+                    ).status_code,
+                    401,
+                )
+            self.assertEqual(
+                self.client.post("/auth/session", json={}, headers=headers).status_code,
+                429,
+            )
+        self.client.set_cookie(auth.COOKIE, "expired-cookie")
+        with patch.object(auth, "verify_access") as verify:
+            # Deleting an existing cookie is idempotent and must not verify it.
+            for _ in range(12):
+                response = self.client.delete("/auth/session", headers=headers)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("Max-Age=0", response.headers["Set-Cookie"])
+            verify.assert_not_called()
+        self.assertIsNone(self.client.get_cookie(auth.COOKIE))
+        self.assertEqual(self.client.get("/_dash-layout").status_code, 401)
+        self.loader.assert_not_called()
+
+    def test_logout_still_requires_matching_origin(self):
+        self.client.set_cookie(auth.COOKIE, "existing-cookie")
+        for origin in [None, "null", "https://evil.example.com"]:
+            headers = {"Origin": origin} if origin else {}
+            self.assertEqual(
+                self.client.delete("/auth/session", headers=headers).status_code, 403
+            )
+            self.assertEqual(
+                self.client.get_cookie(auth.COOKIE).value, "existing-cookie"
+            )
 
     def test_rate_limiting_on_config(self):
         """Test that config endpoint is rate limited (30 per minute)."""
@@ -222,7 +263,7 @@ class AuthTests(unittest.TestCase):
         # 31st request should be rate limited
         response = self.client.get("/auth/config")
         self.assertEqual(response.status_code, 429)
-        self.assertEqual(response.json["error"], auth.GENERIC_AUTH_ERROR)
+        self.assertEqual(response.json["error"], "rate_limited")
 
     def test_account_enumeration_protection_generic_error(self):
         """Test that auth errors return generic messages to prevent account enumeration."""
@@ -265,3 +306,196 @@ class AuthTests(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json["error"], auth.GENERIC_AUTH_ERROR)
+
+
+class EmailAllowlistAuditTests(AuthTests):
+    """Regression coverage for case-insensitive exact-email allowlist matching.
+
+    The allowlist in auth.verify_access casefolds both the allowlist
+    entries and the Supabase-returned email, then performs an exact
+    set-membership test.  These tests prove that behaviour so that
+    the "proposed bypass" (case-sensitive or partial match) is not
+    confirmed.
+    """
+
+    # ------------------------------------------------------------------ #
+    # Positive: full-address case-insensitive matching
+    # ------------------------------------------------------------------ #
+
+    def test_allowlist_match_mixed_case_local_part(self):
+        """Mixed-case local part in the allowlist matches any-casing email."""
+        with patch.dict(os.environ, {"AUTH_ALLOWED_EMAILS": "Analyst@Example.com"}):
+            user = dict(USER, email="ANALYST@example.com")
+            with self.remote(user):
+                result = auth.verify_access(token())
+        self.assertEqual(result[0]["email"], "ANALYST@example.com")
+
+    def test_allowlist_match_mixed_case_domain(self):
+        """Mixed-case domain in the allowlist matches lowercase user email."""
+        with patch.dict(os.environ, {"AUTH_ALLOWED_EMAILS": "user@DOMAIN.COM"}):
+            user = dict(USER, email="user@domain.com")
+            with self.remote(user):
+                result = auth.verify_access(token())
+        self.assertEqual(result[0]["email"], "user@domain.com")
+
+    def test_allowlist_match_both_sides_mixed_case(self):
+        """Both allowlist and returned email have mixed case in local+domain."""
+        with patch.dict(os.environ, {"AUTH_ALLOWED_EMAILS": "Admin@Corp.IO"}):
+            user = dict(USER, email="ADMIN@corp.io")
+            with self.remote(user):
+                result = auth.verify_access(token())
+        self.assertEqual(result[0]["email"], "ADMIN@corp.io")
+
+    def test_allowlist_match_uppercase_returned_email(self):
+        """Supabase may return an all-uppercase email; casefold normalises it."""
+        with patch.dict(os.environ, {"AUTH_ALLOWED_EMAILS": "analyst@example.com"}):
+            user = dict(USER, email="ANALYST@EXAMPLE.COM")
+            with self.remote(user):
+                result = auth.verify_access(token())
+        self.assertEqual(result[0]["email"], "ANALYST@EXAMPLE.COM")
+
+    def test_allowlist_whitespace_trimmed(self):
+        """Surrounding whitespace in allowlist entries is stripped before matching."""
+        with patch.dict(os.environ, {"AUTH_ALLOWED_EMAILS": " analyst@example.com , "}):
+            user = dict(USER, email="analyst@example.com")
+            with self.remote(user):
+                result = auth.verify_access(token())
+        self.assertEqual(result[0]["email"], "analyst@example.com")
+
+    def test_allowlist_multiple_entries_match_listed(self):
+        """Multiple comma-separated entries: only explicitly listed addresses match."""
+        with patch.dict(
+            os.environ,
+            {"AUTH_ALLOWED_EMAILS": "admin@example.com,Analyst@Example.com"},
+        ):
+            for email in ("admin@example.com", "analyst@example.com"):
+                user = dict(USER, email=email)
+                with self.remote(user):
+                    result = auth.verify_access(token())
+                self.assertEqual(result[0]["email"], email)
+
+    # ------------------------------------------------------------------ #
+    # Negative: partial / domain-only / lookalike rejection
+    # ------------------------------------------------------------------ #
+
+    def test_allowlist_rejects_different_local_part(self):
+        """A different local part on the same domain is rejected (403)."""
+        with patch.dict(os.environ, {"AUTH_ALLOWED_EMAILS": "analyst@example.com"}):
+            user = dict(USER, email="attacker@example.com")
+            with self.remote(user):
+                with self.assertRaises(auth.AuthError) as ctx:
+                    auth.verify_access(token())
+        self.assertEqual(ctx.exception.code, "approval_required")
+        self.assertEqual(ctx.exception.status, 403)
+
+    def test_allowlist_rejects_suffix_lookalike(self):
+        """Suffix lookalike: analyst@example.com.evil.com is rejected."""
+        with patch.dict(os.environ, {"AUTH_ALLOWED_EMAILS": "analyst@example.com"}):
+            user = dict(USER, email="analyst@example.com.evil.com")
+            with self.remote(user):
+                with self.assertRaises(auth.AuthError) as ctx:
+                    auth.verify_access(token())
+        self.assertEqual(ctx.exception.code, "approval_required")
+
+    def test_allowlist_rejects_prefix_lookalike(self):
+        """Prefix lookalike: analyst@evil.example.com is rejected."""
+        with patch.dict(os.environ, {"AUTH_ALLOWED_EMAILS": "analyst@example.com"}):
+            user = dict(USER, email="analyst@evil.example.com")
+            with self.remote(user):
+                with self.assertRaises(auth.AuthError) as ctx:
+                    auth.verify_access(token())
+        self.assertEqual(ctx.exception.code, "approval_required")
+
+    def test_allowlist_rejects_attacker_subdomain(self):
+        """Attacker-controlled subdomain suffix is rejected."""
+        with patch.dict(os.environ, {"AUTH_ALLOWED_EMAILS": "user@victim.example.com"}):
+            user = dict(USER, email="user@victim.example.com.attacker.example.com")
+            with self.remote(user):
+                with self.assertRaises(auth.AuthError) as ctx:
+                    auth.verify_access(token())
+        self.assertEqual(ctx.exception.code, "approval_required")
+
+    def test_allowlist_rejects_plus_address_variant(self):
+        """Plus-address variant is rejected unless explicitly listed."""
+        with patch.dict(os.environ, {"AUTH_ALLOWED_EMAILS": "analyst@example.com"}):
+            user = dict(USER, email="analyst+tag@example.com")
+            with self.remote(user):
+                with self.assertRaises(auth.AuthError) as ctx:
+                    auth.verify_access(token())
+        self.assertEqual(ctx.exception.code, "approval_required")
+
+    def test_allowlist_accepts_explicitly_listed_plus_address(self):
+        """A plus-address that IS explicitly listed in the allowlist matches."""
+        with patch.dict(os.environ, {"AUTH_ALLOWED_EMAILS": "analyst+tag@example.com"}):
+            user = dict(USER, email="analyst+tag@example.com")
+            with self.remote(user):
+                result = auth.verify_access(token())
+        self.assertEqual(result[0]["email"], "analyst+tag@example.com")
+
+    # ------------------------------------------------------------------ #
+    # Empty / whitespace-only allowlist
+    # ------------------------------------------------------------------ #
+
+    def test_allowlist_empty_denies_everyone(self):
+        """An empty allowlist denies every verified email (403)."""
+        with patch.dict(os.environ, {"AUTH_ALLOWED_EMAILS": ""}):
+            user = dict(USER, email="analyst@example.com")
+            with self.remote(user):
+                with self.assertRaises(auth.AuthError) as ctx:
+                    auth.verify_access(token())
+        self.assertEqual(ctx.exception.code, "approval_required")
+        self.assertEqual(ctx.exception.status, 403)
+
+    def test_allowlist_whitespace_only_denies_everyone(self):
+        """A whitespace-only allowlist denies every verified email (403)."""
+        with patch.dict(os.environ, {"AUTH_ALLOWED_EMAILS": "   ,  \t  "}):
+            user = dict(USER, email="analyst@example.com")
+            with self.remote(user):
+                with self.assertRaises(auth.AuthError) as ctx:
+                    auth.verify_access(token())
+        self.assertEqual(ctx.exception.code, "approval_required")
+        self.assertEqual(ctx.exception.status, 403)
+
+    # ------------------------------------------------------------------ #
+    # Missing / unconfirmed email
+    # ------------------------------------------------------------------ #
+
+    def test_allowlist_missing_email_rejected(self):
+        """A user dict without an email key is rejected (403)."""
+        user = {k: v for k, v in USER.items() if k != "email"}
+        with self.remote(user):
+            with self.assertRaises(auth.AuthError) as ctx:
+                auth.verify_access(token())
+        self.assertEqual(ctx.exception.code, "approval_required")
+        self.assertEqual(ctx.exception.status, 403)
+
+    def test_confirmation_required_before_allowlist(self):
+        """Unconfirmed email is rejected (403) even if on the allowlist."""
+        with patch.dict(os.environ, {"AUTH_ALLOWED_EMAILS": "analyst@example.com"}):
+            user = dict(USER, email_confirmed_at=None)
+            with self.remote(user):
+                with self.assertRaises(auth.AuthError) as ctx:
+                    auth.verify_access(token())
+        self.assertEqual(ctx.exception.code, "email_confirmation_required")
+        self.assertEqual(ctx.exception.status, 403)
+
+    # ------------------------------------------------------------------ #
+    # Fail-closed: denied identity must not invoke data loaders
+    # ------------------------------------------------------------------ #
+
+    def test_allowlist_denial_blocks_data_loader_via_flask(self):
+        """A denied identity does not invoke the protected data loader."""
+        self.client.set_cookie(auth.COOKIE, token())
+        with self.remote(dict(USER, email="disallowed@example.com")):
+            response = self.client.get("/_dash-layout")
+        self.assertEqual(response.status_code, 403)
+        self.loader.assert_not_called()
+
+    def test_allowlist_denial_blocks_data_loader_dashboard_redirect(self):
+        """A denied identity is redirected to /login and never loads data."""
+        self.client.set_cookie(auth.COOKIE, token())
+        with self.remote(dict(USER, email="disallowed@example.com")):
+            response = self.client.get("/dashboard")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/login")
+        self.loader.assert_not_called()

@@ -36,7 +36,10 @@ jobs:
       - name: Install dependencies
         run: |
           uv python install 3.12
-          uv sync
+          uv sync --locked
+
+      - name: Check project types with locked Pyrefly
+        run: uv run --locked pyrefly check
 
       - name: Set up Node for authentication build
         uses: actions/setup-node@v4
@@ -47,31 +50,40 @@ jobs:
       - name: Build and test dashboard authentication offline
         run: |
           npm ci
+          npx playwright install --with-deps chromium
           npm run build:auth
           npm run test:auth
           uv run python -B -m unittest discover -s tests -v
 
       - name: Setup GCP & dbt Profile
+        # Credentials are injected only as a masked repository secret and are
+        # never echoed, logged, or written into the job's artifact/workspace.
+        # The key is materialized into a single, permission-restricted file
+        # (mode 0600, owned by the runner user) and deleted in the cleanup step
+        # regardless of success or failure.
         env:
           GCP_SA_KEY: ${{ secrets.GCP }}
           GCP_PROJECT_ID: quantum-echo-data-eng-prod
         run: |
-          echo "Secret length check: ${#GCP_SA_KEY} characters"
+          set -euo pipefail
+          umask 077
 
-          if [ -z "$GCP_SA_KEY" ]; then
-            echo "❌ ERROR: secrets.GCP_SA_KEY is empty or unavailable in this runner context."
+          if [ -z "${GCP_SA_KEY:-}" ]; then
+            echo "ERROR: secrets.GCP_SA_KEY is empty or unavailable in this runner context."
             echo "Ensure the secret 'GCP_SA_KEY' is created under Settings -> Secrets and variables -> Actions -> Repository secrets."
             exit 1
           fi
 
+          # Write the key to a single restricted file. The file path is the only
+          # thing that can appear in logs; the secret value never does.
           python3 -c "
           import os, json
           key_str = os.environ.get('GCP_SA_KEY', '')
           data = json.loads(key_str)
           with open('/tmp/gcp_key.json', 'w') as f:
               json.dump(data, f)
-          print('✅ GCP Service Account Key written and validated successfully.')
           "
+          chmod 600 /tmp/gcp_key.json
 
           PROJ_ID="${GCP_PROJECT_ID:-quantum-echo-data-eng-prod}"
 
@@ -92,6 +104,7 @@ jobs:
                 job_retries: 1
                 priority: interactive
           EOF
+          chmod 600 ~/.dbt/profiles.yml
 
       - name: Run dbt Compile & Test
         run: |
@@ -103,8 +116,14 @@ jobs:
       - name: Cleanup Service Account Key & Profile
         if: always()
         run: |
+          set -euo pipefail
+          # Remove the credential materialization and the dbt profile on both
+          # success and failure so no secret-bearing file is left behind.
           rm -f /tmp/gcp_key.json
           rm -rf ~/.dbt
+          # Belt-and-suspenders: nothing outside /tmp and ~/.dbt should hold a
+          # copy of the key, but make sure the env var is unset for this step.
+          unset GCP_SA_KEY
 
   deploy-cloud-run:
     needs: validate-and-test
@@ -116,6 +135,10 @@ jobs:
         uses: actions/checkout@v4.2.2
 
       - name: Google Auth
+        # The google-github-actions/auth action handles the credential JSON
+        # server-side. It is passed as a registered secret input, which GitHub
+        # masks in logs, and the action never writes it to a world-readable
+        # location or includes it in command arguments.
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP }}
@@ -128,9 +151,10 @@ jobs:
 
       - name: Build and Push Docker Image
         run: |
+          set -euo pipefail
           IMAGE_TAG="us-central1-docker.pkg.dev/quantum-echo-data-eng-prod/dash-repo/dash-observability-app:${{ github.sha }}"
-          docker build -t $IMAGE_TAG .
-          docker push $IMAGE_TAG
+          docker build -t "$IMAGE_TAG" .
+          docker push "$IMAGE_TAG"
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2

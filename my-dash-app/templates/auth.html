@@ -12,6 +12,23 @@
     />
     <link rel="stylesheet" href="/assets/00-theme.css" />
     <link rel="stylesheet" href="/assets/08-auth.css" />
+    {% if csp_nonce %}
+    <meta name="csp-nonce" content="{{ csp_nonce }}">
+    {% endif %}
+    {% if csp_nonce %}
+    <script nonce="{{ csp_nonce }}">
+      setTimeout(function () {
+        if (!window.qeAuthStarted) {
+          var e =
+            document.getElementById("auth-loading") ||
+            document.getElementById("auth-session-loading");
+          if (e)
+            e.textContent =
+              "Authentication did not load. Reload the page or contact your administrator.";
+        }
+      }, 10000);
+    </script>
+    {% else %}
     <script>
       setTimeout(function () {
         if (!window.qeAuthStarted) {
@@ -24,7 +41,8 @@
         }
       }, 10000);
     </script>
-    <script defer src="/assets/auth.bundle.js"></script>
+    {% endif %}
+    <script nonce="{{ csp_nonce }}" defer src="/assets/auth.bundle.js"></script>
   </head>
   <body class="auth-page auth-dedicated">
     <main class="auth-shell">

@@ -313,3 +313,14 @@ test("public landing slideshow works without authentication and preserves focus"
   assert.equal(w.document.getElementById("auth-slide-analytics").hidden, false);
   dom.window.close();
 });
+
+test("throttled login page explains retry without starting auth requests", async () => {
+  const { w, calls } = await fixture("rate_limited");
+  assert.match(
+    w.document.getElementById("auth-message").textContent,
+    /Too many authentication requests/,
+  );
+  assert.equal(calls.length, 0);
+  assert.equal(w.document.getElementById("auth-content").hidden, true);
+  w.close();
+});

@@ -478,7 +478,9 @@ def update_top_customers_table(filter_data):
     )
 
     top_cust["customer_name"] = (
-        top_cust["first_name"].fillna("") + " " + top_cust["last_name"].fillna("")
+        top_cust["first_name"]
+        .fillna("")
+        .str.cat(top_cust["last_name"].fillna(""), sep=" ")
     )
 
     column_defs = [

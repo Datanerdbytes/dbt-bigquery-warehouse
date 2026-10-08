@@ -13,6 +13,7 @@ const ready = new Promise((resolve) => {
   resolveReady = resolve;
 });
 const messages = {
+  rate_limited: "Too many authentication requests. Wait a minute and retry.",
   approval_required:
     "Your email is verified. An administrator must approve your account before you can access this workspace.",
   email_confirmation_required: "Confirm your email address before signing in.",
@@ -240,6 +241,7 @@ async function boot() {
       );
       resolveReady(false);
     }, 20000);
+    if (mode === "rate_limited") throw new Error(messages.rate_limited);
     client = await getSupabaseClient(nativeFetch);
     document.addEventListener("click", (event) => {
       if (event.target.closest("#auth-signout, #dashboard-signout"))

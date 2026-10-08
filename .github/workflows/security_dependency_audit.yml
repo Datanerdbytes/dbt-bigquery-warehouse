@@ -1,0 +1,193 @@
+name: Security Dependency Audit
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/security_dependency_audit.yml'
+      - 'tests/test_dependency_audit_workflow.py'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/security_dependency_audit.yml'
+      - 'tests/test_dependency_audit_workflow.py'
+
+jobs:
+  python-audit:
+    name: Python Dependency Audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Install Python and dependencies
+        run: |
+          uv python install 3.12
+          uv export --quiet --locked --no-emit-project --output-file audit-requirements.txt
+
+      - name: Run pip-audit
+        id: python_scan
+        run: |
+          status=0
+          uv tool run --from pip-audit==2.10.1 pip-audit \
+            --requirement audit-requirements.txt --no-deps --disable-pip \
+            --format=json --output=pip-audit-results.json || status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Upload pip-audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-results
+          path: pip-audit-results.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Generate Python SBOM
+        if: ${{ !cancelled() && steps.python_scan.outputs.status != '' && steps.python_scan.outputs.status != '2' }}
+        run: |
+          uv tool run --from pip-audit==2.10.1 pip-audit \
+            --requirement audit-requirements.txt --no-deps --disable-pip \
+            --format=cyclonedx-json --output=sbom-python.json
+
+      - name: Upload Python SBOM
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-python
+          path: sbom-python.json
+          retention-days: 90
+
+      # pip-audit JSON does not supply severity. Preserve its strict policy:
+      # any known vulnerability or scanner failure blocks this job.
+      - name: Enforce Python audit result
+        if: always()
+        env:
+          AUDIT_STATUS: ${{ steps.python_scan.outputs.status }}
+        run: |
+          if [ "$AUDIT_STATUS" != "0" ]; then
+            echo "::error::Python audit found vulnerabilities or failed (status: ${AUDIT_STATUS:-unavailable})"
+            exit 1
+          fi
+          jq -e '.dependencies | type == "array"' pip-audit-results.json > /dev/null
+          VULN_COUNT=$(jq '[.dependencies[] | select(((.vulns // []) | length) > 0)] | length' pip-audit-results.json)
+          echo "Python vulnerable packages: $VULN_COUNT"
+          test "$VULN_COUNT" -eq 0
+
+  npm-audit:
+    name: Node.js Dependency Audit (npm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        id: npm-audit
+        run: |
+          npm audit --json --audit-level=moderate > npm-audit-results.json || true
+          npm audit --audit-level=moderate
+
+      - name: Upload npm audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-results
+          path: npm-audit-results.json
+          retention-days: 30
+
+      - name: Generate npm SBOM
+        run: |
+          npm sbom --sbom-format=cyclonedx --json > sbom-npm.json
+
+      - name: Upload npm SBOM
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-npm
+          path: sbom-npm.json
+          retention-days: 90
+
+      - name: Fail on high/critical vulnerabilities
+        if: always()
+        run: |
+          if [ -f npm-audit-results.json ]; then
+            HIGH_CRITICAL=$(jq '[.vulnerabilities[] | select(.severity == "high" or .severity == "critical")] | length' npm-audit-results.json)
+            echo "High/Critical vulnerabilities: $HIGH_CRITICAL"
+            if [ "$HIGH_CRITICAL" -gt 0 ]; then
+              echo "::error::Found $HIGH_CRITICAL high/critical npm vulnerabilities"
+              exit 1
+            fi
+          fi
+
+  summary:
+    name: Audit Summary
+    needs: [python-audit, npm-audit]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download Python audit results
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: pip-audit-results
+          path: python-audit
+
+      - name: Download npm audit results
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-audit-results
+          path: npm-audit
+
+      - name: Print summary
+        if: always()
+        env:
+          PYTHON_RESULT: ${{ needs.python-audit.result }}
+          NPM_RESULT: ${{ needs.npm-audit.result }}
+        run: |
+          echo "Python audit job: $PYTHON_RESULT"
+          echo "npm audit job: $NPM_RESULT"
+          missing=0
+          if [ -f python-audit/pip-audit-results.json ]; then
+            PY_VULN=$(jq '[.dependencies[] | select(((.vulns // []) | length) > 0)] | length' python-audit/pip-audit-results.json)
+            echo "Python vulnerable packages: $PY_VULN"
+          else
+            echo "::error::Python audit report unavailable; check the Python job logs"
+            missing=1
+          fi
+          if [ -f npm-audit/npm-audit-results.json ]; then
+            NPM_VULN=$(jq '.vulnerabilities | length' npm-audit/npm-audit-results.json)
+            echo "npm vulnerable packages: $NPM_VULN"
+          else
+            echo "::error::npm audit report unavailable; check the npm job logs"
+            missing=1
+          fi
+          test "$missing" -eq 0
+          test "$PYTHON_RESULT" = "success"
+          test "$NPM_RESULT" = "success"

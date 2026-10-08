@@ -141,6 +141,13 @@ repos:
   # ==================================================
   - repo: local
     hooks:
+      - id: pyrefly-check
+        name: Pyrefly (project type checking)
+        entry: uv run --locked pyrefly check
+        language: system
+        pass_filenames: false
+        always_run: true
+
       # ------------------------------------------------
       # Python Tests
       # ------------------------------------------------
