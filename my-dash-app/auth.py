@@ -3,6 +3,7 @@
 import base64
 import json
 import os
+import secrets
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -29,6 +30,11 @@ PUBLIC_ASSETS = {
     "/assets/auth.bundle.js",
     "/assets/showcase.bundle.js",
 }
+
+
+def _generate_nonce() -> str:
+    """Generate a cryptographically random CSP nonce."""
+    return secrets.token_urlsafe(16)
 
 
 class AuthError(Exception):
@@ -124,8 +130,16 @@ def install_auth(server):
     # Register custom 429 error handler
     server.register_error_handler(429, _rate_limit_exceeded_handler)
 
+    @server.context_processor
+    def inject_csp_nonce():
+        """Inject CSP nonce into templates for auth pages."""
+        return {"csp_nonce": getattr(g, "csp_nonce", None)}
+
     @server.before_request
     def protect():
+        # Generate CSP nonce for HTML responses
+        g.csp_nonce = _generate_nonce()
+
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             try:
                 _, _, origin, _ = settings()
@@ -164,6 +178,43 @@ def install_auth(server):
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
+
+        # Add CSP header for HTML responses
+        if response.content_type and response.content_type.startswith("text/html"):
+            nonce = getattr(g, "csp_nonce", None)
+            if nonce:
+                # Runtime configuration is the only external auth connection.
+                # Reject invalid source expressions rather than broadening CSP.
+                configured = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "")
+                try:
+                    parsed = urlsplit(configured)
+                except ValueError:
+                    parsed = urlsplit("")
+                connect_origin = ""
+                if (
+                    parsed.scheme == "https"
+                    and parsed.hostname
+                    and not parsed.username
+                    and not parsed.password
+                    and not any(c.isspace() or c in ";'\\" for c in parsed.netloc)
+                ):
+                    connect_origin = f" https://{parsed.netloc}"
+                csp_parts = [
+                    "default-src 'self'",
+                    f"script-src 'self' 'nonce-{nonce}' 'strict-dynamic'",
+                    # Dash/Plotly inject styles at runtime and use style attrs.
+                    # This compatibility exception applies to CSS only.
+                    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
+                    "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
+                    f"connect-src 'self'{connect_origin}",
+                    "img-src 'self' data:",
+                    "object-src 'none'",
+                    "frame-ancestors 'none'",
+                    "base-uri 'self'",
+                    "form-action 'self'",
+                ]
+                response.headers["Content-Security-Policy"] = "; ".join(csp_parts)
+
         return response
 
     @server.get("/auth/config")

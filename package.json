@@ -5,14 +5,15 @@
   "type": "module",
   "scripts": {
     "build:auth": "node Scripts/build-auth.mjs",
-    "test:auth": "node --test tests/auth-browser.test.mjs"
+    "test:auth": "node --test tests/auth-browser.test.mjs tests/csp-browser.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.100.0"
   },
   "devDependencies": {
     "esbuild": "0.25.12",
-    "prettier": "3.6.2",
-    "jsdom": "26.1.0"
+    "jsdom": "26.1.0",
+    "playwright": "1.64.0",
+    "prettier": "3.6.2"
   }
 }
