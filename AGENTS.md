@@ -209,3 +209,154 @@ defaultColDef = {"filter": True, "sortable": True}
 - Edit `auth_frontend/` sources, then run `npm ci` and `npm run build:auth`. Never fix authentication by editing only the generated bundle or disabling the server guard. Exclude the bundle from Dash auto-injection and load it exactly once through the index template.
 - Commit the backend, templates, CSS, frontend sources, generated tracked bundle, package manifests, build script, and Docker integration together. Docker builds the bundle in a Node stage and runs only Python/Gunicorn in the final image.
 - After auth changes, run `.venv/bin/python -B -m unittest discover -s tests -v` and `npm run test:auth`. Verify unauthenticated page/data access, approval and confirmation checks, expiry/refresh, logout, OAuth errors, and loading states without querying production BigQuery or creating real accounts.
+
+## 13. Parallel Development & Integration Policy
+
+### 13.1 Scope, precedence, and actual capabilities
+
+- Sections 1–12 remain in force for every role and worktree. This section adds coordination rules; it does not relax architecture, authentication, production safety, credential handling, or testing requirements. If a task or integration plan conflicts with an existing requirement, report the conflict before acting.
+- `AGENTS.md` is policy, not an executable scheduler, a filesystem lock, or merge authorization. It does not itself launch sessions, assign tasks, configure Agent Manager, run checks, merge branches, or enforce permissions.
+- Kilo Agent Manager supports isolated worktree sessions. Its extension `agent_manager` tool can orchestrate sessions when available and permitted; otherwise the user must perform the session-management steps. Check the installed version and available tools before promising automation.
+- Separate sessions inside the same worktree share files, branch, and terminal state. Use separate worktrees for concurrent writers. Independent Agent Manager sessions do not automatically share a Swarm board; maintain explicit coordination records and deliver updates to the affected sessions.
+- Automated integration requires a scoped user instruction, an assigned integrator, available Git/Agent Manager tools, and permission to perform the proposed operations. Record that authorization once; do not ask again for routine actions already covered by it. This file alone grants no authorization to push, merge PRs, promote to `main`, deploy, delete worktrees/branches, or access production.
+
+### 13.2 Roles and single-writer rule
+
+- **Coordinator:** Decompose work, identify dependencies and shared contracts, assign ownership, communicate decisions, and maintain the authoritative task/integration queue. The coordinator may also serve as integrator, but must perform both roles' checks.
+- **Worker:** Implement only its assigned task in its recorded worktree, preserve existing requirements, run checks, and deliver a handoff tied to an exact commit. Workers do not integrate their own branches into `integration` or `main`.
+- **Integrator:** Review handoffs and diffs, integrate ready commits in dependency order, resolve only unambiguous conflicts, verify the combined result, and record acceptance or failure. Only one integrator may write the integration target at a time.
+- **User:** Decide unresolved business/architecture conflicts and authorize release, production operations, or cleanup where not already authorized.
+- Never edit another active worker's checkout, switch its branch, reset its state, or run commands in its terminal. Send the requested change to its owner. Read-only inspection is allowed.
+
+### 13.3 Plan and task ownership before launching workers
+
+Use `integration` as the intended development base and integration target for this workflow. Confirm it exists and identify its upstream; do not silently substitute `main` or create/reset it from an assumed baseline. Existing branch restrictions and remote protections still apply.
+
+Before parallel editing, create one authoritative batch record in the coordinator's checkout, for example `docs/agent-work/<batch-id>.md`. Only the coordinator/integrator writes that record. Workers send updates through session messages; they must not create competing copies of the queue in their branches. Do not store secrets in records or prompts.
+
+Record the following for each task and include it in the worker's launch prompt:
+
+```text
+Batch / task ID:
+Objective and acceptance criteria:
+Owner / Agent Manager session ID:
+Branch / absolute worktree path:
+Base branch / remote / exact base commit:
+Owned paths (including specific tests):
+Allowed shared-file edits and designated owner:
+Out-of-scope paths and behavior:
+Dependencies / required commit or contract version:
+Interface contract (IDs, columns/dtypes, function signatures, routes):
+Required checks and safe test environment:
+Allocated ports / caches / temporary resources:
+Authorized operations (commit, push, integration target, cleanup):
+Status / handoff commit / blockers:
+```
+
+- Parallelize tasks with disjoint edits and compatible contracts. Serialize dependencies or agree an explicit interface first; do not guess another worker's unfinished implementation.
+- Assign tests as well as application files. Two workers editing `tests/test_dashboard_regressions.py` still overlap even when their page files differ.
+- Keep task scope narrow. Start with a small batch; increase concurrency only when review and integration can keep up. A dependency blocked worker may do independent read-only investigation, but must not claim the dependent task is complete.
+- Use explicit statuses: `planned`, `running`, `blocked`, `ready-for-review`, `integrating`, `verification-failed`, `integrated`, `closed`. Worker completion means ready for review; only the integrator declares integration successful.
+
+### 13.4 Shared files and cross-task contracts
+
+- Default to one owner per shared file per batch. Treat `AGENTS.md`, `CLAUDE.md`, root `utils/`, `my-dash-app/app.py`, `auth.py`, `data_loader.py`, `app_observability.py`, `theme.py`, `assets/00-theme.css`, shared components, dependency manifests/locks, `Dockerfile`, CI, `run_pipeline.sh`, and dbt project/package/source definitions as coordination-sensitive. This list supplements each task's explicit path ownership.
+- Before changing a shared file outside the assignment, send the coordinator the exact path, required change, affected consumers, and dependency impact. Continue independent in-scope work while ownership is resolved. The coordinator either expands the assignment explicitly or assigns a separate prerequisite task; silence is not approval.
+- Ownership records are procedural agreements, not automatic locks. Confirm there is no concurrent writer before changing a shared checkout. Avoid repository-wide formatting, mass renames, and unrelated cleanup during parallel batches.
+- Agree contracts for Dash component IDs/callback outputs, prepared dataset columns and dtypes, cache keys/TTL behavior, authentication routes/response codes, and dbt model/source schemas before dependent work. Notify consumers when a contract changes; update their task records and tests.
+- Assign dependency changes to one owner. Regenerate each lockfile with its normal tool from the resolved manifest; do not manually splice conflicting lockfile contents. Preserve the existing rule to build tracked auth bundles from frontend sources and commit the related integration files together.
+- Shared-file ownership does not authorize bypassing authentication, changing production schemas, or weakening tests. Architectural or safety conflicts require escalation.
+
+### 13.5 Branch and worktree lifecycle
+
+1. Inspect repository status, current branch, upstream, existing worktrees, and any merge/rebase in progress. Preserve pre-existing user changes. Do not reset, clean, or overwrite a checkout to make it usable.
+2. In the primary repository, configure the project's Agent Manager Default Base Branch as `integration`, or explicitly select it when creating each worktree. This is a separate Agent Manager setting; this document does not set it. Verify the actual branch and base commit after creation.
+3. Use one unique task branch and managed worktree per worker, for example `agent/<batch-id>/<task-id>`. Record the actual path; do not assume the directory name equals the branch name. Never check out a branch already in use by another worktree or make direct worker commits on `main` or `integration`.
+4. Establish a known current base without destructive resets. If the local base and its upstream diverge, resolve the intended source before launching work. Prefer the same recorded baseline for independent tasks; launch dependent tasks from the verified integration result that contains their prerequisite.
+5. Prepare each worktree using existing project setup conventions and Python 3.12/uv and Node 22+/npm requirements. Keep credentials local and server-side; never copy secret files into tracked paths or print their contents. A setup script may prepare dependencies, but must not run ingestion, deployment, database writes, or `run_pipeline.sh` by default.
+6. Allocate unique local ports, writable cache directories, test outputs, container names, and temporary resources where supported. FileSystemCache paths must not collide across concurrent runs. Redis caches need a supported per-worktree namespace or isolated test instance. Do not modify production cache state or shared cloud resources to simulate isolation.
+7. Commit only reviewed task files; inspect staged changes and exclude secrets, runtime artifacts, and unrelated edits. Preserve the project's explicit requirements for tracked generated auth bundles. No force pushes, destructive resets, or Git stash in worktrees: stashes are shared across the repository. Prefer clean task commits; if a temporary recovery commit/copy is necessary, record and verify it and keep unfinished work out of accepted integration commits.
+8. When the base advances, coordinate an update at a safe checkpoint. `/update-from-base` uses a managed worktree's saved base; verify it is the intended `integration` source. Changing the default setting or diff comparison base does not change an existing worktree's saved base. For local-only/unpublished integration commits, explicitly establish the correct source rather than assuming a fetched remote contains them. Preserve and verify staged, unstaged, and untracked edits before updating; stop if preservation cannot be verified.
+9. After any update or worker revision, rerun affected checks and issue a new handoff commit. Previous validation does not certify the new commit. Check Kilo's push-related settings before invoking updates; do not allow automatic push behavior beyond the recorded authorization.
+
+### 13.6 Worker handoff
+
+Freeze the submitted commit while it is reviewed. If further work is needed, notify the integrator and submit a new SHA rather than silently moving the accepted branch head.
+
+```text
+Task / owner / session:
+Branch / worktree / base SHA / submitted head SHA:
+Acceptance criteria met:
+Changed files and purpose:
+Shared contracts / dependency / generated-file changes:
+Required predecessor tasks and commit SHAs:
+Exact check commands, results, and tested SHA:
+Skipped or unavailable checks and reason:
+Manual verification and safe environment used:
+Known limitations / conflicts / production impact:
+Working tree clean? Outstanding edits/untracked files:
+Rollback considerations / resources retained:
+Requested next action:
+```
+
+- Run all task-relevant checks from sections 11 and 12 and the existing CI configuration. Include meaningful regression coverage required by section 11. Do not disable a failing guard, delete a test, or replace a failure with a success claim.
+- Separate reproducible baseline failures from newly introduced failures and provide evidence. A skipped check, unavailable runtime, missing dependency, or unavailable credentials is not a passing check.
+- A handoff may report a blocker without committing incomplete work as ready. Do not send credential contents or production data as evidence.
+
+### 13.7 Serialized automated integration
+
+The integrator may execute this sequence without repeated confirmation when the user has already authorized the batch and target. Workers' passing checks are necessary evidence; the combined tree needs its own verification.
+
+1. Confirm scope, target, merge method, permission, ownership, and a clean integration checkout. Inspect each handoff's exact commits and diff, including unexpected files, secrets, shared contracts, missing generated outputs, and dependencies. Do not integrate a branch that has moved beyond its submitted SHA without a refreshed handoff.
+2. Record the target's current SHA and order tasks by prerequisites, integrating foundational changes first. Reject out-of-scope or incomplete work rather than silently dropping hunks. Do not mix Apply to local, cherry-picking, and branch merging for the same contribution.
+3. Prefer an isolated candidate branch/worktree such as `integrate/<batch-id>` created from the recorded current `integration` SHA. Merge each accepted submitted commit there using the agreed merge method; do not pull an unchecked moving branch head. Keep the integration queue single-writer.
+4. After each merge, inspect the combined diff and run affected checks. For ordinary integration fixes within the authorized scope, preserve both tasks' intended behavior, commit the fix separately, record it, and rerun checks. If an intent decision or unsafe operation is required, follow section 13.8.
+5. Before accepting the candidate, run the full verification gate in section 13.9 on its exact head. Mark failures as `verification-failed` and retain the candidate for diagnosis; do not promote it.
+6. Recheck the actual `integration` head immediately before promotion. If it changed, incorporate the new target into the candidate and rerun the gate on the new combined head. If unchanged and authorized, fast-forward `integration` to the verified candidate. Coordinate checkout ownership; do not switch or update a branch being edited by another session. If fast-forward is unavailable, stop and reassess instead of resetting the target.
+7. Record the resulting SHA, accepted task SHAs, conflict resolutions, checks, and remaining blockers. A push to the integration upstream needs existing authorization and must respect protections/CI. PR merges and GitHub auto-merge are separate configured operations, not consequences of this policy.
+8. Keep `integration` → `main`, release, Cloud Run deployment, and production changes outside routine batch integration unless the user explicitly authorizes them. Inspect whether a push would trigger deployment in existing CI before treating it as a routine remote update.
+
+An explicitly authorized direct-to-`integration` workflow may be used instead of a candidate branch. Preserve a recoverable pre-merge SHA, verify after each merge, and stop subsequent integration on failure. Use a reviewed revert when authorized if recovery is needed; never rewrite a shared target with a reset or force push.
+
+### 13.8 Conflict handling and escalation
+
+- Resolve a textual conflict autonomously only when both intents and the correct combined behavior are clear from the tasks, contracts, and tests. Inspect the full affected behavior, not just conflict markers. Never choose all `ours`/`theirs` merely to make Git finish.
+- Resolve generated-file conflicts by reconciling sources and rebuilding with the existing toolchain. Recheck the resulting changes. A clean merge can still break callback wiring, schemas, data types, cache behavior, or authorization.
+- Stop the affected merge for incompatible business logic or API/schema contracts, ambiguous ownership, auth/allowlist/cookie changes with unclear intent, destructive production operations, or unexplained failing checks. Continue unrelated safe tasks only if they do not depend on the blocked result.
+- Report task IDs, branches/SHAs, affected paths, each side's intended behavior, failure evidence, recovery state, and the smallest decision needed. Keep secrets out of reports.
+- Preserve the conflict state for inspection or abort only the merge initiated by this integrator after verifying recoverability. Do not abort another session's pre-existing operation, discard user edits, or mark the task integrated while conflicts remain.
+
+### 13.9 Integration verification gate
+
+Run checks from the repository root of the combined candidate. Preserve the existing commands exactly:
+
+```bash
+.venv/bin/python -B -m unittest discover -s tests -v
+npm run build:auth
+npm run test:auth
+```
+
+- The full offline Python suite is required for every accepted batch. Keep the production BigQuery client guard and cache stubs intact. Build the auth bundle before running browser authentication tests; verify whether rebuilding leaves tracked bundle changes, and include required changes before certifying the final SHA.
+- For auth work, also follow all section 12 checks: unauthenticated page/data access, confirmation and approval, expiry/refresh, logout, OAuth errors, and loading states without production BigQuery queries or real-account creation.
+- Run applicable existing CI, formatting, and dbt validation checks using the repository's actual configured commands. Inspect `.github/workflows/ci_pipeline.yml` first; do not invent commands or blindly run deployment steps locally. dbt checks must use a verified safe target. Do not execute `dbt clean`, ingestion, artifact upload, `run_pipeline.sh`, or production-connected dashboard queries as routine verification.
+- Check the combined Dash component IDs, callback inputs/outputs, page routes, prepared-data contracts, read-only shared frames, dtypes, cache behavior, auth ordering, and any dbt producer/consumer contracts affected by the batch. Use offline fixtures/mocks; visually verify UI changes when relevant.
+- Inspect final status and diff for conflict markers, unrelated changes, credentials, generated/runtime artifacts, and unintended dependency churn. Confirm acceptance criteria and record the exact tested head SHA, command outcomes, and remaining limitations.
+- If a required check cannot run, report the batch as awaiting verification and retain its worktrees. Do not promote it as verified. Any changes after the gate require relevant checks again; a changed target requires checks on the new combined result.
+
+### 13.10 Cleanup and recovery
+
+- Treat cleanup as a separate recorded step after successful integration and any required remote acceptance. Completion alone is not permission to delete a worktree or branch.
+- Before authorized cleanup, stop its sessions/processes, verify staged/unstaged/untracked files, confirm accepted work exists in the target, and preserve any unmerged work and required recovery references. For squash/rebase integrations, verify accepted changes explicitly rather than relying only on Git ancestry.
+- Use Agent Manager's managed lifecycle for managed worktrees. Check the installed version's close behavior and confirmation: official documentation differs on whether closing also deletes the local branch. Assume closing may delete both checkout and branch until verified. Preserve needed commits in a recovery ref outside the potentially deleted branch before closing. Never remove `.kilo/worktrees/` directories manually while registered or active.
+- Delete remote branches only when separately authorized and no task/PR still needs them. Do not delete `main`, `integration`, or another agent's branch.
+- Clean up only the task's allocated local resources. Worktree closure does not imply external containers, caches, databases, or cloud resources are removed. Production cleanup still requires the explicit, multi-turn confirmation in sections 9 and 10.
+- Finish the batch record with integrated SHAs, verification evidence, retained recovery refs, cleanup actions, and any unresolved tasks.
+
+### 13.11 Kilo capability references
+
+Documentation checked on 2026-10-08; verify against the installed extension before using version-dependent actions:
+
+- [Agent Manager](https://kilo.ai/docs/automate/agent-manager): project base settings, isolated/shared sessions, recorded-base updates, orchestration tools, and managed lifecycle.
+- [Agent Manager Workflows](https://kilo.ai/docs/automate/agent-manager-workflows): integration choices, dependency ordering, shared-worktree coordination, Swarm boundaries, and stash cautions.
+
+These references describe available mechanisms. The ownership, authorization, verification, and cleanup requirements above are project policy and must be carried out by an assigned agent or the user.
