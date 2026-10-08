@@ -2,9 +2,17 @@ import dash
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
+
+# pyrefly: ignore [missing-import]
 from components.filter_bar import create_filter_bar
+
+# pyrefly: ignore [missing-import]
 from components.kpi_bar import create_kpi_bar
+
+# pyrefly: ignore [missing-import]
 from components.panels import chart_panel, create_grid, loading, panel
+
+# pyrefly: ignore [missing-import]
 from components.revenue_chart import map_figure, normalize_view, revenue_menu
 from dash import (
     Input,
@@ -16,9 +24,14 @@ from dash import (
     html,
     no_update,
 )
+
+# pyrefly: ignore [missing-import]
 from data_loader import get_prepared_dataset
+
+# pyrefly: ignore [missing-import]
 from theme import COLORS, style_figure
 
+# pyrefly: ignore [missing-import]
 from utils.helpers import calculate_pop_badge, filter_dataframe, format_compact_number
 
 # Register Page
@@ -651,6 +664,7 @@ def toggle_product_modal(
     if not ctx.triggered:
         return False, "", None, None
 
+    # pyrefly: ignore [unsupported-operation]
     trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
     if trigger_id == "close-modal-btn":

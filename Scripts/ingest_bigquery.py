@@ -11,7 +11,10 @@ from google.oauth2 import service_account
 from sqlalchemy import create_engine
 from sqlalchemy import exc as sqla_exc
 
+# pyrefly: ignore [missing-import]
 from utils.audit_logger import log_execution_to_bigquery
+
+# pyrefly: ignore [missing-import]
 from utils.logging_config import get_logger, sanitize_exception
 
 # 1. Load environment variables from .env file
@@ -195,6 +198,7 @@ def extract_and_load():
 
 
 if __name__ == "__main__":
+    # pyrefly: ignore [missing-import]
     from utils.logging_config import setup_logging
 
     setup_logging()

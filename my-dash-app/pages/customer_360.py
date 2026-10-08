@@ -2,13 +2,24 @@ import dash
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
+
+# pyrefly: ignore [missing-import]
 from components.filter_bar import create_filter_bar
+
+# pyrefly: ignore [missing-import]
 from components.kpi_bar import create_kpi_bar
+
+# pyrefly: ignore [missing-import]
 from components.panels import chart_panel, create_grid, loading, panel
 from dash import Input, Output, callback, html
+
+# pyrefly: ignore [missing-import]
 from data_loader import get_prepared_dataset
+
+# pyrefly: ignore [missing-import]
 from theme import COLORS, style_figure
 
+# pyrefly: ignore [missing-import]
 from utils.helpers import create_trend_badge, filter_dataframe
 
 # Register Page

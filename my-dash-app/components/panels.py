@@ -2,6 +2,8 @@
 
 import dash_ag_grid as dag
 from dash import dcc, html
+
+# pyrefly: ignore [missing-import]
 from theme import COLORS
 
 

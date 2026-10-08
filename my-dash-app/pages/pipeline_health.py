@@ -3,8 +3,12 @@ import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+
+# pyrefly: ignore [missing-import]
 from components.panels import create_grid, loading, panel
 from dash import Input, Output, callback, dcc, html
+
+# pyrefly: ignore [missing-import]
 from data_loader import (
     load_bigquery_cost_metrics,
     load_column_coverage_details,
@@ -16,8 +20,11 @@ from data_loader import (
     load_table_ingestion_logs,
 )
 from plotly.subplots import make_subplots
+
+# pyrefly: ignore [missing-import]
 from theme import COLORS, style_figure
 
+# pyrefly: ignore [missing-import]
 from utils.helpers import dataframe_value
 
 dash.register_page(__name__, path="/pipeline-health", name="Pipeline Health")

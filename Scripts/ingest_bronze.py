@@ -36,6 +36,7 @@ from google.cloud import bigquery
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, Engine
 
+# pyrefly: ignore [missing-import]
 from utils.logging_config import get_logger, sanitize_exception
 
 logger = get_logger(__name__)

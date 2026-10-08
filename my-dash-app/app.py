@@ -5,9 +5,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import dash
 import dash_bootstrap_components as dbc
 import pandas as pd
+
+# pyrefly: ignore [missing-import]
 from auth import install_auth
+
+# pyrefly: ignore [missing-import]
 from components.header import create_header
+
+# pyrefly: ignore [missing-import]
 from components.panels import create_grid
+
+# pyrefly: ignore [missing-import]
 from components.sidebar import create_sidebar
 from dash import (
     Dash,
@@ -20,10 +28,15 @@ from dash import (
     html,
     no_update,
 )
+
+# pyrefly: ignore [missing-import]
 from data_loader import get_prepared_dataset
 from flask import Flask
 
+# pyrefly: ignore [missing-import]
 from utils.cache import cache
+
+# pyrefly: ignore [missing-import]
 from utils.helpers import filter_dataframe
 
 # Register authentication before Dash request hooks.
@@ -106,6 +119,7 @@ def toggle_and_render_export_modal(
     if not ctx.triggered:
         return False, no_update
 
+    # pyrefly: ignore [unsupported-operation]
     trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
     if trigger_id == "close-export-modal-btn":

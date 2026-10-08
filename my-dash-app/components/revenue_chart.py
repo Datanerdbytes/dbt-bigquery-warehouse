@@ -5,6 +5,8 @@ import pandas as pd
 import plotly.express as px
 import pycountry
 from dash import html
+
+# pyrefly: ignore [missing-import]
 from theme import COLORS, style_figure
 
 

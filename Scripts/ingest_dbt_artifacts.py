@@ -8,6 +8,7 @@ from dotenv import find_dotenv, load_dotenv
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
+# pyrefly: ignore [missing-import]
 from utils.logging_config import get_logger, sanitize_exception
 
 # Locate and load .env from root or parent paths automatically

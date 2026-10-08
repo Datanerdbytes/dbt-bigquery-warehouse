@@ -1,10 +1,15 @@
 import logging
 
 import dash_bootstrap_components as dbc
+
+# pyrefly: ignore [missing-import]
 from components.panels import loading
 from dash import Input, Output, State, callback, dcc, html, no_update
+
+# pyrefly: ignore [missing-import]
 from data_loader import load_pipeline_health_summary
 
+# pyrefly: ignore [missing-import]
 from utils.helpers import dataframe_value
 
 logger = logging.getLogger(__name__)

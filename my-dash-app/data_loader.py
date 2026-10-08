@@ -9,6 +9,7 @@ from google.cloud import bigquery
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, Engine
 
+# pyrefly: ignore [missing-import]
 from utils.cache import cache
 
 DEFAULT_DRIVER = "ODBC Driver 18 for SQL Server"
