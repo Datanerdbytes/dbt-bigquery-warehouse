@@ -1,8 +1,18 @@
-.git
-.venv
-node_modules
-.env
-.env.*
+# Local repositories, worktrees, dependencies and runtime artifacts.
+**/.git
+**/.kilo
+**/.codex
+**/.venv
+**/node_modules
 **/__pycache__
 **/cache-directory
+
+# Credentials must never enter the build context (including nested copies).
+**/.env
+**/.env.*
+**/gcp-key.json
+**/gha-creds-*.json
+
+# Rebuilt in the auth-build stage.
 my-dash-app/assets/auth.bundle.js
+my-dash-app/assets/showcase.bundle.js

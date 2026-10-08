@@ -21,8 +21,14 @@ RUN pip install --no-cache-dir uv gunicorn
 # 3. Copy dependency configs from project root
 COPY pyproject.toml uv.lock ./
 
-# 4. Install dependencies
-RUN uv pip install --system --no-cache -r pyproject.toml
+# 4. Install the locked runtime graph into the same system Python as Gunicorn.
+# --locked rejects manifest/lock drift; --no-deps prevents a fresh resolution.
+# The local package is omitted because the Dash app runs from copied source.
+RUN uv export --locked --no-dev --no-emit-project --format requirements-txt \
+        --output-file /tmp/runtime-requirements.txt \
+    && uv pip install --system --no-cache --no-deps --require-hashes \
+        -r /tmp/runtime-requirements.txt \
+    && rm /tmp/runtime-requirements.txt
 
 # 5. Copy the entire repository into /app
 COPY . .
