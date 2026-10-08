@@ -107,6 +107,10 @@ ignore = [
 "tests/*.py" = ["E402"]
 
 [tool.pyrefly]
+# Match the root utils package, Dash local imports and src package layout.
+search-path = [".", "my-dash-app", "src"]
+# Worktrees under ignored .kilo/ still check the explicit project scopes below.
+use-ignore-files = false
 project-includes = [
     "my-dash-app",
     "Scripts",

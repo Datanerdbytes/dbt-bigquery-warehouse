@@ -36,7 +36,10 @@ jobs:
       - name: Install dependencies
         run: |
           uv python install 3.12
-          uv sync
+          uv sync --locked
+
+      - name: Check project types with locked Pyrefly
+        run: uv run --locked pyrefly check
 
       - name: Set up Node for authentication build
         uses: actions/setup-node@v4

@@ -283,9 +283,9 @@ def toggle_and_render_export_modal(
                 .head(10)
             )
             top_cust["customer_name"] = (
-                top_cust["first_name"].fillna("")
-                + " "
-                + top_cust["last_name"].fillna("")
+                top_cust["first_name"]
+                .fillna("")
+                .str.cat(top_cust["last_name"].fillna(""), sep=" ")
             )
 
             champ_cols = [
@@ -570,7 +570,9 @@ def execute_csv_download(n_clicks, filter_data, pathname):
             .head(10)
         )
         top_cust["Customer_Name"] = (
-            top_cust["first_name"].fillna("") + " " + top_cust["last_name"].fillna("")
+            top_cust["first_name"]
+            .fillna("")
+            .str.cat(top_cust["last_name"].fillna(""), sep=" ")
         )
         top_cust = top_cust[
             ["Customer_Name", "country", "Total_Orders", "Total_Spend"]
