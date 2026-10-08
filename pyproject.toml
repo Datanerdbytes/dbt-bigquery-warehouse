@@ -18,6 +18,7 @@ dependencies = [
     "flask-limiter>=3.11.0",
     "google-cloud-bigquery-storage>=2.41.0",
     "jupyterlab>=4.6.4",
+    "oauthlib>=4.0.0",
     "pandas>=3.0.5",
     "plotly>=7.0.0",
     "pre-commit>=4.6.2",
@@ -28,6 +29,8 @@ dependencies = [
     "sqlalchemy>=2.0.52",
     "sqlfluff>=4.3.0",
     "sqlfluff-templater-dbt>=4.3.0",
+    "urllib3>=2.8.0",
+    "werkzeug>=3.1.9",
 ]
 
 [project.scripts]

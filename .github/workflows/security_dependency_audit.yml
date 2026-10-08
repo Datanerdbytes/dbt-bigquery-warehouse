@@ -1,0 +1,162 @@
+name: Security Dependency Audit
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'package.json'
+      - 'package-lock.json'
+
+jobs:
+  python-audit:
+    name: Python Dependency Audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Install Python and dependencies
+        run: |
+          uv python install 3.12
+          uv sync
+
+      - name: Install pip-audit
+        run: uv pip install pip-audit
+
+      - name: Run pip-audit
+        id: pip-audit
+        run: |
+          uv run pip-audit --format=json --output=pip-audit-results.json || true
+          uv run pip-audit --format=text
+
+      - name: Upload pip-audit results
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-results
+          path: pip-audit-results.json
+          retention-days: 30
+
+      - name: Generate Python SBOM
+        run: |
+          uv pip install cyclonedx-bom
+          uv run cyclonedx-py environment --of JSON --outfile sbom-python.json
+
+      - name: Upload Python SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-python
+          path: sbom-python.json
+          retention-days: 90
+
+      - name: Fail on high/critical vulnerabilities
+        if: always()
+        run: |
+          if [ -f pip-audit-results.json ]; then
+            VULN_COUNT=$(jq '[.dependencies[] | select(.vulns != null and .vulns | length > 0)] | length' pip-audit-results.json)
+            HIGH_CRITICAL=$(jq '[.dependencies[] | select(.vulns != null and .vulns | length > 0) | .vulns[] | select(.severity == "HIGH" or .severity == "CRITICAL")] | length' pip-audit-results.json)
+            echo "Total vulnerable packages: $VULN_COUNT"
+            echo "High/Critical vulnerabilities: $HIGH_CRITICAL"
+            if [ "$HIGH_CRITICAL" -gt 0 ]; then
+              echo "::error::Found $HIGH_CRITICAL high/critical vulnerabilities"
+              exit 1
+            fi
+          fi
+
+  npm-audit:
+    name: Node.js Dependency Audit (npm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        id: npm-audit
+        run: |
+          npm audit --json --audit-level=moderate > npm-audit-results.json || true
+          npm audit --audit-level=moderate
+
+      - name: Upload npm audit results
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-results
+          path: npm-audit-results.json
+          retention-days: 30
+
+      - name: Generate npm SBOM
+        run: |
+          npm sbom --sbom-format=cyclonedx --json > sbom-npm.json
+
+      - name: Upload npm SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-npm
+          path: sbom-npm.json
+          retention-days: 90
+
+      - name: Fail on high/critical vulnerabilities
+        if: always()
+        run: |
+          if [ -f npm-audit-results.json ]; then
+            HIGH_CRITICAL=$(jq '[.vulnerabilities[] | select(.severity == "high" or .severity == "critical")] | length' npm-audit-results.json)
+            echo "High/Critical vulnerabilities: $HIGH_CRITICAL"
+            if [ "$HIGH_CRITICAL" -gt 0 ]; then
+              echo "::error::Found $HIGH_CRITICAL high/critical npm vulnerabilities"
+              exit 1
+            fi
+          fi
+
+  summary:
+    name: Audit Summary
+    needs: [python-audit, npm-audit]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download Python audit results
+        uses: actions/download-artifact@v4
+        with:
+          name: pip-audit-results
+          path: python-audit
+
+      - name: Download npm audit results
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-audit-results
+          path: npm-audit
+
+      - name: Print summary
+        run: |
+          echo "=== Security Dependency Audit Summary ==="
+          if [ -f python-audit/pip-audit-results.json ]; then
+            PY_VULN=$(jq '[.dependencies[] | select(.vulns != null and .vulns | length > 0)] | length' python-audit/pip-audit-results.json)
+            echo "Python vulnerable packages: $PY_VULN"
+          fi
+          if [ -f npm-audit/npm-audit-results.json ]; then
+            NPM_VULN=$(jq '.vulnerabilities | length' npm-audit/npm-audit-results.json)
+            echo "npm vulnerabilities: $NPM_VULN"
+          fi
