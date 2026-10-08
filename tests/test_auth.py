@@ -188,7 +188,9 @@ class AuthTests(unittest.TestCase):
         # 6th request should be rate limited
         response = self.client.get("/login")
         self.assertEqual(response.status_code, 429)
-        self.assertEqual(response.json["error"], auth.GENERIC_AUTH_ERROR)
+        self.assertEqual(response.mimetype, "text/html")
+        self.assertIn('data-auth-page="rate_limited"', response.get_data(as_text=True))
+        self.assertIn("Content-Security-Policy", response.headers)
 
     def test_rate_limiting_on_session_bridge(self):
         """Test that session bridge is rate limited (10 per minute)."""
@@ -211,7 +213,46 @@ class AuthTests(unittest.TestCase):
                 headers={"Origin": ENV["AUTH_APP_ORIGIN"]},
             )
             self.assertEqual(response.status_code, 429)
-            self.assertEqual(response.json["error"], auth.GENERIC_AUTH_ERROR)
+            self.assertEqual(response.json["error"], "rate_limited")
+
+    def test_logout_remains_available_after_session_rate_limit(self):
+        headers = {"Origin": ENV["AUTH_APP_ORIGIN"]}
+        with patch.object(
+            auth, "verify_access", side_effect=auth.AuthError("session_expired", 401)
+        ):
+            for _ in range(10):
+                self.assertEqual(
+                    self.client.post(
+                        "/auth/session", json={}, headers=headers
+                    ).status_code,
+                    401,
+                )
+            self.assertEqual(
+                self.client.post("/auth/session", json={}, headers=headers).status_code,
+                429,
+            )
+        self.client.set_cookie(auth.COOKIE, "expired-cookie")
+        with patch.object(auth, "verify_access") as verify:
+            # Deleting an existing cookie is idempotent and must not verify it.
+            for _ in range(12):
+                response = self.client.delete("/auth/session", headers=headers)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("Max-Age=0", response.headers["Set-Cookie"])
+            verify.assert_not_called()
+        self.assertIsNone(self.client.get_cookie(auth.COOKIE))
+        self.assertEqual(self.client.get("/_dash-layout").status_code, 401)
+        self.loader.assert_not_called()
+
+    def test_logout_still_requires_matching_origin(self):
+        self.client.set_cookie(auth.COOKIE, "existing-cookie")
+        for origin in [None, "null", "https://evil.example.com"]:
+            headers = {"Origin": origin} if origin else {}
+            self.assertEqual(
+                self.client.delete("/auth/session", headers=headers).status_code, 403
+            )
+            self.assertEqual(
+                self.client.get_cookie(auth.COOKIE).value, "existing-cookie"
+            )
 
     def test_rate_limiting_on_config(self):
         """Test that config endpoint is rate limited (30 per minute)."""
@@ -222,7 +263,7 @@ class AuthTests(unittest.TestCase):
         # 31st request should be rate limited
         response = self.client.get("/auth/config")
         self.assertEqual(response.status_code, 429)
-        self.assertEqual(response.json["error"], auth.GENERIC_AUTH_ERROR)
+        self.assertEqual(response.json["error"], "rate_limited")
 
     def test_account_enumeration_protection_generic_error(self):
         """Test that auth errors return generic messages to prevent account enumeration."""

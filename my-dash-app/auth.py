@@ -112,8 +112,10 @@ def verify_access(token):
 
 
 def _rate_limit_exceeded_handler(e):
-    """Handler for rate limit exceeded - returns generic message."""
-    return jsonify(error=GENERIC_AUTH_ERROR), 429
+    """Return a non-enumerating error that distinguishes throttling from login."""
+    if request.endpoint == "auth_page":
+        return render_template("auth.html", mode="rate_limited"), 429
+    return jsonify(error="rate_limited"), 429
 
 
 def install_auth(server):
@@ -241,7 +243,8 @@ def install_auth(server):
         )
 
     @server.route("/auth/session", methods=["POST", "DELETE", "GET"])
-    @limiter.limit("10 per minute")
+    # Logout only clears a cookie; keep it available when verification is throttled.
+    @limiter.limit("10 per minute", methods=["POST"])
     def session_bridge():
         if request.method == "GET":
             return jsonify(error="method_not_allowed"), 405
