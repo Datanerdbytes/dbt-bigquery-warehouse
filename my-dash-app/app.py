@@ -33,7 +33,6 @@ from dash import (
 from data_loader import get_prepared_dataset
 from flask import Flask
 
-# pyrefly: ignore [missing-import]
 from utils.cache import cache
 
 # pyrefly: ignore [missing-import]
@@ -57,14 +56,53 @@ app = Dash(
     suppress_callback_exceptions=True,
 )
 
-app.index_string = (
-    app.index_string.replace("<html>", '<html lang="en">')
-    .replace("{%css%}", '{%css%}<script src="/assets/auth.bundle.js"></script>')
-    .replace(
-        "{%app_entry%}",
-        '<div id="auth-session-loading" role="status" tabindex="-1">Connecting to your workspace…</div>{%app_entry%}',
-    )
-)
+# Custom index_string with CSP nonce placeholder.
+# Dash's interpolate_index processes {%metas%}, {%title%}, etc. but does not
+# run Flask context processors on the final HTML. We override interpolate_index
+# to inject the per-request nonce from Flask's g object.
+DASH_INDEX_STRING = """
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        {%metas%}
+        <title>{%title%}</title>
+        {%favicon%}
+        {%css%}
+        <script nonce="{%csp_nonce%}" src="/assets/auth.bundle.js"></script>
+    </head>
+    <body>
+        <div id="auth-session-loading" role="status" tabindex="-1">Connecting to your workspace…</div>
+        {%app_entry%}
+        {%config%}
+        {%scripts%}
+        {%renderer%}
+    </body>
+</html>
+"""
+
+app.index_string = DASH_INDEX_STRING
+
+_original_interpolate_index = app.interpolate_index
+
+
+def _interpolate_index_with_nonce(self, **kwargs):
+    # Fetch the nonce from Flask's request context (set by before_request)
+    from flask import g
+
+    nonce = getattr(g, "csp_nonce", "")
+    return _original_interpolate_index(
+        metas=kwargs.get("metas", ""),
+        title=kwargs.get("title", ""),
+        css=kwargs.get("css", ""),
+        config=kwargs.get("config", ""),
+        scripts=kwargs.get("scripts", ""),
+        favicon=kwargs.get("favicon", ""),
+        renderer=kwargs.get("renderer", ""),
+        app_entry=kwargs.get("app_entry", ""),
+    ).replace("{%csp_nonce%}", nonce)
+
+
+app.interpolate_index = _interpolate_index_with_nonce.__get__(app, Dash)
 
 cache.init_app(app.server)
 server = app.server

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build:auth": "node Scripts/build-auth.mjs",
-    "test:auth": "node --test tests/auth-browser.test.mjs"
+    "test:auth": "node --test tests/auth-browser.test.mjs tests/csp-browser.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.100.0"

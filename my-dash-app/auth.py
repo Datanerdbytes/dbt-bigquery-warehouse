@@ -3,6 +3,7 @@
 import base64
 import json
 import os
+import secrets
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -29,6 +30,11 @@ PUBLIC_ASSETS = {
     "/assets/auth.bundle.js",
     "/assets/showcase.bundle.js",
 }
+
+
+def _generate_nonce() -> str:
+    """Generate a cryptographically random CSP nonce."""
+    return secrets.token_urlsafe(16)
 
 
 class AuthError(Exception):
@@ -124,8 +130,16 @@ def install_auth(server):
     # Register custom 429 error handler
     server.register_error_handler(429, _rate_limit_exceeded_handler)
 
+    @server.context_processor
+    def inject_csp_nonce():
+        """Inject CSP nonce into templates for auth pages."""
+        return {"csp_nonce": getattr(g, "csp_nonce", None)}
+
     @server.before_request
     def protect():
+        # Generate CSP nonce for HTML responses
+        g.csp_nonce = _generate_nonce()
+
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             try:
                 _, _, origin, _ = settings()
@@ -164,6 +178,27 @@ def install_auth(server):
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
+
+        # Add CSP header for HTML responses
+        if response.content_type and response.content_type.startswith("text/html"):
+            nonce = getattr(g, "csp_nonce", None)
+            if nonce:
+                # Build CSP policy with nonce for inline scripts
+                csp_parts = [
+                    "default-src 'self'",
+                    "script-src 'self' 'nonce-{nonce}' 'strict-dynamic' https://cdn.jsdelivr.net https://unpkg.com",
+                    "style-src 'self' 'nonce-{nonce}' https://fonts.googleapis.com https://cdn.jsdelivr.net",
+                    "font-src 'self' https://fonts.gstatic.com",
+                    "connect-src 'self' https://*.supabase.co https://*.supabase.net",
+                    "img-src 'self' data:",
+                    "frame-ancestors 'none'",
+                    "base-uri 'self'",
+                    "form-action 'self'",
+                ]
+                response.headers["Content-Security-Policy"] = "; ".join(
+                    csp_parts
+                ).format(nonce=nonce)
+
         return response
 
     @server.get("/auth/config")
