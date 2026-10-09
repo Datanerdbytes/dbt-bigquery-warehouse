@@ -2,7 +2,7 @@
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -52,9 +52,9 @@ def transform_run_results(data: dict[str, Any]) -> list[dict[str, Any]]:
     if generated_at:
         timestamp = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
         if timestamp.tzinfo is None:
-            timestamp = timestamp.replace(tzinfo=timezone.utc)
+            timestamp = timestamp.replace(tzinfo=UTC)
     else:
-        timestamp = datetime.now(timezone.utc)
+        timestamp = datetime.now(UTC)
     rows = []
     for item in data.get("results", []):
         unique_id = item.get("unique_id", "")

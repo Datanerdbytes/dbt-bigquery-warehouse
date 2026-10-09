@@ -5,9 +5,9 @@ import json
 import os
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from Scripts import ingest_dbt_artifacts as ingest
 
@@ -75,17 +75,13 @@ class DbtArtifactTests(unittest.TestCase):
         self.assertEqual(rows[0]["rows_affected"], 0)
         self.assertEqual(rows[1]["column_name"], "id")
         self.assertEqual(rows[1]["status"], "fail")
-        self.assertEqual(
-            datetime.fromisoformat(rows[0]["run_timestamp"]).tzinfo, timezone.utc
-        )
+        self.assertEqual(datetime.fromisoformat(rows[0]["run_timestamp"]).tzinfo, UTC)
 
     def test_timestamp_fallback_is_aware(self):
         rows = ingest.transform_run_results(
             {"results": [{"unique_id": "model.p.orders"}]}
         )
-        self.assertEqual(
-            datetime.fromisoformat(rows[0]["run_timestamp"]).tzinfo, timezone.utc
-        )
+        self.assertEqual(datetime.fromisoformat(rows[0]["run_timestamp"]).tzinfo, UTC)
 
     def test_load_results_and_invalid_json(self):
         with tempfile.TemporaryDirectory() as directory:

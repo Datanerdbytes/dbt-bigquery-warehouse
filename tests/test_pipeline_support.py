@@ -3,10 +3,10 @@
 import io
 import json
 import os
-import subprocess
-import tempfile
 import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -67,8 +67,7 @@ class PipelineRunnerTests(unittest.TestCase):
             root = Path(folder)
             shutil.copy(ROOT / "run_pipeline.sh", root / "run_pipeline.sh")
             (root / "analytics_layer").mkdir()
-            (root / ".venv/bin").mkdir(parents=True)
-            (root / ".venv/bin/python").symlink_to(sys.executable)
+            (root / ".venv").symlink_to(sys.prefix, target_is_directory=True)
             (root / ".env").write_text(
                 "SOURCE_FOLDER='/tmp/source with spaces'\n"
                 "DB_CONNECTION_STRING=unused\n"

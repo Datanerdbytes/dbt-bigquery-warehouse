@@ -5,9 +5,9 @@ Uses structured logging with redaction to avoid leaking sensitive metadata
 in container logs or CI output.
 """
 
-import os
 import json
 import logging
+import os
 import sys
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -20,7 +20,7 @@ from utils.helpers import (
     resolve_bq_table,
     validate_bq_write_target,
 )
-from utils.logging_config import get_logger, sanitize_exception
+from utils.logging_config import sanitize_exception
 
 logger = logging.getLogger(__name__)
 
