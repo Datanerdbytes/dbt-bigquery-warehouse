@@ -31,7 +31,7 @@ class BronzeTests(unittest.TestCase):
             mock.patch.dict(
                 os.environ,
                 {
-                    "DB_CONNECTION_STRING": "mssql+pyodbc://user:pass@localhost/db"
+                    "DB_CONNECTION_STRING": "mssql+pyodbc://fixture@localhost/db"
                 },  # pragma: allowlist secret (offline fixture)
                 clear=True,
             ),
