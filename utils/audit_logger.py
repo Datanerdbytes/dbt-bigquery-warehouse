@@ -99,8 +99,17 @@ class AuditLogger:
             return {
                 str(key): (
                     "[REDACTED]"
-                    if any(part in str(key).lower() for part in
-                           ("password", "secret", "token", "credential", "connection_string", "api_key"))
+                    if any(
+                        part in str(key).lower()
+                        for part in (
+                            "password",
+                            "secret",
+                            "token",
+                            "credential",
+                            "connection_string",
+                            "api_key",
+                        )
+                    )
                     else self._redact(item)
                 )
                 for key, item in value.items()
