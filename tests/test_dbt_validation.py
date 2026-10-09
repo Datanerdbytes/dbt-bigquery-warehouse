@@ -50,7 +50,7 @@ class DbtValidationTests(unittest.TestCase):
                 os.environ,
                 {
                     "GCP_KEY_PATH": "production.json",
-                    "DBT_ENV_SECRET_PASSWORD": "secret",
+                    "DBT_ENV_SECRET_PASSWORD": "secret",  # pragma: allowlist secret (offline fixture)
                     "DBT_PROFILES_DIR": "/production",
                 },
             ),
