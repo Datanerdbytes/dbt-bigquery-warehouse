@@ -31,15 +31,15 @@ Fix all identified issues across the three data ingestion scripts (`ingest_bronz
 
 | Task ID | Title | Owner | Branch | Base SHA | Status |
 |---------|-------|-------|--------|----------|--------|
-| T01 | Fix driver mismatch & add retry in `ingest_bronze.py` | Worker A | `agent/ingestion-pipeline-fixes/T01-driver-retry` | `<integration-sha>` | ready-for-review |
-| T02 | Remove import-time side effects in `ingest_bigquery.py` | Worker B | `agent/ingestion-pipeline-fixes/T02-import-safety-bq` | `<integration-sha>` | ready-for-review |
-| T03 | Remove import-time side effects & fix datetime in `ingest_dbt_artifacts.py` | Worker C | `agent/ingestion-pipeline-fixes/T03-import-safety-dbt` | `<integration-sha>` | ready-for-review |
-| T04 | Unify audit logging in `utils/audit_logger.py` and all scripts | Worker D | `agent/ingestion-pipeline-fixes/T04-audit-logging` | `<integration-sha>` | ready-for-review |
-| T05 | Fix hardcoded paths in `run_pipeline.sh` | Worker A | `agent/ingestion-pipeline-fixes/T05-run-pipeline-paths` | `<integration-sha>` (after T01) | ready-for-review |
-| T06 | Add missing env vars to `.env.example` | Worker A | `agent/ingestion-pipeline-fixes/T06-env-vars` | `<integration-sha>` (after T01) | ready-for-review |
-| T07 | Add regression tests for `ingest_bronze.py` | Worker A | `agent/ingestion-pipeline-fixes/T07-tests-bronze` | `<integration-sha>` (after T01, T04) | ready-for-review |
-| T08 | Add regression tests for `ingest_bigquery.py` | Worker B | `agent/ingestion-pipeline-fixes/T08-tests-bq` | `<integration-sha>` (after T02, T04) | ready-for-review |
-| T09 | Add regression tests for `ingest_dbt_artifacts.py` | Worker C | `agent/ingestion-pipeline-fixes/T09-tests-dbt` | `<integration-sha>` (after T03, T04) | ready-for-review |
+| T01 | Fix driver mismatch & add retry in `ingest_bronze.py` | Worker A | `agent/ingestion-pipeline-fixes/T01-driver-retry` | `<integration-sha>` | integrated |
+| T02 | Remove import-time side effects in `ingest_bigquery.py` | Worker B | `agent/ingestion-pipeline-fixes/T02-import-safety-bq` | `<integration-sha>` | integrated |
+| T03 | Remove import-time side effects & fix datetime in `ingest_dbt_artifacts.py` | Worker C | `agent/ingestion-pipeline-fixes/T03-import-safety-dbt` | `<integration-sha>` | integrated |
+| T04 | Unify audit logging in `utils/audit_logger.py` and all scripts | Worker D | `agent/ingestion-pipeline-fixes/T04-audit-logging` | `<integration-sha>` | integrated |
+| T05 | Fix hardcoded paths in `run_pipeline.sh` | Worker A | `agent/ingestion-pipeline-fixes/T05-run-pipeline-paths` | `<integration-sha>` (after T01) | integrated |
+| T06 | Add missing env vars to `.env.example` | Worker A | `agent/ingestion-pipeline-fixes/T06-env-vars` | `<integration-sha>` (after T01) | integrated |
+| T07 | Add regression tests for `ingest_bronze.py` | Worker A | `agent/ingestion-pipeline-fixes/T07-tests-bronze` | `<integration-sha>` (after T01, T04) | integrated |
+| T08 | Add regression tests for `ingest_bigquery.py` | Worker B | `agent/ingestion-pipeline-fixes/T08-tests-bq` | `<integration-sha>` (after T02, T04) | integrated |
+| T09 | Add regression tests for `ingest_dbt_artifacts.py` | Worker C | `agent/ingestion-pipeline-fixes/T09-tests-dbt` | `<integration-sha>` (after T03, T04) | integrated |
 
 ---
 
@@ -314,3 +314,39 @@ Original repository candidate branch: `integrate/ingestion-pipeline-fixes-codex`
 ## Verification repair — 2026-10-09
 
 User authorized fixing the remaining verification setup and local integration. Coordinator owns `.sqlfluff`, `.pre-commit-config.yaml`, `.dbt-checkpoint.yaml`, necessary lint-only model corrections and verification documentation. dbt agent owns new `Scripts/prepare_dbt_checks.py`, `tests/test_dbt_validation.py`, and optional nonsecret offline profile resources. No production connection/compilation, no push/deployment. Commit-time SQLFluff uses Jinja with dbt builtins for existing ref/source/config-only models, retaining all existing SQL lint rules. A preceding hook prepares a fresh dbt manifest via parse with an isolated profile before manifest quality checks; existing warehouse-connected CI compile/test remains unchanged.
+
+
+## Verification resolved and integration accepted
+
+The preceding `verification-failed` handoff is superseded by this record.
+All nine tasks now satisfy the local integration gate. Verified code head:
+`69a91615ff23488bc0762b0a20e53a5e585cfc4a`; this document-only completion
+commit is rechecked before promotion, with the exact promoted SHA recorded
+in the user-facing takeover summary.
+
+- Full `pre_commit run --all-files`: every hook passes, including secret
+  scanning, fresh dbt parse preparation, all three dbt manifest quality
+  checks, Ruff, Pyrefly, pytest, and SQLFluff.
+- Full offline unittest: 177 tests pass.
+- Pytest: 193 tests and 82 subtests pass.
+- Auth build and all 21 browser checks pass; no generated bundle change.
+- ShellCheck, Black for changed Python source, and diff hygiene pass.
+- A new `prepare-dbt-checks` prerequisite obtains exactly the locked package
+  versions and reparses current source on every hook run using isolated
+  non-production configuration. Stale manifests cannot satisfy quality checks
+  after preparation failure; credential variables are excluded.
+- SQLFluff lints all models using Jinja dbt builtins plus an explicit BigQuery
+  surrogate-key expansion verified against existing compiled model expressions.
+  No lint rule was disabled. Unknown macros and invalid SQL still fail, with
+  regression coverage. Warehouse-backed CI compile/test remains unchanged.
+- External dbt-checkpoint usage telemetry is disabled in tracked configuration.
+- Additional dbt helper commit: `6f195446a614c407c0e8d0ae5ef671fc2f3f83eb`,
+  merged with the coordinator's lint configuration and regression coverage.
+
+Promotion is a local fast-forward of `integration` from recorded base
+`ea28abf9a941253738e29456bacdc2bac887c994` after the final gate passes and
+checkout ownership/status are rechecked. No push, release, deployment, live
+warehouse query, ingestion, cleanup, or branch deletion is included. Recovery
+references and worker worktrees remain retained. See `docs/offline-verification.md`
+for reproducible setup and the separation between offline commit checks and
+warehouse-backed CI validation.
