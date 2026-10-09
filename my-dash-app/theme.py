@@ -30,6 +30,22 @@ def css_tokens():
     )
 
 
+def initialize_chart_templates():
+    """Resolve lazy Plotly template children before concurrent callbacks run."""
+    import plotly.express as px
+    import plotly.io as pio
+
+    # Express reads shared template trace defaults lazily. Concurrent first
+    # access can replace child objects another callback is already reading.
+    # Exercise the dashboard's chart families on the startup thread without
+    # querying data or changing the configured templates/default palette.
+    for template in dict.fromkeys((pio.templates.default or "plotly", "plotly_dark")):
+        for chart in (px.area, px.bar, px.scatter, px.line):
+            chart(x=[0, 1], y=[0, 1], template=template)
+        px.pie(names=["startup"], values=[1], template=template)
+        px.choropleth(locations=["USA"], color=[1], template=template)
+
+
 def style_figure(fig, height=280):
     """Apply the same readable chart surfaces and typography on every page."""
     fig.update_layout(
