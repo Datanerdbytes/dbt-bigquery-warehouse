@@ -35,10 +35,16 @@ from dash import (
 from data_loader import get_prepared_dataset
 from flask import Flask
 
+# pyrefly: ignore [missing-import]
+from theme import initialize_chart_templates
+
 from utils.cache import cache
 
 # pyrefly: ignore [missing-import]
 from utils.helpers import filter_dataframe
+
+# Materialize shared Plotly defaults before Dash can dispatch threaded callbacks.
+initialize_chart_templates()
 
 # Register authentication before Dash request hooks.
 server = Flask(__name__)
