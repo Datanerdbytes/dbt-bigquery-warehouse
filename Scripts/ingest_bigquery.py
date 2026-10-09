@@ -1,5 +1,6 @@
 """Extract SQL Server bronze tables into BigQuery with runtime configuration."""
 
+import logging
 import os
 import re
 import sys
@@ -13,9 +14,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import URL, make_url
 
 from utils.audit_logger import AuditLogger
-from utils.logging_config import get_logger, sanitize_exception
+from utils.logging_config import sanitize_exception
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 TABLES = [
     "crm_cust_info",
     "crm_prd_info",
@@ -79,7 +80,7 @@ def _validate_table_name(table_name: str) -> str:
 
 
 def _build_query(table_name: str) -> str:
-    return f"SELECT * FROM bronze.{_validate_table_name(table_name)}"
+    return f"SELECT * FROM [bronze].[{_validate_table_name(table_name)}]"
 
 
 def validate_connection(db_engine):
@@ -99,7 +100,7 @@ def extract_and_load(bq_client=None, db_engine=None, audit=None):
         project = os.getenv("TARGET_PROJECT") or os.getenv("GCP_PROJECT_ID")
         if not project:
             raise ValueError("Missing TARGET_PROJECT or GCP_PROJECT_ID")
-        dataset = os.getenv("TARGET_DATASET", "bronze")
+        dataset = os.getenv("TARGET_DATASET") or "bronze"
         validate_connection(engine)
         failures = []
         loaded_rows = 0
