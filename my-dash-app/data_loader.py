@@ -1,5 +1,6 @@
 import functools
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -18,6 +19,7 @@ DEFAULT_CACHE_TIMEOUT = 3600
 # Process-local hot copy of the merged dataset. This holds a shared, read-only
 # frame for every user, never per-user state. Callbacks must not mutate it.
 _DATASET_HOT_CACHE: dict = {"key": None, "value": None, "expires_at": 0.0}
+_DATASET_HOT_CACHE_LOCK = threading.Lock()
 
 
 @functools.lru_cache(maxsize=1)
@@ -159,17 +161,22 @@ def get_prepared_dataset(limit: int = 10000) -> pd.DataFrame:
 
     The returned frame is shared by every caller, so treat it as read-only: build
     derived frames with ``filter_dataframe`` or ``.copy()`` instead of mutating it.
+    Cache checks and population share a lock so concurrent misses load once and
+    readers cannot observe a partially updated entry.
     """
     key = (limit,)
-    now = time.monotonic()
-    if _DATASET_HOT_CACHE["key"] == key and now < _DATASET_HOT_CACHE["expires_at"]:
-        return _DATASET_HOT_CACHE["value"]
+    with _DATASET_HOT_CACHE_LOCK:
+        now = time.monotonic()
+        if _DATASET_HOT_CACHE["key"] == key and now < _DATASET_HOT_CACHE["expires_at"]:
+            return _DATASET_HOT_CACHE["value"]
 
-    df_merged, _, _, _, _ = load_and_prep_data(limit=limit)
-    _DATASET_HOT_CACHE["key"] = key
-    _DATASET_HOT_CACHE["value"] = df_merged
-    _DATASET_HOT_CACHE["expires_at"] = now + _dataset_cache_ttl_seconds()
-    return df_merged
+        df_merged, _, _, _, _ = load_and_prep_data(limit=limit)
+        _DATASET_HOT_CACHE["key"] = key
+        _DATASET_HOT_CACHE["value"] = df_merged
+        _DATASET_HOT_CACHE["expires_at"] = (
+            time.monotonic() + _dataset_cache_ttl_seconds()
+        )
+        return df_merged
 
 
 @cache.memoize(timeout=60)

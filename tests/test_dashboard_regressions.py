@@ -3,8 +3,10 @@
 import importlib
 import json
 import sys
+import threading
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -172,6 +174,95 @@ class DashboardRegressionTests(unittest.TestCase):
 
         self.assertEqual(loader.call_count, 2)
         self.assertIsNot(first, refreshed)
+
+    def test_prepared_dataset_coalesces_concurrent_cold_and_expired_loads(self):
+        self.addCleanup(
+            data_loader._DATASET_HOT_CACHE.update,
+            {"key": None, "value": None, "expires_at": 0.0},
+        )
+
+        def check_concurrent_load(expired):
+            frame = pd.DataFrame({"a": [1]})
+            data_loader._DATASET_HOT_CACHE.update(
+                key=(10000,) if expired else None,
+                value=pd.DataFrame({"a": [0]}) if expired else None,
+                expires_at=0.0,
+            )
+            all_waiting = threading.Event()
+            release_loader = threading.Event()
+            loader_started = threading.Event()
+            count_lock = threading.Lock()
+            population_lock = threading.Lock()
+            attempts = 0
+
+            class ObservedLock:
+                def __enter__(self):
+                    nonlocal attempts
+                    with count_lock:
+                        attempts += 1
+                        if attempts == 8:
+                            all_waiting.set()
+                    population_lock.acquire()
+
+                def __exit__(self, *args):
+                    population_lock.release()
+
+            def load(limit=10000):
+                loader_started.set()
+                if not release_loader.wait(timeout=5):
+                    raise TimeoutError("Test did not release the dataset loader")
+                return frame, None, None, [], []
+
+            with (
+                patch.object(data_loader, "_DATASET_HOT_CACHE_LOCK", ObservedLock()),
+                patch.object(
+                    data_loader, "load_and_prep_data", side_effect=load
+                ) as loader,
+                ThreadPoolExecutor(max_workers=8) as pool,
+            ):
+                futures = [
+                    pool.submit(data_loader.get_prepared_dataset) for _ in range(8)
+                ]
+                try:
+                    self.assertTrue(loader_started.wait(timeout=3))
+                    self.assertTrue(all_waiting.wait(timeout=3))
+                    self.assertEqual(loader.call_count, 1)
+                finally:
+                    release_loader.set()
+                results = [future.result(timeout=3) for future in futures]
+                self.assertEqual(loader.call_count, 1)
+                for result in results:
+                    self.assertIs(result, frame)
+
+        for expired in (False, True):
+            with self.subTest(expired=expired):
+                check_concurrent_load(expired)
+
+    def test_prepared_dataset_ttl_starts_after_loading_and_failure_can_retry(self):
+        data_loader._DATASET_HOT_CACHE.update(key=None, value=None, expires_at=0.0)
+        self.addCleanup(
+            data_loader._DATASET_HOT_CACHE.update,
+            {"key": None, "value": None, "expires_at": 0.0},
+        )
+        frame = pd.DataFrame({"a": [1]})
+        with patch.object(
+            data_loader, "load_and_prep_data", side_effect=RuntimeError("Load failed")
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Load failed"):
+                data_loader.get_prepared_dataset()
+        self.assertIsNone(data_loader._DATASET_HOT_CACHE["key"])
+
+        with (
+            patch.object(
+                data_loader, "load_and_prep_data", return_value=(frame,) * 5
+            ) as loader,
+            patch.object(data_loader.time, "monotonic", side_effect=[100, 200, 250]),
+            patch.object(data_loader, "_dataset_cache_ttl_seconds", return_value=60),
+        ):
+            self.assertIs(data_loader.get_prepared_dataset(), frame)
+            self.assertEqual(data_loader._DATASET_HOT_CACHE["expires_at"], 260)
+            self.assertIs(data_loader.get_prepared_dataset(), frame)
+            loader.assert_called_once_with(limit=10000)
 
     def test_prepared_dataset_reloads_for_a_different_limit(self):
         frame = pd.DataFrame({"a": [1, 2, 3, 4, 5]})
