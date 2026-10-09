@@ -121,7 +121,7 @@ def verify_connection(engine: Engine) -> None:
 
 def _get_bigquery_client(project_id: str) -> bigquery.Client:
     """Create BigQuery client with retry logic for initialization/connection.
-    
+
     Retries on GoogleAPICallError with exponential backoff (max 3 attempts, 2s base).
     """
     from google.api_core.exceptions import GoogleAPICallError
