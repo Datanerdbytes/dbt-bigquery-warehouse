@@ -7,7 +7,8 @@ in the `public` schema. Table name is derived from the CSV filename
 (`source_crm` -> crm, `source_erp` -> erp). Unknown folders fall back to
 the folder slug as-is.
 
-Required environment variables (loaded from .env or the shell):
+Connection configuration (loaded from .env or the shell):
+    DB_CONNECTION_STRING  SQLAlchemy mssql+pyodbc URL; alternatively use DB_* below.
     DB_DRIVER        e.g. ODBC Driver 18 for SQL Server
     DB_SERVER        e.g. localhost
     DB_DATABASE      e.g. Demo_Database
@@ -34,8 +35,8 @@ from pathlib import Path
 
 import pandas as pd
 from google.cloud import bigquery
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import URL, Engine
+from sqlalchemy import MetaData, Table, create_engine, text
+from sqlalchemy.engine import URL, Engine, make_url
 
 # pyrefly: ignore [missing-import]
 from utils.logging_config import get_logger, sanitize_exception
@@ -83,7 +84,16 @@ def require_env(name: str) -> str:
 
 
 def build_engine() -> Engine:
-    driver = require_env("DB_DRIVER")
+    connection_string = os.environ.get("DB_CONNECTION_STRING")
+    if connection_string:
+        connection_url = make_url(connection_string)
+        if connection_url.drivername != "mssql+pyodbc":
+            raise ValueError("DB_CONNECTION_STRING must use mssql+pyodbc")
+        connection_url = connection_url.update_query_dict(
+            {"driver": "ODBC Driver 18 for SQL Server", "TrustServerCertificate": "yes"}
+        )
+        return create_engine(connection_url, pool_pre_ping=True)
+    driver = os.environ.get("DB_DRIVER", "ODBC Driver 18 for SQL Server")
     server = require_env("DB_SERVER")
     database = require_env("DB_DATABASE")
     username = require_env("DB_USERNAME")
@@ -104,6 +114,49 @@ def build_engine() -> Engine:
     return create_engine(connection_url, pool_pre_ping=True)
 
 
+def get_engine() -> Engine:
+    """Return the configured SQL Server engine (legacy build_engine is retained)."""
+    return build_engine()
+
+
+def insert_rows(engine: Engine, table, rows, batch_size: int = CHUNKSIZE):
+    """Insert all batches atomically; never replay a potentially committed append.
+
+    A SQLAlchemy Table or a schema-qualified table name is accepted. Failed
+    statements roll back the entire attempt before retrying. A commit failure
+    has an unknown outcome and is reported without retrying.
+    """
+    from sqlalchemy.exc import OperationalError
+
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive")
+    records = list(rows)
+    if not records:
+        return 0, []
+    target = table
+    if isinstance(table, str):
+        schema, separator, name = table.rpartition(".")
+        target = Table(
+            name if separator else table,
+            MetaData(),
+            schema=schema if separator else None,
+            autoload_with=engine,
+        )
+    for attempt in range(3):
+        statements_complete = False
+        try:
+            with engine.begin() as conn:
+                for offset in range(0, len(records), batch_size):
+                    conn.execute(target.insert(), records[offset : offset + batch_size])
+                statements_complete = True
+            return len(records), []
+        except OperationalError as exc:
+            if statements_complete or attempt == 2:
+                return 0, [sanitize_exception(exc)]
+            time.sleep(2.0 * (2**attempt))
+    raise AssertionError("unreachable")
+
+
 def verify_connection(engine: Engine) -> None:
     """Validate connection to the SQL Server database."""
     from sqlalchemy.exc import OperationalError
@@ -121,10 +174,11 @@ def verify_connection(engine: Engine) -> None:
 
 def _get_bigquery_client(project_id: str) -> bigquery.Client:
     """Create BigQuery client with retry logic for initialization/connection.
-    
+
     Retries on GoogleAPICallError with exponential backoff (max 3 attempts, 2s base).
     """
     from google.api_core.exceptions import GoogleAPICallError
+
     max_retries = 3
     base_delay = 2.0
 
@@ -133,9 +187,15 @@ def _get_bigquery_client(project_id: str) -> bigquery.Client:
             return bigquery.Client(project=project_id)
         except GoogleAPICallError as exc:
             if attempt == max_retries - 1:
-                logger.error("BigQuery client initialization failed after %d attempts: %s", max_retries, exc)
-                raise RuntimeError(f"Failed to initialize BigQuery client after {max_retries} attempts") from exc
-            delay = base_delay * (2 ** attempt)
+                logger.error(
+                    "BigQuery client initialization failed after %d attempts: %s",
+                    max_retries,
+                    exc,
+                )
+                raise RuntimeError(
+                    f"Failed to initialize BigQuery client after {max_retries} attempts"
+                ) from exc
+            delay = base_delay * (2**attempt)
             logger.warning(
                 "BigQuery client initialization attempt %d/%d failed: %s. Retrying in %.1fs...",
                 attempt + 1,
@@ -146,7 +206,9 @@ def _get_bigquery_client(project_id: str) -> bigquery.Client:
             time.sleep(delay)
 
     # Should not reach here, but satisfy type checker
-    raise RuntimeError(f"Failed to initialize BigQuery client after {max_retries} attempts")
+    raise RuntimeError(
+        f"Failed to initialize BigQuery client after {max_retries} attempts"
+    )
 
 
 def log_table_ingestion_to_bigquery(
@@ -188,19 +250,24 @@ def log_table_ingestion_to_bigquery(
 
     # Retry on BigQuery errors with exponential backoff (max 3 attempts, 2s base)
     from google.api_core.exceptions import GoogleAPICallError
+
     max_retries = 3
     base_delay = 2.0
 
     for attempt in range(max_retries):
         try:
-            job = client.load_table_from_dataframe(df_log, table_id, job_config=job_config)
+            job = client.load_table_from_dataframe(
+                df_log, table_id, job_config=job_config
+            )
             job.result()
             return
         except GoogleAPICallError as exc:
             if attempt == max_retries - 1:
-                logger.error("BigQuery logging failed after %d attempts: %s", max_retries, exc)
+                logger.error(
+                    "BigQuery logging failed after %d attempts: %s", max_retries, exc
+                )
                 raise
-            delay = base_delay * (2 ** attempt)
+            delay = base_delay * (2**attempt)
             logger.warning(
                 "BigQuery logging attempt %d/%d failed: %s. Retrying in %.1fs...",
                 attempt + 1,
@@ -237,27 +304,31 @@ def ingest_csv(engine: Engine, csv_path: Path, schema: str, table: str) -> int:
     # Re-runnable: TRUNCATE the target table first so re-running doesn't duplicate rows.
     # Retry on OperationalError with exponential backoff (max 3 attempts, 2s base)
     from sqlalchemy.exc import OperationalError
+
     max_retries = 3
     base_delay = 2.0
 
     for attempt in range(max_retries):
         try:
             with engine.begin() as conn:
-                conn.execute(text(f"TRUNCATE TABLE {schema}.{table}"))
-
-            df.to_sql(
-                name=table,
-                con=engine,
-                schema=schema,
-                if_exists="append",
-                index=False,
-                chunksize=CHUNKSIZE,
-            )
+                preparer = engine.dialect.identifier_preparer
+                target = f"{preparer.quote_schema(schema)}.{preparer.quote(table)}"
+                conn.execute(text(f"TRUNCATE TABLE {target}"))
+                df.to_sql(
+                    name=table,
+                    con=conn,
+                    schema=schema,
+                    if_exists="append",
+                    index=False,
+                    chunksize=CHUNKSIZE,
+                )
             return len(df)
         except OperationalError as exc:
             if attempt == max_retries - 1:
-                raise RuntimeError(f"Failed to ingest {table} after {max_retries} attempts") from exc
-            delay = base_delay * (2 ** attempt)
+                raise RuntimeError(
+                    f"Failed to ingest {table} after {max_retries} attempts"
+                ) from exc
+            delay = base_delay * (2**attempt)
             logger.warning(
                 "Attempt %d/%d failed for %s: %s. Retrying in %.1fs...",
                 attempt + 1,
@@ -272,74 +343,66 @@ def ingest_csv(engine: Engine, csv_path: Path, schema: str, table: str) -> int:
     raise RuntimeError(f"Failed to ingest {table} after {max_retries} attempts")
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str] | None = None) -> int:
+    # Lazy import also keeps environment/credential access out of module import.
+    from utils.audit_logger import AuditLogger
+
     load_env()
-
-    source_root = (
-        Path(argv[1]) if len(argv) > 1 else Path(os.environ.get("SOURCE_FOLDER", ""))
-    )
-    if not source_root:
-        logger.error("Usage: python ingest_bronze.py <source_folder>")
-        return 2
-
-    schema = "public"  # Flat schema landing zone
-    engine = build_engine()
-    verify_connection(engine)
-
-    pairs = list(discover_csvs(source_root))
-    if not pairs:
-        logger.warning("No CSVs found under %s", source_root)
+    argv = sys.argv if argv is None else argv
+    source = argv[1] if len(argv) > 1 else os.environ.get("SOURCE_FOLDER")
+    audit = AuditLogger()
+    script = "ingest_bronze"
+    params = {"source_folder": source}
+    audit.log_start(script, params)
+    engine = None
+    try:
+        if not source:
+            raise ValueError("Usage: python ingest_bronze.py <source_folder>")
+        source_root = Path(source)
+        engine = get_engine()
+        verify_connection(engine)
+        pairs = list(discover_csvs(source_root))
+        failures = []
+        total_rows = 0
+        for csv_path, table in pairs:
+            started = time.monotonic()
+            timestamp = datetime.now(UTC)
+            try:
+                rows = ingest_csv(engine, csv_path, "public", table)
+                total_rows += rows
+            except Exception as exc:
+                failures.append(sanitize_exception(exc))
+                rows = 0
+                error = sanitize_exception(exc)
+            else:
+                error = None
+            # Telemetry must not convert a completed load into a failed load.
+            try:
+                log_table_ingestion_to_bigquery(
+                    timestamp,
+                    "csv_ingestion",
+                    csv_path.name,
+                    f"public.{table}",
+                    rows,
+                    rows,
+                    time.monotonic() - started,
+                    "fail" if error else "success",
+                    error,
+                )
+            except Exception as exc:
+                logger.warning("Table audit unavailable: %s", sanitize_exception(exc))
+        if failures:
+            audit.log_failure(script, "; ".join(failures), params)
+            return 1
+        audit.log_success(script, {"tables": len(pairs), "rows": total_rows})
         return 0
-
-    logger.info("Found %d CSV file(s)", len(pairs))
-    failures = 0
-
-    for csv_path, table in pairs:
-        start_time = time.time()
-        run_timestamp = datetime.now(UTC)
-        target_table_name = f"{schema}.{table}"
-        source_name = csv_path.name
-
-        try:
-            rows = ingest_csv(engine, csv_path, schema, table)
-            duration = time.time() - start_time
-            logger.info("OK %s -> %s (%d rows)", source_name, target_table_name, rows)
-
-            log_table_ingestion_to_bigquery(
-                run_timestamp=run_timestamp,
-                resource_type="csv_ingestion",
-                table_name=source_name,
-                target_table=target_table_name,
-                source_rows=rows,
-                destination_rows=rows,
-                duration_seconds=duration,
-                status="success",
-            )
-
-        except Exception as exc:
-            duration = time.time() - start_time
-            failures += 1
-            logger.error(
-                "FAIL %s -> %s (%s)",
-                source_name,
-                target_table_name,
-                sanitize_exception(exc),
-            )
-
-            log_table_ingestion_to_bigquery(
-                run_timestamp=run_timestamp,
-                resource_type="csv_ingestion",
-                table_name=source_name,
-                target_table=target_table_name,
-                source_rows=0,
-                destination_rows=0,
-                duration_seconds=duration,
-                status="fail",
-                error_message=str(exc),
-            )
-
-    logger.info("Done. %d succeeded, %d failed.", len(pairs) - failures, failures)
-    return 0 if failures == 0 else 1
+    except Exception as exc:
+        logger.error("Bronze ingestion failed: %s", sanitize_exception(exc))
+        audit.log_failure(script, sanitize_exception(exc), params)
+        return 2 if not source else 1
+    finally:
+        if engine is not None:
+            engine.dispose()
 
 
 if __name__ == "__main__":
