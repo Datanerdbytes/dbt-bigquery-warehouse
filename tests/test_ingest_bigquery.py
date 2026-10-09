@@ -15,6 +15,10 @@ class BigQueryIngestionTests(unittest.TestCase):
         with (
             patch("dotenv.load_dotenv", side_effect=AssertionError("dotenv I/O")),
             patch(
+                "utils.logging_config.get_logger",
+                side_effect=AssertionError("logging I/O"),
+            ),
+            patch(
                 "google.cloud.bigquery.Client", side_effect=AssertionError("cloud I/O")
             ),
             patch(
@@ -127,7 +131,10 @@ class BigQueryIngestionTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(
             [call.args[0] for call in read.call_args_list],
-            ["SELECT * FROM bronze.crm_cust_info", "SELECT * FROM bronze.erp_loc_a101"],
+            [
+                "SELECT * FROM [bronze].[crm_cust_info]",
+                "SELECT * FROM [bronze].[erp_loc_a101]",
+            ],
         )
         self.assertEqual(
             [call.args[1] for call in client.load_table_from_dataframe.call_args_list],
