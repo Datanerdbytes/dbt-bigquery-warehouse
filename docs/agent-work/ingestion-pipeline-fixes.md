@@ -309,3 +309,8 @@ Validated code head: `eaac585` (following commit updates this record only).
 Original stopped Kilo edits preserved on `recovery/ingestion-pipeline-fixes-kilo-takeover`, commit `779e9f2`, plus raw pre-hook source patches retained in coordinator scratch storage. This recovery-only snapshot bypassed commit hooks because it intentionally preserves incomplete work; it is not an accepted implementation commit.
 
 Original repository candidate branch: `integrate/ingestion-pipeline-fixes-codex`. No push, release, deployment, production writes, resets, branch deletion, or worktree cleanup performed. All worker worktrees and recovery references remain available. The code is usable for review and continued development; promotion to `integration` awaits safe dbt/SQLFluff verification.
+
+
+## Verification repair — 2026-10-09
+
+User authorized fixing the remaining verification setup and local integration. Coordinator owns `.sqlfluff`, `.pre-commit-config.yaml`, `.dbt-checkpoint.yaml`, necessary lint-only model corrections and verification documentation. dbt agent owns new `Scripts/prepare_dbt_checks.py`, `tests/test_dbt_validation.py`, and optional nonsecret offline profile resources. No production connection/compilation, no push/deployment. Commit-time SQLFluff uses Jinja with dbt builtins for existing ref/source/config-only models, retaining all existing SQL lint rules. A preceding hook prepares a fresh dbt manifest via parse with an isolated profile before manifest quality checks; existing warehouse-connected CI compile/test remains unchanged.

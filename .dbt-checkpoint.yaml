@@ -1,0 +1,3 @@
+version: 1
+# Keep commit checks independent of external usage telemetry.
+disable-tracking: true
