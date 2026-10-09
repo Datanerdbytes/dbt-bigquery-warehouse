@@ -2,7 +2,9 @@
 # 1. Switched to bigquery based on your project stack
 dialect = bigquery
 
-templater = dbt
+# Commit-time SQL checks must not connect to a warehouse.
+# Models use standard ref/source/config calls supported by these dbt builtins.
+templater = jinja
 rules = all
 
 # 2. Combined your original exclusions with the new ones to quiet down the terminal
@@ -24,6 +26,6 @@ capitalisation_policy = lower
 [sqlfluff:rules:aliasing.expression]
 allow_implicit = False
 
-[sqlfluff:templater:dbt]
-project_dir = ./analytics_layer
-profiles_dir = ~/.dbt
+[sqlfluff:templater:jinja]
+apply_dbt_builtins = True
+library_path = sqlfluff_libs

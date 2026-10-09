@@ -5,7 +5,11 @@ Uses structured logging with redaction to avoid leaking sensitive metadata
 in container logs or CI output.
 """
 
+import json
+import logging
 import os
+import sys
+from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from dotenv import find_dotenv, load_dotenv
@@ -16,12 +20,9 @@ from utils.helpers import (
     resolve_bq_table,
     validate_bq_write_target,
 )
-from utils.logging_config import get_logger, sanitize_exception
+from utils.logging_config import sanitize_exception
 
-# Ensure environment variables are available
-load_dotenv(find_dotenv())
-
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def log_execution_to_bigquery(
@@ -35,6 +36,7 @@ def log_execution_to_bigquery(
     error_msg: str | None = None,
 ):
     """Streams pipeline execution logs into BigQuery audit_metadata.dbt_execution_logs."""
+    load_dotenv(find_dotenv())
     project_id = os.getenv("GCP_PROJECT_ID")
 
     if not project_id:
@@ -80,3 +82,61 @@ def log_execution_to_bigquery(
         logger.error(
             "Failed to stream audit metadata to BigQuery: %s", sanitize_exception(e)
         )
+
+
+class AuditLogger:
+    """Write redacted JSON events without opening cloud clients or files.
+
+    The legacy BigQuery telemetry function remains available to existing callers.
+    Pipeline lifecycle events use this local JSON-lines stream exclusively.
+    """
+
+    def __init__(self, stream=None):
+        self.stream = stream if stream is not None else sys.stderr
+
+    def _redact(self, value):
+        if isinstance(value, Mapping):
+            return {
+                str(key): (
+                    "[REDACTED]"
+                    if any(
+                        part in str(key).lower()
+                        for part in (
+                            "password",
+                            "secret",
+                            "token",
+                            "credential",
+                            "connection_string",
+                            "api_key",
+                        )
+                    )
+                    else self._redact(item)
+                )
+                for key, item in value.items()
+            }
+        if isinstance(value, (list, tuple)):
+            return [self._redact(item) for item in value]
+        if isinstance(value, str):
+            return sanitize_exception(value)
+        if value is None or isinstance(value, (bool, int, float)):
+            return value
+        return sanitize_exception(value)
+
+    def _log(self, script, event, details):
+        record = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "script": self._redact(script),
+            "event": event,
+            "details": self._redact(details),
+        }
+        self.stream.write(json.dumps(record, allow_nan=False) + "\n")
+        self.stream.flush()
+
+    def log_start(self, script, params):
+        self._log(script, "start", params)
+
+    def log_success(self, script, stats):
+        self._log(script, "success", stats)
+
+    def log_failure(self, script, error, params):
+        self._log(script, "failure", {"error": str(error), "params": params})

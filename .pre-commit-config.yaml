@@ -96,6 +96,17 @@ repos:
   # ==================================================
   # dbt Model Quality
   # ==================================================
+  # Build a current manifest using an isolated, credential-free parse target.
+  # This prerequisite runs before the manifest-consuming dbt quality hooks.
+  - repo: local
+    hooks:
+      - id: prepare-dbt-checks
+        name: Prepare dbt manifest (offline parse)
+        entry: uv run --locked python Scripts/prepare_dbt_checks.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
   - repo: https://github.com/dbt-checkpoint/dbt-checkpoint
     rev: v2.0.10
     hooks:

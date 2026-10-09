@@ -26,7 +26,7 @@ def _import_module():
         patch("Scripts.ingest_bigquery.service_account") as _sa,
         patch("Scripts.ingest_bigquery.bigquery") as _bq,
         patch("Scripts.ingest_bigquery.create_engine") as _engine,
-        patch("Scripts.ingest_bigquery.log_execution_to_bigquery"),
+        patch("Scripts.ingest_bigquery.AuditLogger"),
     ):
         return importlib.import_module("Scripts.ingest_bigquery")
 
@@ -84,7 +84,7 @@ class TestTableInterpolationIsSafe(unittest.TestCase):
         module = _import_module()
         sql = module._build_query("crm_cust_info")
         # The query must use a quoted identifier (square brackets).
-        self.assertEqual(sql, "SELECT * FROM public.crm_cust_info")
+        self.assertEqual(sql, "SELECT * FROM [bronze].[crm_cust_info]")
         # The raw name must not appear unquoted in the SQL.
         self.assertNotIn("FROM bronze.crm_cust_info", sql)
 
