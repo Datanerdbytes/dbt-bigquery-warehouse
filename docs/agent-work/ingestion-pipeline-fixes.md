@@ -261,3 +261,21 @@ All checks must pass before marking batch `integrated`.
 - Delete task branches (local and remote) after confirming `integration` contains all changes
 - Preserve recovery refs for 30 days
 - No external resources to clean up (no containers, caches, cloud resources created)
+
+## Codex takeover record — 2026-10-09
+
+- Coordinator: Codex root; original repository `/Users/roelsomido/demo-database`.
+- Original target `integration`, upstream `origin/integration`, base `ea28abf`.
+- No existing Kilo task branch had commits beyond this base. Primary checkout had uncommitted bronze implementation, untracked bronze tests, and a staged plan. T03 and T04 Kilo worktrees contained additional uncommitted edits; all remain untouched, with source patches captured in the coordinator's scratch directory.
+- Candidate is an independent local clone under this chat's `work/repository`, branch `integrate/ingestion-pipeline-fixes`. This avoids writing into checkouts still owned by Kilo. Original work preserved in commit `7b894f3`.
+- New worktrees share the candidate clone's Git database: `work/bronze`, `work/bigquery`, `work/dbt`; each branched from `7b894f3`.
+- T01/T07 owner Codex bronze agent, branch `agent/codex-ingestion/bronze`; owns bronze script/tests.
+- T02/T08 owner Codex bigquery agent, branch `agent/codex-ingestion/bigquery`; owns BigQuery script/tests.
+- T03/T09 owner Codex dbt agent, branch `agent/codex-ingestion/dbt`; owns dbt artifact script/tests.
+- T04 owner coordinator for `utils/audit_logger.py`, `utils/__init__.py`; each script owner implements agreed lifecycle API in its own file, serialized through prerequisite `6b8243e`.
+- T05/T06 owner coordinator; owns runner/environment template and support regressions. Coordinator also updates existing SQL injection regression expectations from PostgreSQL public to quoted SQL Server bronze.
+- Audit contract: `AuditLogger().log_start(script, params)`, `log_success(script, stats)`, `log_failure(script, error, params)`; redacted JSON lines, no cloud writes for lifecycle logging. Legacy cloud telemetry function retained for existing consumers.
+- `DBT_TARGET_DATASET` isolates telemetry from `TARGET_DATASET=bronze`; runner defaults telemetry to `audit_metadata`.
+- Authorized: local task commits and candidate merges. No push, production execution, cleanup, or promotion of another session's checkout. Original integration remains untouched while its ownership is uncertain.
+- Checks use existing Python/Node dependencies, offline mocks, isolated working directories; no allocated servers or production resources.
+- Status: T01–T09 running; shared prerequisite and T05/T06 implemented, pending combined verification.
