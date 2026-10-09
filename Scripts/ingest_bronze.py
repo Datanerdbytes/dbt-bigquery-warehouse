@@ -1,5 +1,5 @@
 """
-Flat-staging ingestion pipeline for PostgreSQL.
+Flat-staging ingestion pipeline for SQL Server.
 
 Walks a source folder, picks up every CSV, and loads it into the flat tables
 in the `public` schema. Table name is derived from the CSV filename
@@ -8,11 +8,12 @@ in the `public` schema. Table name is derived from the CSV filename
 the folder slug as-is.
 
 Required environment variables (loaded from .env or the shell):
+    DB_DRIVER        e.g. ODBC Driver 18 for SQL Server
     DB_SERVER        e.g. localhost
     DB_DATABASE      e.g. Demo_Database
-    DB_USERNAME      e.g. postgres
+    DB_USERNAME      e.g. sa
     DB_PASSWORD      the secret
-    DB_PORT          e.g. 5432 (optional, defaults to 5432)
+    DB_PORT          e.g. 1433 (optional, defaults to 1433)
     GCP_PROJECT_ID   e.g. your-gcp-project-id (required for BigQuery logging)
 
 Usage:
@@ -82,41 +83,70 @@ def require_env(name: str) -> str:
 
 
 def build_engine() -> Engine:
+    driver = require_env("DB_DRIVER")
     server = require_env("DB_SERVER")
     database = require_env("DB_DATABASE")
     username = require_env("DB_USERNAME")
     password = require_env("DB_PASSWORD")
-    port = int(os.environ.get("DB_PORT", 5432))
+    port = int(os.environ.get("DB_PORT", 1433))
 
-    # Build PostgreSQL connection URL
+    # Build SQL Server connection URL
     connection_url = URL.create(
-        "postgresql+psycopg2",
+        "mssql+pyodbc",
         username=username,
         password=password,
         host=server,
         port=port,
         database=database,
-        query={"sslmode": "prefer"},
+        query={"driver": driver, "TrustServerCertificate": "yes"},
     )
 
     return create_engine(connection_url, pool_pre_ping=True)
 
 
 def verify_connection(engine: Engine) -> None:
-    """Validate connection to the PostgreSQL database."""
+    """Validate connection to the SQL Server database."""
     from sqlalchemy.exc import OperationalError
 
     try:
         with engine.connect() as conn:
-            conn.execute(
-                text("SELECT current_database() AS db, current_user AS usr")
-            ).fetchone()
+            conn.execute(text("SELECT DB_NAME() AS db, SYSTEM_USER AS usr")).fetchone()
     except OperationalError as exc:
         raise RuntimeError(
-            f"Failed to establish a connection to PostgreSQL: {exc}"
+            f"Failed to establish a connection to SQL Server: {exc}"
         ) from exc
 
-    logger.info("Connected to PostgreSQL database successfully")
+    logger.info("Connected to SQL Server database successfully")
+
+
+def _get_bigquery_client(project_id: str) -> bigquery.Client:
+    """Create BigQuery client with retry logic for initialization/connection.
+    
+    Retries on GoogleAPICallError with exponential backoff (max 3 attempts, 2s base).
+    """
+    from google.api_core.exceptions import GoogleAPICallError
+    max_retries = 3
+    base_delay = 2.0
+
+    for attempt in range(max_retries):
+        try:
+            return bigquery.Client(project=project_id)
+        except GoogleAPICallError as exc:
+            if attempt == max_retries - 1:
+                logger.error("BigQuery client initialization failed after %d attempts: %s", max_retries, exc)
+                raise RuntimeError(f"Failed to initialize BigQuery client after {max_retries} attempts") from exc
+            delay = base_delay * (2 ** attempt)
+            logger.warning(
+                "BigQuery client initialization attempt %d/%d failed: %s. Retrying in %.1fs...",
+                attempt + 1,
+                max_retries,
+                exc,
+                delay,
+            )
+            time.sleep(delay)
+
+    # Should not reach here, but satisfy type checker
+    raise RuntimeError(f"Failed to initialize BigQuery client after {max_retries} attempts")
 
 
 def log_table_ingestion_to_bigquery(
@@ -132,7 +162,7 @@ def log_table_ingestion_to_bigquery(
 ) -> None:
     """Record table ingestion metrics directly into BigQuery audit metadata."""
     project_id = require_env("GCP_PROJECT_ID")
-    client = bigquery.Client(project=project_id)
+    client = _get_bigquery_client(project_id)
     table_id = f"{project_id}.audit_metadata.table_ingestion_logs"
 
     log_record = [
@@ -155,8 +185,30 @@ def log_table_ingestion_to_bigquery(
     job_config = bigquery.LoadJobConfig(
         write_disposition=bigquery.WriteDisposition.WRITE_APPEND
     )
-    job = client.load_table_from_dataframe(df_log, table_id, job_config=job_config)
-    job.result()
+
+    # Retry on BigQuery errors with exponential backoff (max 3 attempts, 2s base)
+    from google.api_core.exceptions import GoogleAPICallError
+    max_retries = 3
+    base_delay = 2.0
+
+    for attempt in range(max_retries):
+        try:
+            job = client.load_table_from_dataframe(df_log, table_id, job_config=job_config)
+            job.result()
+            return
+        except GoogleAPICallError as exc:
+            if attempt == max_retries - 1:
+                logger.error("BigQuery logging failed after %d attempts: %s", max_retries, exc)
+                raise
+            delay = base_delay * (2 ** attempt)
+            logger.warning(
+                "BigQuery logging attempt %d/%d failed: %s. Retrying in %.1fs...",
+                attempt + 1,
+                max_retries,
+                exc,
+                delay,
+            )
+            time.sleep(delay)
 
 
 def schema_prefix_for(folder_name: str) -> str:
@@ -183,18 +235,41 @@ def ingest_csv(engine: Engine, csv_path: Path, schema: str, table: str) -> int:
     df.columns = df.columns.str.strip().str.lower()
 
     # Re-runnable: TRUNCATE the target table first so re-running doesn't duplicate rows.
-    with engine.begin() as conn:
-        conn.execute(text(f"TRUNCATE TABLE {schema}.{table} CASCADE"))
+    # Retry on OperationalError with exponential backoff (max 3 attempts, 2s base)
+    from sqlalchemy.exc import OperationalError
+    max_retries = 3
+    base_delay = 2.0
 
-    df.to_sql(
-        name=table,
-        con=engine,
-        schema=schema,
-        if_exists="append",
-        index=False,
-        chunksize=CHUNKSIZE,
-    )
-    return len(df)
+    for attempt in range(max_retries):
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"TRUNCATE TABLE {schema}.{table}"))
+
+            df.to_sql(
+                name=table,
+                con=engine,
+                schema=schema,
+                if_exists="append",
+                index=False,
+                chunksize=CHUNKSIZE,
+            )
+            return len(df)
+        except OperationalError as exc:
+            if attempt == max_retries - 1:
+                raise RuntimeError(f"Failed to ingest {table} after {max_retries} attempts") from exc
+            delay = base_delay * (2 ** attempt)
+            logger.warning(
+                "Attempt %d/%d failed for %s: %s. Retrying in %.1fs...",
+                attempt + 1,
+                max_retries,
+                table,
+                sanitize_exception(exc),
+                delay,
+            )
+            time.sleep(delay)
+
+    # Should not reach here, but satisfy type checker
+    raise RuntimeError(f"Failed to ingest {table} after {max_retries} attempts")
 
 
 def main(argv: list[str]) -> int:
