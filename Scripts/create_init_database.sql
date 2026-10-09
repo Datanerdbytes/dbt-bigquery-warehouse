@@ -1,25 +1,9 @@
-USE master;
-GO
+-- Terminate any active connections to Demo_Database if it exists
+SELECT pg_terminate_backend(pid)
+FROM pg_stat_activity
+WHERE datname = 'Demo_Database'
+  AND pid <> pg_backend_pid();
 
--- Force disconnect active users if it exists, then drop
-IF EXISTS (SELECT 1 FROM sys.databases WHERE name = 'Demo_Database')
-BEGIN
-    ALTER DATABASE Demo_Database SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-END;
-
-DROP DATABASE IF EXISTS Demo_Database;
-GO
-
-CREATE DATABASE Demo_Database;
-GO
-
-USE Demo_Database;
-GO
-
--- Create Schemas
-IF SCHEMA_ID('bronze') IS NULL EXEC('CREATE SCHEMA bronze');
-GO
-IF SCHEMA_ID('silver') IS NULL EXEC('CREATE SCHEMA silver');
-GO
-IF SCHEMA_ID('gold') IS NULL EXEC('CREATE SCHEMA gold');
-GO
+-- Drop and recreate the flat database
+DROP DATABASE IF EXISTS "Demo_Database";
+CREATE DATABASE "Demo_Database";

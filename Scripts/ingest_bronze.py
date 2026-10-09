@@ -1,19 +1,19 @@
 """
-Bronze-layer ingestion pipeline.
+Flat-staging ingestion pipeline for PostgreSQL.
 
-Walks a source folder, picks up every CSV, and loads it into the matching
-table in the `bronze` schema. Table name is derived from the CSV filename
-(strip extension), and the schema is inferred from the parent folder name
+Walks a source folder, picks up every CSV, and loads it into the flat tables
+in the `public` schema. Table name is derived from the CSV filename
+(strip prefix), and the prefix is inferred from the parent folder name
 (`source_crm` -> crm, `source_erp` -> erp). Unknown folders fall back to
 the folder slug as-is.
 
 Required environment variables (loaded from .env or the shell):
     DB_SERVER        e.g. localhost
     DB_DATABASE      e.g. Demo_Database
-    DB_USERNAME      e.g. sa
+    DB_USERNAME      e.g. postgres
     DB_PASSWORD      the secret
-    DB_DRIVER        e.g. ODBC Driver 18 for SQL Server  (optional, default shown)
-    GCP_PROJECT_ID   e.g. your-gcp-project-id            (required for BigQuery logging)
+    DB_PORT          e.g. 5432 (optional, defaults to 5432)
+    GCP_PROJECT_ID   e.g. your-gcp-project-id (required for BigQuery logging)
 
 Usage:
     python Scripts/ingest_bronze.py <source_folder>
@@ -43,14 +43,13 @@ logger = get_logger(__name__)
 
 # ----- Configuration --------------------------------------------------------
 
-DEFAULT_DRIVER = "ODBC Driver 18 for SQL Server"
 CHUNKSIZE = 10_000
 
 # Folders under the source root that should be skipped.
 SKIP_FOLDERS = {".DS_Store", "__pycache__"}
 
-# Folders whose name maps to a short schema prefix used in the bronze table
-# (e.g. source_crm/cust_info.csv -> bronze.crm_cust_info).
+# Folders whose name maps to a short prefix used in the flat table name
+# (e.g. source_crm/cust_info.csv -> crm_cust_info).
 SCHEMA_PREFIX_MAP = {
     "source_crm": "crm",
     "source_erp": "erp",
@@ -61,8 +60,7 @@ SCHEMA_PREFIX_MAP = {
 
 
 def load_env(env_file: Path | None = None) -> None:
-    """Best-effort .env loader. We keep this dependency-free so the script
-    works on a clean `uv sync` without extra packages."""
+    """Best-effort .env loader. Dependency-free."""
     candidate = env_file or (Path.cwd() / ".env")
     if not candidate.exists():
         return
@@ -73,7 +71,6 @@ def load_env(env_file: Path | None = None) -> None:
         key, _, value = line.partition("=")
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        # Don't clobber an existing env var (shell wins over .env).
         os.environ.setdefault(key, value)
 
 
@@ -89,55 +86,37 @@ def build_engine() -> Engine:
     database = require_env("DB_DATABASE")
     username = require_env("DB_USERNAME")
     password = require_env("DB_PASSWORD")
-    driver = os.environ.get("DB_DRIVER", DEFAULT_DRIVER)
+    port = int(os.environ.get("DB_PORT", 5432))
 
-    # Clean up server string if port is included
-    host = server.split(",")[0].split(":")[0]
-    port = 1433
-
-    # Build ODBC connection query string safely
-    odbc_str = (
-        f"DRIVER={{{driver}}};"
-        f"SERVER={host},{port};"
-        f"DATABASE={database};"
-        f"UID={username};"
-        f"PWD={password};"
-        f"Encrypt=yes;"
-        f"TrustServerCertificate=no;"
+    # Build PostgreSQL connection URL
+    connection_url = URL.create(
+        "postgresql+psycopg2",
+        username=username,
+        password=password,
+        host=server,
+        port=port,
+        database=database,
+        query={"sslmode": "prefer"},
     )
 
-    connection_url = URL.create("mssql+pyodbc", query={"odbc_connect": odbc_str})
-
-    return create_engine(connection_url, pool_pre_ping=True, fast_executemany=True)
+    return create_engine(connection_url, pool_pre_ping=True)
 
 
 def verify_connection(engine: Engine) -> None:
-    """Validate the connection enforces TLS with certificate verification.
-
-    Fails fast and loudly if the physical link is not encrypted or if
-    certificate validation was bypassed.
-    """
+    """Validate connection to the PostgreSQL database."""
     from sqlalchemy.exc import OperationalError
 
     try:
         with engine.connect() as conn:
             conn.execute(
-                text("SELECT DB_NAME() AS db, SUSER_SNAME() AS usr")
-            ).fetchone()
-            encrypted = conn.execute(
-                text("SELECT SESSIONPROPERTY('Encrypted') AS IsEncrypted")
+                text("SELECT current_database() AS db, current_user AS usr")
             ).fetchone()
     except OperationalError as exc:
         raise RuntimeError(
-            f"Failed to establish a secure TLS-encrypted connection: {exc}"
+            f"Failed to establish a connection to PostgreSQL: {exc}"
         ) from exc
 
-    if not encrypted or not encrypted[0]:
-        raise RuntimeError(
-            "SQL Server connection is NOT encrypted. TLS enforcement failed."
-        )
-
-    logger.info("Connected to database (TLS encrypted)")
+    logger.info("Connected to PostgreSQL database successfully")
 
 
 def log_table_ingestion_to_bigquery(
@@ -156,7 +135,6 @@ def log_table_ingestion_to_bigquery(
     client = bigquery.Client(project=project_id)
     table_id = f"{project_id}.audit_metadata.table_ingestion_logs"
 
-    # Prepare data payload
     log_record = [
         {
             "log_id": str(uuid.uuid4()),
@@ -174,16 +152,15 @@ def log_table_ingestion_to_bigquery(
 
     df_log = pd.DataFrame(log_record)
 
-    # Append the row to BigQuery
     job_config = bigquery.LoadJobConfig(
         write_disposition=bigquery.WriteDisposition.WRITE_APPEND
     )
     job = client.load_table_from_dataframe(df_log, table_id, job_config=job_config)
-    job.result()  # Wait for the load job to complete
+    job.result()
 
 
 def schema_prefix_for(folder_name: str) -> str:
-    """Return the bronze table prefix for a given source folder name."""
+    """Return the flat table prefix for a given source folder name."""
     return SCHEMA_PREFIX_MAP.get(folder_name, folder_name)
 
 
@@ -203,13 +180,11 @@ def discover_csvs(source_root: Path) -> Iterable[tuple[Path, str]]:
 
 def ingest_csv(engine: Engine, csv_path: Path, schema: str, table: str) -> int:
     df = pd.read_csv(csv_path)
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.strip().str.lower()
 
-    # Re-runnable: TRUNCATE the target first so re-running the script doesn't
-    # duplicate rows. Use an explicit autocommit transaction so the TRUNCATE
-    # is visible to the subsequent bulk insert on the same engine.
+    # Re-runnable: TRUNCATE the target table first so re-running doesn't duplicate rows.
     with engine.begin() as conn:
-        conn.execute(text(f"TRUNCATE TABLE {schema}.{table}"))
+        conn.execute(text(f"TRUNCATE TABLE {schema}.{table} CASCADE"))
 
     df.to_sql(
         name=table,
@@ -232,7 +207,7 @@ def main(argv: list[str]) -> int:
         logger.error("Usage: python ingest_bronze.py <source_folder>")
         return 2
 
-    schema = "bronze"
+    schema = "public"  # Flat schema landing zone
     engine = build_engine()
     verify_connection(engine)
 
@@ -255,7 +230,6 @@ def main(argv: list[str]) -> int:
             duration = time.time() - start_time
             logger.info("OK %s -> %s (%d rows)", source_name, target_table_name, rows)
 
-            # Log success directly to BigQuery audit metadata table
             log_table_ingestion_to_bigquery(
                 run_timestamp=run_timestamp,
                 resource_type="csv_ingestion",
@@ -277,7 +251,6 @@ def main(argv: list[str]) -> int:
                 sanitize_exception(exc),
             )
 
-            # Log failure directly to BigQuery audit metadata table
             log_table_ingestion_to_bigquery(
                 run_timestamp=run_timestamp,
                 resource_type="csv_ingestion",
