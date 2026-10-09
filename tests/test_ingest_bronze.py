@@ -42,6 +42,7 @@ class BronzeTests(unittest.TestCase):
 
     def test_legacy_env_defaults_driver_and_port(self):
         env = {
+            "DB_DRIVER": "ODBC Driver 17 for SQL Server",
             "DB_SERVER": "localhost",
             "DB_DATABASE": "test",
             "DB_USERNAME": "test",
@@ -206,45 +207,52 @@ class BronzeTests(unittest.TestCase):
             ),
             mock.patch.object(
                 bronze, "ingest_csv", return_value=2, side_effect=ingest_error
-            ),
+            ) as ingest,
             mock.patch.object(
                 bronze, "log_table_ingestion_to_bigquery", side_effect=telemetry_error
-            ),
-            mock.patch("utils.audit_logger.AuditLogger") as audit,
+            ) as legacy_audit,
+            mock.patch.object(bronze, "AuditLogger") as audit,
         ):
             result = bronze.main(["script", "source"])
+            ingest.assert_called_once_with(
+                engine.return_value, Path("test.csv"), "bronze", "crm_test"
+            )
+            legacy_audit.assert_not_called()
         engine.return_value.dispose.assert_called_once()
         return result, audit.return_value
 
     def test_main_start_success(self):
         result, audit = self.run_main()
         self.assertEqual(result, 0)
-        audit.log_start.assert_called_once_with(
-            "ingest_bronze", {"source_folder": "source"}
-        )
-        audit.log_success.assert_called_once_with(
-            "ingest_bronze", {"tables": 1, "rows": 2}
-        )
+        audit.log_start.assert_any_call("ingest_bronze", {"source_folder": "source"})
+        audit.log_success.assert_any_call("ingest_bronze", {"tables": 1, "rows": 2})
         audit.log_failure.assert_not_called()
+        audit.log_start.assert_any_call(
+            "ingest_bronze:crm_test",
+            {"source": "test.csv", "target_table": "bronze.crm_test"},
+        )
+        table_stats = audit.log_success.call_args_list[0].args[1]
+        self.assertEqual(table_stats["target_table"], "bronze.crm_test")
+        self.assertEqual(table_stats["rows"], 2)
 
     def test_main_start_failure(self):
         result, audit = self.run_main(RuntimeError("bad csv"))
         self.assertEqual(result, 1)
-        audit.log_start.assert_called_once()
-        audit.log_failure.assert_called_once()
+        self.assertEqual(audit.log_start.call_count, 2)
+        self.assertEqual(audit.log_failure.call_count, 2)
         audit.log_success.assert_not_called()
 
-    def test_telemetry_failure_preserves_load_success(self):
+    def test_main_never_calls_legacy_cloud_telemetry(self):
         result, audit = self.run_main(telemetry_error=RuntimeError("offline"))
         self.assertEqual(result, 0)
-        audit.log_success.assert_called_once()
+        self.assertEqual(audit.log_success.call_count, 2)
 
     def test_missing_source_returns_usage_failure_before_engine(self):
         with (
             mock.patch.dict(os.environ, {}, clear=True),
             mock.patch.object(bronze, "load_env"),
             mock.patch.object(bronze, "get_engine") as engine,
-            mock.patch("utils.audit_logger.AuditLogger") as audit,
+            mock.patch.object(bronze, "AuditLogger") as audit,
         ):
             self.assertEqual(bronze.main(["script"]), 2)
         engine.assert_not_called()

@@ -2,7 +2,7 @@
 Flat-staging ingestion pipeline for SQL Server.
 
 Walks a source folder, picks up every CSV, and loads it into the flat tables
-in the `public` schema. Table name is derived from the CSV filename
+in the `bronze` schema. Table name is derived from the CSV filename
 (strip prefix), and the prefix is inferred from the parent folder name
 (`source_crm` -> crm, `source_erp` -> erp). Unknown folders fall back to
 the folder slug as-is.
@@ -25,12 +25,13 @@ If <source_folder> is omitted, SOURCE_FOLDER from the environment is used.
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 import time
 import uuid
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -39,9 +40,10 @@ from sqlalchemy import MetaData, Table, create_engine, text
 from sqlalchemy.engine import URL, Engine, make_url
 
 # pyrefly: ignore [missing-import]
-from utils.logging_config import get_logger, sanitize_exception
+from utils.audit_logger import AuditLogger
+from utils.logging_config import sanitize_exception, setup_logging
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # ----- Configuration --------------------------------------------------------
 
@@ -93,7 +95,7 @@ def build_engine() -> Engine:
             {"driver": "ODBC Driver 18 for SQL Server", "TrustServerCertificate": "yes"}
         )
         return create_engine(connection_url, pool_pre_ping=True)
-    driver = os.environ.get("DB_DRIVER", "ODBC Driver 18 for SQL Server")
+    driver = "ODBC Driver 18 for SQL Server"
     server = require_env("DB_SERVER")
     database = require_env("DB_DATABASE")
     username = require_env("DB_USERNAME")
@@ -344,9 +346,6 @@ def ingest_csv(engine: Engine, csv_path: Path, schema: str, table: str) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Lazy import also keeps environment/credential access out of module import.
-    from utils.audit_logger import AuditLogger
-
     load_env()
     argv = sys.argv if argv is None else argv
     source = argv[1] if len(argv) > 1 else os.environ.get("SOURCE_FOLDER")
@@ -366,31 +365,25 @@ def main(argv: list[str] | None = None) -> int:
         total_rows = 0
         for csv_path, table in pairs:
             started = time.monotonic()
-            timestamp = datetime.now(UTC)
+            table_script = f"{script}:{table}"
+            table_params = {"source": csv_path.name, "target_table": f"bronze.{table}"}
+            audit.log_start(table_script, table_params)
             try:
-                rows = ingest_csv(engine, csv_path, "public", table)
+                rows = ingest_csv(engine, csv_path, "bronze", table)
                 total_rows += rows
             except Exception as exc:
-                failures.append(sanitize_exception(exc))
-                rows = 0
                 error = sanitize_exception(exc)
+                failures.append(error)
+                audit.log_failure(table_script, error, table_params)
             else:
-                error = None
-            # Telemetry must not convert a completed load into a failed load.
-            try:
-                log_table_ingestion_to_bigquery(
-                    timestamp,
-                    "csv_ingestion",
-                    csv_path.name,
-                    f"public.{table}",
-                    rows,
-                    rows,
-                    time.monotonic() - started,
-                    "fail" if error else "success",
-                    error,
+                audit.log_success(
+                    table_script,
+                    {
+                        "rows": rows,
+                        "duration_seconds": time.monotonic() - started,
+                        "target_table": f"bronze.{table}",
+                    },
                 )
-            except Exception as exc:
-                logger.warning("Table audit unavailable: %s", sanitize_exception(exc))
         if failures:
             audit.log_failure(script, "; ".join(failures), params)
             return 1
@@ -406,4 +399,5 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    setup_logging()
     sys.exit(main(sys.argv))
