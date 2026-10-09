@@ -25,9 +25,9 @@ logger = get_logger(__name__)
 # 2. Retrieve variables from environment
 SERVER = os.getenv("DB_SERVER", "127.0.0.1")
 DATABASE = os.getenv("DB_DATABASE", "Demo_Database")
-USERNAME = os.getenv("DB_USERNAME", "sa")
-PASSWORD = os.getenv("DB_PASSWORD")
-DRIVER = os.getenv("DB_DRIVER", "ODBC Driver 18 for SQL Server")
+USERNAME = os.getenv("DB_USERNAME", "postgres")
+PASSWORD = os.getenv("DB_PASSWORD", "")
+PORT = os.getenv("DB_PORT", "5432")
 
 encoded_password = quote_plus(PASSWORD) if PASSWORD else ""
 
@@ -37,30 +37,25 @@ TARGET_DATASET = os.getenv("TARGET_DATASET", "bronze")
 
 
 def _init_clients():
-    """Create and return the BigQuery and SQL Server clients.
+    """Create and return the BigQuery and PostgreSQL clients.
 
     Validates that database credentials are present before proceeding.
-    Raises ``ValueError`` if credentials are missing — deferred from
-    import time so the module (and its validation helper) remain
-    importable in offline/CI environments without a ``.env`` file.
+    Raises ``ValueError`` if credentials are missing.
     """
-    if not USERNAME or not PASSWORD:
-        raise ValueError("Missing database credentials in .env file!")
+    if not USERNAME:
+        raise ValueError("Missing database username in .env file!")
 
     credentials = service_account.Credentials.from_service_account_file(KEY_PATH)
-
     bq_client = bigquery.Client(project=GCP_PROJECT_ID, credentials=credentials)
 
-    sql_conn_str = (
-        f"mssql+pyodbc://{USERNAME}:{encoded_password}@{SERVER}/{DATABASE}?"
-        f"driver={DRIVER}&encrypt=TLS&TrustServerCertificate=no"
-    )
+    # PostgreSQL connection URL using psycopg2
+    sql_conn_str = f"postgresql+psycopg2://{USERNAME}:{encoded_password}@{SERVER}:{PORT}/{DATABASE}"
     db_engine = create_engine(sql_conn_str, pool_pre_ping=True)
 
     return credentials, bq_client, db_engine
 
 
-# 4. Tables to Ingest
+# 4. Tables to Ingest (Flat Staging in public schema)
 TABLES_TO_INGEST = [
     "crm_cust_info",
     "crm_prd_info",
@@ -77,11 +72,7 @@ TABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _validate_table_name(table_name: str) -> str:
-    """Validate *table_name* against the strict allowlist.
-
-    Raises ``ValueError`` if the name contains characters that could be used
-    for SQL injection (semicolons, quotes, whitespace, dots, etc.).
-    """
+    """Validate *table_name* against the strict allowlist."""
     if not isinstance(table_name, str) or not TABLE_NAME_RE.fullmatch(table_name):
         raise ValueError(
             f"Invalid table name: {table_name!r}. "
@@ -92,44 +83,23 @@ def _validate_table_name(table_name: str) -> str:
 
 
 def _build_query(table_name: str) -> str:
-    """Return a parameterized SELECT for *table_name*.
-
-    The table name is validated against the allowlist and then embedded as a
-    properly quoted SQL Server identifier (using square brackets), which is
-    safe because the allowlist guarantees the name contains no ``]``
-    characters.  Values are never interpolated into the query string.
-    """
+    """Return a parameterized SELECT for *table_name* from the public schema."""
     safe_name = _validate_table_name(table_name)
-    # SQL Server identifier quoting: [table_name].  The allowlist guarantees
-    # the name contains only [A-Za-z0-9_], so no bracket can appear inside.
-    return f"SELECT * FROM bronze.[{safe_name}]"
+    return f"SELECT * FROM public.{safe_name}"
 
 
-def validate_tls_connection(db_engine):
-    """Verify the database connection enforces TLS with certificate validation.
-
-    Fails fast and loudly if the connection cannot be established under the
-    strict encrypted=TLS / TrustServerCertificate=no policy.
-    """
+def validate_connection(db_engine):
+    """Verify the PostgreSQL database connection is responsive."""
     try:
         with db_engine.connect() as conn:
-            # Verify encryption is active on the physical link
-            result = conn.exec_driver_sql(
-                "SELECT SESSIONPROPERTY('Encrypted') AS IsEncrypted"
-            ).fetchone()
-            if not result or not result[0]:
-                raise RuntimeError(
-                    "SQL Server connection is NOT encrypted. TLS enforcement failed."
-                )
-            logger.info("Database connection validated with TLS encryption.")
+            conn.exec_driver_sql("SELECT current_database()").fetchone()
+            logger.info("PostgreSQL database connection validated successfully.")
     except sqla_exc.OperationalError as exc:
         raise RuntimeError(
-            f"Failed to establish a secure TLS-encrypted database connection: {exc}"
+            f"Failed to establish a connection to PostgreSQL: {exc}"
         ) from exc
     except Exception as exc:
-        if "certificate" in str(exc).lower() or "ssl" in str(exc).lower():
-            raise RuntimeError(f"TLS certificate validation failed: {exc}") from exc
-        raise
+        raise RuntimeError(f"Database connection validation failed: {exc}") from exc
 
 
 def extract_and_load():
@@ -138,8 +108,8 @@ def extract_and_load():
     # Initialize clients (validates credentials and establishes connections)
     credentials, bq_client, db_engine = _init_clients()
 
-    # Enforce secure TLS connections with certificate validation before ingestion
-    validate_tls_connection(db_engine)
+    # Verify connection before ingestion
+    validate_connection(db_engine)
 
     for table_name in TABLES_TO_INGEST:
         logger.info("Processing table: %s", table_name)
@@ -148,7 +118,7 @@ def extract_and_load():
 
         try:
             query = _build_query(table_name)
-            logger.info("Reading data from SQL Server...")
+            logger.info("Reading data from PostgreSQL...")
             with db_engine.connect() as conn:
                 df = pd.read_sql(query, con=conn)
             logger.info("Extracted %d rows.", len(df))

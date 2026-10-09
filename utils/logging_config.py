@@ -74,8 +74,8 @@ class StructuredFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         record.message = record.getMessage()
-        if self.usesTime():
-            record.asctime = self.formatTime(record, self.datefmt)
+        # Explicitly generate the timestamp so it is always present
+        record.asctime = self.formatTime(record, self.datefmt)
         return (
             f"{record.asctime} | {record.levelname:8s} | "
             f"{record.name:30s} | {record.message}"
