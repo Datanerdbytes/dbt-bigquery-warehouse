@@ -4,6 +4,9 @@ import io
 import json
 import os
 import subprocess
+import tempfile
+import shutil
+import sys
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -58,6 +61,52 @@ class PipelineRunnerTests(unittest.TestCase):
         self.assertEqual(result.stdout.count("DRY RUN:"), 5)
         self.assertIn("Scripts/ingest_bronze.py", result.stdout)
         self.assertNotIn("/Users/roelsomido/Source", result.stdout)
+
+    def test_dotenv_loaded_before_validation_and_external_values_win(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            shutil.copy(ROOT / "run_pipeline.sh", root / "run_pipeline.sh")
+            (root / "analytics_layer").mkdir()
+            (root / ".venv/bin").mkdir(parents=True)
+            (root / ".venv/bin/python").symlink_to(sys.executable)
+            (root / ".env").write_text(
+                "SOURCE_FOLDER='/tmp/source with spaces'\n"
+                "DB_CONNECTION_STRING=unused\n"
+                "TARGET_PROJECT=dotenv-project\n"
+                "PIPELINE_DRY_RUN=1\n"
+                "DBT_PROJECT_DIR=./analytics_layer\n"
+            )
+            env = {"PATH": os.environ["PATH"], "SOURCE_FOLDER": "/tmp/external-source"}
+            result = subprocess.run(
+                ["bash", str(root / "run_pipeline.sh")],
+                cwd="/tmp",
+                env=env,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.count("DRY RUN:"), 5)
+            # Prove external variables survive dotenv parsing.
+            helper = root / "inspect.py"
+            helper.write_text("import os; print(os.environ['SOURCE_FOLDER'])")
+            runner = (
+                (root / "run_pipeline.sh")
+                .read_text()
+                .replace(
+                    "run uv run Scripts/ingest_bronze.py",
+                    f'"{sys.executable}" "{helper}"',
+                )
+            )
+            (root / "run_pipeline.sh").write_text(runner)
+            result = subprocess.run(
+                ["bash", str(root / "run_pipeline.sh")],
+                cwd="/tmp",
+                env=env,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("/tmp/external-source", result.stdout)
 
     def test_missing_configuration_fails_before_execution(self):
         result = subprocess.run(

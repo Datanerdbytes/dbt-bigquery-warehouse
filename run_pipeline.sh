@@ -3,6 +3,24 @@ set -euo pipefail
 
 # Resolve paths relative to this repository, regardless of the caller's cwd.
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# Parse dotenv with Python rather than sourcing configuration as shell code.
+# Re-exec with the loaded environment before applying defaults or validation.
+if [[ -f "${ROOT_DIR}/.env" && "${1:-}" != "--environment-loaded" ]]; then
+    if [[ -x "${ROOT_DIR}/.venv/bin/python" ]]; then
+        PYTHON_RUN=("${ROOT_DIR}/.venv/bin/python")
+    else
+        PYTHON_RUN=(uv run --directory "${ROOT_DIR}" python)
+    fi
+    exec "${PYTHON_RUN[@]}" -c '
+import os, sys
+from dotenv import load_dotenv
+load_dotenv(sys.argv[1], override=False)
+os.execvpe("bash", ["bash", sys.argv[2], "--environment-loaded", *sys.argv[3:]], os.environ)
+' "${ROOT_DIR}/.env" "${ROOT_DIR}/run_pipeline.sh" "$@"
+fi
+if [[ "${1:-}" == "--environment-loaded" ]]; then
+    shift
+fi
 export PYTHONPATH="${ROOT_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 : "${SOURCE_FOLDER:?Set SOURCE_FOLDER to the directory containing source CSV files}"
 : "${DB_CONNECTION_STRING:?Set DB_CONNECTION_STRING to a SQL Server mssql+pyodbc URL}"
