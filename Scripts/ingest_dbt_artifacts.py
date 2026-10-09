@@ -1,119 +1,127 @@
+"""Upload dbt run-result telemetry; importing this module performs no I/O."""
+
 import json
 import os
-import uuid
-from datetime import datetime
-from typing import Any, cast
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
 from dotenv import find_dotenv, load_dotenv
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
-# pyrefly: ignore [missing-import]
-from utils.logging_config import get_logger, sanitize_exception
+from utils.audit_logger import AuditLogger
 
-# Locate and load .env from root or parent paths automatically
-load_dotenv(find_dotenv())
-
-logger = get_logger(__name__)
-
-# Paths and BigQuery Configuration
 DBT_RUN_RESULTS_PATH = "analytics_layer/target/run_results.json"
-PROJECT_ID = os.getenv("GCP_PROJECT_ID")
-KEY_PATH = os.getenv("GCP_KEY_PATH")
-
 DATASET_ID = "audit_metadata"
 TABLE_ID = "dbt_execution_logs"
 
 
+def get_bq_client(project_id: str | None = None) -> bigquery.Client:
+    """Create a client at execution time, using explicit credentials or ADC."""
+    project_id = (
+        project_id or os.getenv("TARGET_PROJECT") or os.getenv("GCP_PROJECT_ID")
+    )
+    if not project_id:
+        raise ValueError("TARGET_PROJECT or GCP_PROJECT_ID must be configured.")
+    key_path = os.getenv("GCP_KEY_PATH")
+    if key_path:
+        credentials = service_account.Credentials.from_service_account_file(key_path)
+        return bigquery.Client(credentials=credentials, project=project_id)
+    return bigquery.Client(project=project_id)
+
+
 def get_bigquery_client() -> bigquery.Client:
-    """Helper to initialize authenticated BigQuery client."""
-    if not PROJECT_ID:
-        raise ValueError("GCP_PROJECT_ID is missing from environment/env variables.")
-
-    if KEY_PATH and os.path.exists(KEY_PATH):
-        # Create explicit service account credentials object
-        credentials = service_account.Credentials.from_service_account_file(KEY_PATH)
-        return bigquery.Client(credentials=credentials, project=PROJECT_ID)
-
-    # Fallback to Google Application Default Credentials
-    logger.warning(
-        "KEY_PATH not found or not provided. Falling back to default environment credentials."
-    )
-    return bigquery.Client(project=PROJECT_ID)
+    """Compatibility wrapper for existing callers."""
+    return get_bq_client()
 
 
-def parse_and_upload_run_results():
-    if not os.path.exists(DBT_RUN_RESULTS_PATH):
-        logger.error(
-            "%s not found. Run 'dbt test' or 'dbt run' first.", DBT_RUN_RESULTS_PATH
-        )
-        return
+def load_run_results(path: str | Path) -> dict[str, Any]:
+    """Read a run-results artifact without creating clients or uploading data."""
+    with open(path, encoding="utf-8") as artifact:
+        data = json.load(artifact)
+    if not isinstance(data, dict):
+        raise ValueError("run_results.json must contain a JSON object.")
+    return data
 
-    with open(DBT_RUN_RESULTS_PATH) as f:
-        data: dict[str, Any] = cast(dict[str, Any], json.load(f))
 
-    # Initialize client ONCE using helper
-    client = get_bigquery_client()
-
+def transform_run_results(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten results into the existing dbt_execution_logs table schema."""
     metadata = data.get("metadata", {})
-    invocation_id = metadata.get("invocation_id", str(uuid.uuid4()))
-    generated_at_str = metadata.get("generated_at")
-
-    # Format ISO timestamp
-    run_timestamp = (
-        generated_at_str if generated_at_str else datetime.utcnow().isoformat()
-    )
-
-    rows_to_insert = []
-
+    generated_at = metadata.get("generated_at")
+    if generated_at:
+        timestamp = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+    else:
+        timestamp = datetime.now(timezone.utc)
+    rows = []
     for item in data.get("results", []):
         unique_id = item.get("unique_id", "")
-        unique_id_parts = unique_id.split(".")
-        resource_type = unique_id_parts[0] if len(unique_id_parts) > 0 else "unknown"
-        node_name = unique_id_parts[-2] if len(unique_id_parts) > 1 else unique_id
-
-        target_table = unique_id_parts[2] if len(unique_id_parts) > 2 else None
+        parts = unique_id.split(".")
+        resource_type = parts[0] if unique_id else "unknown"
+        # Models/seeds/snapshots have three components; tests add a hash suffix.
+        node_name = parts[2] if len(parts) > 2 else unique_id
         column_name = None
         if resource_type == "test" and "_" in node_name:
-            parts = node_name.split("_")
-            if len(parts) >= 3:
-                column_name = parts[-1]
-
-        row = {
-            "execution_id": invocation_id,
-            "run_timestamp": run_timestamp,
-            "resource_type": resource_type,
-            "node_name": node_name,
-            "target_table": target_table,
-            "column_name": column_name,
-            "status": item.get("status", "unknown"),
-            "execution_time_seconds": round(float(item.get("execution_time", 0.0)), 2),
-            "rows_affected": item.get("failures", 0)
-            if item.get("failures") is not None
-            else 0,
-            "error_message": item.get("message"),
-        }
-        rows_to_insert.append(row)
-
-    if not rows_to_insert:
-        logger.warning("No execution results found in file.")
-        return
-
-    table_ref = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}"
-
-    # Stream rows into BigQuery using authenticated client
-    errors = client.insert_rows_json(table_ref, rows_to_insert)
-
-    if not errors:
-        logger.info(
-            "Successfully ingested %d records into %s", len(rows_to_insert), table_ref
+            node_parts = node_name.split("_")
+            if len(node_parts) >= 3:
+                column_name = node_parts[-1]
+        rows.append(
+            {
+                "execution_id": metadata.get("invocation_id", "unknown"),
+                "run_timestamp": timestamp.isoformat(),
+                "resource_type": resource_type,
+                "node_name": node_name,
+                "target_table": parts[2] if len(parts) > 2 else None,
+                "column_name": column_name,
+                "status": item.get("status", "unknown"),
+                "execution_time_seconds": round(
+                    float(item.get("execution_time", 0.0)), 2
+                ),
+                "rows_affected": item.get("failures") or 0,
+                "error_message": item.get("message"),
+            }
         )
-    else:
-        logger.error(
-            "Encountered errors while inserting rows: %s",
-            sanitize_exception(str(errors)),
-        )
+    return rows
+
+
+def main() -> int:
+    """Load runtime configuration, upload rows, and report a failing exit code."""
+    load_dotenv(find_dotenv())
+    audit = AuditLogger()
+    script = "ingest_dbt_artifacts"
+    project = os.getenv("TARGET_PROJECT") or os.getenv("GCP_PROJECT_ID")
+    dataset = (
+        os.getenv("DBT_TARGET_DATASET") or os.getenv("TARGET_DATASET") or DATASET_ID
+    )
+    path = os.getenv("DBT_ARTIFACTS_PATH") or DBT_RUN_RESULTS_PATH
+    params = {
+        "artifact_path": path,
+        "target_project": project,
+        "target_dataset": dataset,
+    }
+    audit.log_start(script, params)
+    try:
+        if not project:
+            raise ValueError("TARGET_PROJECT or GCP_PROJECT_ID must be configured.")
+        rows = transform_run_results(load_run_results(path))
+        if rows:
+            client = get_bq_client(project)
+            errors = client.insert_rows_json(f"{project}.{dataset}.{TABLE_ID}", rows)
+            if errors:
+                raise RuntimeError(f"BigQuery rejected dbt telemetry rows: {errors}")
+        audit.log_success(script, {"rows_inserted": len(rows)})
+        return 0
+    except Exception as error:
+        audit.log_failure(script, error, params)
+        return 1
+
+
+def parse_and_upload_run_results() -> int:
+    """Compatibility entry point for existing callers."""
+    return main()
 
 
 if __name__ == "__main__":
-    parse_and_upload_run_results()
+    raise SystemExit(main())
