@@ -62,7 +62,7 @@ class BigQueryIngestionTests(unittest.TestCase):
             "DB_SERVER": "localhost",
             "DB_DATABASE": "offline",
             "DB_USERNAME": "sa",
-            "DB_PASSWORD": "p@ss:/?#",
+            "DB_PASSWORD": "p@ss:/?#",  # pragma: allowlist secret (offline fixture)
         }
         with (
             patch.dict(os.environ, values, clear=True),
@@ -76,7 +76,7 @@ class BigQueryIngestionTests(unittest.TestCase):
         self.assertEqual(url.query["driver"], "ODBC Driver 18 for SQL Server")
 
     def test_engine_accepts_explicit_sql_server_url(self):
-        value = "mssql+pyodbc://sa:placeholder@localhost/offline?driver=ODBC+Driver+18+for+SQL+Server"
+        value = "mssql+pyodbc://sa:placeholder@localhost/offline?driver=ODBC+Driver+18+for+SQL+Server"  # pragma: allowlist secret (offline fixture)
         with (
             patch.dict(os.environ, {"DB_CONNECTION_STRING": value}, clear=True),
             patch.object(ingestion, "create_engine") as create,

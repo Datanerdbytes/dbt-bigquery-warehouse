@@ -30,7 +30,9 @@ class BronzeTests(unittest.TestCase):
         with (
             mock.patch.dict(
                 os.environ,
-                {"DB_CONNECTION_STRING": "mssql+pyodbc://user:pass@localhost/db"},
+                {
+                    "DB_CONNECTION_STRING": "mssql+pyodbc://user:pass@localhost/db"
+                },  # pragma: allowlist secret (offline fixture)
                 clear=True,
             ),
             mock.patch.object(bronze, "create_engine") as create,
@@ -46,7 +48,7 @@ class BronzeTests(unittest.TestCase):
             "DB_SERVER": "localhost",
             "DB_DATABASE": "test",
             "DB_USERNAME": "test",
-            "DB_PASSWORD": "test",
+            "DB_PASSWORD": "test",  # pragma: allowlist secret (offline fixture)
         }
         with (
             mock.patch.dict(os.environ, env, clear=True),

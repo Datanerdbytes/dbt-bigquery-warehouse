@@ -214,7 +214,7 @@ T04 ─────────────────┬──→ T07
 |----------|-------|-----------|--------|
 | `utils.audit_logger.AuditLogger` API | T04 | T01, T02, T03, T07, T08, T09 | Defined in T04 |
 | Env var names (`SOURCE_FOLDER`, etc.) | T01, T06 | T05, T06, all scripts | T01 defines, T06 documents |
-| SQL Server connection string format | T01 | T05 (validation) | `mssql+pyodbc://user:pass@host/db?driver=ODBC+Driver+18+for+SQL+Server` |
+| SQL Server connection string format | T01 | T05 (validation) | `mssql+pyodbc://<user>:<password>@host/db?driver=ODBC+Driver+18+for+SQL+Server` |
 
 ---
 
