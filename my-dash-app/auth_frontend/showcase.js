@@ -5,9 +5,11 @@ function initializeShowcase() {
   const slides = [...showcase.querySelectorAll(".auth-slide")];
   const selectors = [...document.querySelectorAll("[data-slide]")];
   const rotation = showcase.querySelector('[data-carousel="rotation"]');
+  const landing = document.body.classList.contains("landing-page");
   const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
   let active = 0;
   let timer = null;
+  let hovered = false;
   function show(index) {
     const moveFocus = slides[active].contains(document.activeElement);
     active = (index + slides.length) % slides.length;
@@ -31,17 +33,26 @@ function initializeShowcase() {
   function stop() {
     window.clearInterval(timer);
     timer = null;
-    rotation.textContent = "Play";
-    rotation.setAttribute("aria-label", "Play slideshow");
+    if (rotation) {
+      rotation.textContent = "Play";
+      rotation.setAttribute("aria-label", "Play slideshow");
+    }
     showcase.querySelector(".auth-slides").setAttribute("aria-live", "polite");
   }
   function play() {
     stop();
-    if (motion.matches || document.hidden) return;
+    if (
+      motion.matches ||
+      document.hidden ||
+      (landing && (hovered || showcase.contains(document.activeElement)))
+    )
+      return;
     showcase.querySelector(".auth-slides").setAttribute("aria-live", "off");
-    rotation.textContent = "Pause";
-    rotation.setAttribute("aria-label", "Pause slideshow");
-    timer = window.setInterval(() => show(active + 1), 9000);
+    if (rotation) {
+      rotation.textContent = "Pause";
+      rotation.setAttribute("aria-label", "Pause slideshow");
+    }
+    timer = window.setInterval(() => show(active + 1), landing ? 6000 : 9000);
   }
   selectors.forEach((button) =>
     button.addEventListener("click", () => {
@@ -55,26 +66,36 @@ function initializeShowcase() {
   ]) {
     showcase
       .querySelector(`[data-carousel="${action}"]`)
-      .addEventListener("click", () => {
+      ?.addEventListener("click", () => {
         stop();
         show(active + delta);
       });
   }
-  rotation.addEventListener("click", () => (timer === null ? play() : stop()));
-  showcase.addEventListener("pointerenter", stop);
+  rotation?.addEventListener("click", () => (timer === null ? play() : stop()));
+  showcase.addEventListener("pointerenter", () => {
+    hovered = true;
+    stop();
+  });
+  showcase.addEventListener("pointerleave", () => {
+    hovered = false;
+    if (landing) play();
+  });
   document.addEventListener("focusin", (event) => {
     if (event.target !== rotation) stop();
   });
+  if (landing) {
+    showcase.addEventListener("focusout", () => window.setTimeout(play, 0));
+  }
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) stop();
   });
   window.addEventListener("pagehide", stop);
   motion.addEventListener("change", () => {
     if (motion.matches) stop();
-    rotation.hidden = motion.matches;
+    if (rotation) rotation.hidden = motion.matches;
   });
   show(0);
-  rotation.hidden = motion.matches;
+  if (rotation) rotation.hidden = motion.matches;
   showcase.querySelector(".auth-carousel-controls").hidden = false;
   play();
 }
