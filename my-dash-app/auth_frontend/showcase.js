@@ -44,7 +44,7 @@ function initializeShowcase() {
     if (
       motion.matches ||
       document.hidden ||
-      (landing && (hovered || showcase.contains(document.activeElement)))
+      (landing && (hovered || showcase.querySelector(":focus-visible")))
     )
       return;
     showcase.querySelector(".auth-slides").setAttribute("aria-live", "off");
@@ -58,6 +58,7 @@ function initializeShowcase() {
     button.addEventListener("click", () => {
       stop();
       show(Number(button.dataset.slide));
+      if (landing) play();
     }),
   );
   for (const [action, delta] of [
@@ -72,26 +73,35 @@ function initializeShowcase() {
       });
   }
   rotation?.addEventListener("click", () => (timer === null ? play() : stop()));
-  showcase.addEventListener("pointerenter", () => {
-    hovered = true;
-    stop();
-  });
-  showcase.addEventListener("pointerleave", () => {
-    hovered = false;
-    if (landing) play();
+  const hoverTargets = landing
+    ? [...showcase.querySelectorAll(".auth-preview")]
+    : [showcase];
+  hoverTargets.forEach((target) => {
+    target.addEventListener("pointerenter", () => {
+      hovered = true;
+      stop();
+    });
+    target.addEventListener("pointerleave", () => {
+      hovered = false;
+      if (landing) play();
+    });
   });
   document.addEventListener("focusin", (event) => {
-    if (event.target !== rotation) stop();
+    if (landing) play();
+    else if (event.target !== rotation) stop();
   });
   if (landing) {
-    showcase.addEventListener("focusout", () => window.setTimeout(play, 0));
+    document.addEventListener("focusout", () => window.setTimeout(play, 0));
   }
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) stop();
+    else if (landing) play();
   });
   window.addEventListener("pagehide", stop);
+  if (landing) window.addEventListener("pageshow", play);
   motion.addEventListener("change", () => {
-    if (motion.matches) stop();
+    if (landing) play();
+    else if (motion.matches) stop();
     if (rotation) rotation.hidden = motion.matches;
   });
   show(0);

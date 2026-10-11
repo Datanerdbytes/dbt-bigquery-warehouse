@@ -55,19 +55,19 @@ def layout():
             html.Div(
                 [
                     chart_panel(
-                        "Customer segments",
+                        "Customer Segments",
                         "c360-rfm-segment-graph",
                         "c360-rfm-loading",
                         "span-8",
                     ),
                     chart_panel(
-                        "Customer spend distribution",
+                        "Customer Spend Distribution",
                         "c360-spend-dist-graph",
                         "c360-spend-loading",
                         "span-4",
                     ),
                     panel(
-                        "High-value customers",
+                        "High-Value Customers",
                         loading(
                             html.Div(id="c360-top-customers-table-container"),
                             "c360-table-loading",
@@ -75,7 +75,7 @@ def layout():
                         "span-8",
                     ),
                     chart_panel(
-                        "Active customer trend",
+                        "Active Customer Trend",
                         "c360-cust-trend-graph",
                         "c360-trend-loading",
                         "span-4",

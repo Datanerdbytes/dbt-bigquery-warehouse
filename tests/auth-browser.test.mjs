@@ -324,11 +324,17 @@ test("landing rotates faster without playback buttons and pauses on hover or foc
     "my-dash-app/templates/showcase.html",
     "utf8",
   ).replace(/\{% if not landing_showcase %\}[\s\S]*?\{% endif %\}/, "");
-  const dom = new JSDOM(`<body class="landing-page">${showcase}</body>`, {
-    runScripts: "outside-only",
-  });
+  const dom = new JSDOM(
+    `<body class="landing-page"><button id="test-nav" data-slide="1">Data pipeline</button>${showcase}</body>`,
+    {
+      runScripts: "outside-only",
+    },
+  );
   const w = dom.window;
-  Object.defineProperty(w.document, "hidden", { value: false });
+  Object.defineProperty(w.document, "hidden", {
+    value: false,
+    configurable: true,
+  });
   let advance, delay, motionChanged;
   const motion = {
     matches: false,
@@ -346,7 +352,7 @@ test("landing rotates faster without playback buttons and pauses on hover or foc
     advance = null;
   };
   w.eval(readFileSync("my-dash-app/auth_frontend/showcase.js", "utf8"));
-  const panel = w.document.getElementById("auth-showcase");
+  const panel = w.document.querySelector(".auth-preview");
   const analytics = w.document.getElementById("auth-slide-analytics");
   assert.equal(w.document.querySelector("[data-carousel]"), null);
   assert.equal(delay, 6000);
@@ -370,6 +376,33 @@ test("landing rotates faster without playback buttons and pauses on hover or foc
   motionChanged();
   panel.dispatchEvent(new w.Event("pointerleave"));
   assert.equal(advance, null);
+  motion.matches = false;
+  motionChanged();
+  assert.equal(typeof advance, "function");
+  Object.defineProperty(w.document, "hidden", {
+    value: true,
+    configurable: true,
+  });
+  w.document.dispatchEvent(new w.Event("visibilitychange"));
+  assert.equal(advance, null);
+  Object.defineProperty(w.document, "hidden", {
+    value: false,
+    configurable: true,
+  });
+  w.document.dispatchEvent(new w.Event("visibilitychange"));
+  assert.equal(typeof advance, "function");
+  w.dispatchEvent(new w.Event("pagehide"));
+  assert.equal(advance, null);
+  w.dispatchEvent(new w.Event("pageshow"));
+  assert.equal(typeof advance, "function");
+  const outside = w.document.createElement("button");
+  w.document.body.append(outside);
+  outside.focus();
+  assert.equal(typeof advance, "function");
+  // Existing slide selectors outside the showcase must resume autoplay.
+  outside.click();
+  w.document.getElementById("test-nav").click();
+  assert.equal(typeof advance, "function");
   dom.window.close();
 });
 

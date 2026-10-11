@@ -78,7 +78,10 @@ def create_sidebar():
                         className="sidebar-brand",
                     ),
                     html.Button(
-                        html.I(className="bi bi-list", **{"aria-hidden": "true"}),
+                        html.I(
+                            className="bi bi-chevron-double-left",
+                            **{"aria-hidden": "true"},
+                        ),
                         id="sidebar-toggle-btn",
                         className="sidebar-toggle-btn",
                         title="Toggle navigation",

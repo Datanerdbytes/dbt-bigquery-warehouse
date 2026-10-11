@@ -647,13 +647,17 @@ def toggle_sidebar(n_clicks, current_class):
         return no_update, no_update, no_update
 
     if current_class and "sidebar-closed" in current_class:
-        # Opening the sidebar -> Show hamburger menu
+        # Expanded navigation offers a left-pointing collapse action.
         new_class = "app-wrapper sidebar-open"
-        new_icon = html.I(className="bi bi-list fs-5")
+        new_icon = html.I(
+            className="bi bi-chevron-double-left fs-5", **{"aria-hidden": "true"}
+        )
     else:
         # Closing the sidebar -> Show double greater-than chevrons
         new_class = "app-wrapper sidebar-closed"
-        new_icon = html.I(className="bi bi-chevron-double-right fs-5")
+        new_icon = html.I(
+            className="bi bi-chevron-double-right fs-5", **{"aria-hidden": "true"}
+        )
 
     return new_class, new_icon, str("sidebar-open" in new_class).lower()
 

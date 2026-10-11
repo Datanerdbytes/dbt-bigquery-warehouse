@@ -69,14 +69,14 @@ def layout():
             html.Div(
                 [
                     chart_panel(
-                        "Sales revenue & profit margin",
+                        "Sales Revenue & Profit Margin",
                         "sales-trend-graph",
                         "sales-trend-loading",
                         "span-8",
                         description="Gross margin uses standard product cost × units sold. Daily up to 60 days; monthly for longer ranges.",
                     ),
                     chart_panel(
-                        "Revenue by category",
+                        "Revenue by Category",
                         "category-pie-graph",
                         "category-pie-loading",
                         "span-4",
@@ -86,7 +86,7 @@ def layout():
                         graph_config={"topojsonURL": "/assets/topojson/"},
                     ),
                     panel(
-                        "Top-performing products",
+                        "Top-Performing Products",
                         [
                             loading(
                                 create_grid(
@@ -131,7 +131,7 @@ def layout():
                         "Select a product to explore its recent transactions.",
                     ),
                     chart_panel(
-                        "Revenue by country",
+                        "Revenue by Country",
                         "regional-sales-graph",
                         "regional-sales-loading",
                         "span-4",
@@ -457,7 +457,7 @@ def select_revenue_view(donut_clicks, map_clicks):
 )
 def update_category_pie(filter_data, view="donut"):
     view = normalize_view(view)
-    title = "Revenue by country" if view == "map" else "Revenue by category"
+    title = "Revenue by Country" if view == "map" else "Revenue by Category"
 
     def result(figure, details=None):
         return figure, title, details, view == "donut", view == "map"
