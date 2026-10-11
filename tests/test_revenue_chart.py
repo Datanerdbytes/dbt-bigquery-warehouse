@@ -90,6 +90,31 @@ class RevenueChartTests(unittest.TestCase):
         fig, *_ = self.render("map", {**self.filters, "country": "DE"})
         self.assertEqual(list(fig.data[0].z), [40])
 
+    def test_donut_total_tracks_filters_and_does_not_mutate_shared_data(self):
+        original = self.frame.copy(deep=True)
+        for filters, total in [
+            (self.filters, "$81"),
+            ({**self.filters, "category": "bikes"}, "$30"),
+            ({**self.filters, "country": "DE"}, "$40"),
+        ]:
+            figure, *_ = self.render("donut", filters)
+            self.assertEqual(
+                [annotation.text for annotation in figure.layout.annotations],
+                ["Total revenue", total],
+            )
+        pd.testing.assert_frame_equal(self.frame, original)
+
+    def test_donut_uses_legend_instead_of_slice_labels(self):
+        figure, *_ = self.render("donut")
+        self.assertEqual(figure.data[0].textinfo, "none")
+        self.assertTrue(figure.layout.showlegend)
+        self.assertEqual(figure.layout.legend.orientation, "h")
+        self.assertEqual(figure.layout.legend.xanchor, "center")
+        self.assertLess(figure.layout.legend.y, 0)
+        self.assertEqual(set(figure.data[0].labels), {"Bikes", "Gear"})
+        self.assertIn("%{label}", figure.data[0].hovertemplate)
+        self.assertIn("%{percent}", figure.data[0].hovertemplate)
+
     def test_empty_and_unmappable(self):
         for frame in [pd.DataFrame(), None]:
             with patch.object(
@@ -118,4 +143,17 @@ class RevenueChartTests(unittest.TestCase):
         self.assertEqual(store.storage_type, "session")
         self.assertEqual(store.data, "donut")
         self.assertEqual(normalize_view({"unexpected": True}), "donut")
+
+        def find_graph(component):
+            if getattr(component, "id", None) == "category-pie-graph":
+                return component
+            children = getattr(component, "children", None)
+            for child in children if isinstance(children, list) else [children]:
+                if child is not None:
+                    found = find_graph(child)
+                    if found is not None:
+                        return found
+            return None
+
+        self.assertEqual(find_graph(layout).config["topojsonURL"], "/assets/topojson/")
         self.assertIsNotNone(revenue_menu())

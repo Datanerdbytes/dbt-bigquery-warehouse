@@ -37,7 +37,8 @@ def get_bigquery_client():
 
 
 @cache.memoize()
-def load_and_prep_data(limit: int = 10000):
+def load_and_prep_data(limit: int = 10000, cost_schema_version: int = 1):
+    # The schema argument changes memoization keys for pre-cost cached frames.
     client = get_bigquery_client()
 
     query_sales = """
@@ -58,7 +59,8 @@ def load_and_prep_data(limit: int = 10000):
         SELECT
             product_key,
             product_name,
-            category
+            category,
+            cost
         FROM `quantum-echo-data-eng-prod.gold.dim_products`
     """
 
@@ -95,7 +97,7 @@ def load_and_prep_data(limit: int = 10000):
         ]
     )
     df_products = df_products.reindex(
-        columns=["product_key", "product_name", "category"]
+        columns=["product_key", "product_name", "category", "cost"]
     )
     df_customers = df_customers.reindex(
         columns=["customer_key", "first_name", "last_name", "country"]
@@ -113,10 +115,10 @@ def load_and_prep_data(limit: int = 10000):
     # BigQuery returns NUMERIC as object dtype holding Decimal values, which makes
     # every aggregation slow. Normalize the monetary columns to float64 once so the
     # chart and KPI aggregations use the vectorized numeric path.
-    for money_column in ("gross_sales_amount", "unit_price"):
+    for money_column in ("gross_sales_amount", "unit_price", "cost"):
         df_merged[money_column] = pd.to_numeric(
             df_merged[money_column], errors="coerce"
-        )
+        ).astype("float64")
 
     min_data_date = None
     max_data_date = None

@@ -8,6 +8,7 @@ let client,
   initialized = false,
   signingOut = false;
 let synchronization = Promise.resolve(false);
+let synchronizationToken;
 let resolveReady;
 const ready = new Promise((resolve) => {
   resolveReady = resolve;
@@ -97,7 +98,12 @@ async function syncSession(session) {
   else document.documentElement.dataset.authReady = "true";
   return true;
 }
-function synchronize(session) {
+function synchronize(session, retry = false) {
+  const token = session?.access_token ?? null;
+  // Supabase can repeat SIGNED_IN on tab focus and alongside form submission.
+  // Share the queued result, including failures, instead of replaying mutations.
+  if (!retry && token === synchronizationToken) return synchronization;
+  synchronizationToken = token;
   synchronization = synchronization
     .catch(() => false)
     .then(() => syncSession(session));
@@ -215,7 +221,7 @@ function wireForm() {
           : await client.auth.signInWithPassword(credentials);
       if (error) throw error;
       password.value = "";
-      if (data.session) await synchronize(data.session);
+      if (data.session) await synchronize(data.session, true);
       else {
         element("auth-content").hidden = true;
         element("auth-back").hidden = false;

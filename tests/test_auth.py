@@ -179,18 +179,40 @@ class AuthTests(unittest.TestCase):
         self.assertIn("Max-Age=0", response.headers["Set-Cookie"])
         self.assertIn("no-store", response.headers["Cache-Control"])
 
-    def test_rate_limiting_on_auth_page(self):
-        """Test that auth pages are rate limited (5 per minute)."""
-        # Make 5 requests - should all succeed
-        for _ in range(5):
-            response = self.client.get("/login")
+    def test_auth_page_navigation_does_not_consume_attempt_budget(self):
+        with patch.object(auth, "verify_access") as verify:
+            for _ in range(12):
+                for path in ("/login", "/signup", "/auth/callback"):
+                    response = self.client.get(path)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertIn("Content-Security-Policy", response.headers)
+            verify.assert_not_called()
+        self.loader.assert_not_called()
+
+    def test_successful_session_sync_does_not_consume_attempt_budget(self):
+        headers = {"Origin": ENV["AUTH_APP_ORIGIN"]}
+        for _ in range(15):
+            with self.remote() as remote:
+                response = self.client.post(
+                    "/auth/session", json={"access_token": token()}, headers=headers
+                )
             self.assertEqual(response.status_code, 200)
-        # 6th request should be rate limited
-        response = self.client.get("/login")
-        self.assertEqual(response.status_code, 429)
-        self.assertEqual(response.mimetype, "text/html")
-        self.assertIn('data-auth-page="rate_limited"', response.get_data(as_text=True))
-        self.assertIn("Content-Security-Policy", response.headers)
+            # Every accepted synchronization still verifies identity remotely.
+            remote.assert_called_once()
+        with patch.object(
+            auth, "verify_access", side_effect=auth.AuthError("session_expired", 401)
+        ):
+            for _ in range(10):
+                self.assertEqual(
+                    self.client.post(
+                        "/auth/session", json={}, headers=headers
+                    ).status_code,
+                    401,
+                )
+            self.assertEqual(
+                self.client.post("/auth/session", json={}, headers=headers).status_code,
+                429,
+            )
 
     def test_rate_limiting_on_session_bridge(self):
         """Test that session bridge is rate limited (10 per minute)."""
@@ -254,16 +276,12 @@ class AuthTests(unittest.TestCase):
                 self.client.get_cookie(auth.COOKIE).value, "existing-cookie"
             )
 
-    def test_rate_limiting_on_config(self):
-        """Test that config endpoint is rate limited (30 per minute)."""
-        # Make 30 requests - should all succeed
-        for _ in range(30):
+    def test_public_config_reads_do_not_consume_attempt_budget(self):
+        for _ in range(40):
             response = self.client.get("/auth/config")
             self.assertEqual(response.status_code, 200)
-        # 31st request should be rate limited
-        response = self.client.get("/auth/config")
-        self.assertEqual(response.status_code, 429)
-        self.assertEqual(response.json["error"], "rate_limited")
+            self.assertEqual(set(response.json), {"url", "anonKey"})
+            self.assertIn("no-store", response.headers["Cache-Control"])
 
     def test_account_enumeration_protection_generic_error(self):
         """Test that auth errors return generic messages to prevent account enumeration."""

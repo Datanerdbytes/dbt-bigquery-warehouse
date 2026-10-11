@@ -260,6 +260,24 @@ test("actual password login, Dash bootstrap/chunks, Plotly, client callbacks and
       trace.y?.some((value) => Number(value) > 0),
     );
   });
+  await f.page.waitForFunction(() => {
+    const graph = document.querySelector("#sales-trend-graph .js-plotly-plot");
+    return (
+      graph?._fullData?.[0]?.type === "bar" &&
+      graph?._fullData?.[1]?.type === "scatter" &&
+      graph._fullData[1].yaxis === "y2" &&
+      graph._fullData[1].y.some((value) => value > 0)
+    );
+  });
+  await f.page
+    .locator("#sales-trend-graph")
+    .screenshot({ path: "/tmp/sales-margin-chart.png" });
+  await f.page.setViewportSize({ width: 375, height: 812 });
+  await f.page.locator("#sales-trend-graph").scrollIntoViewIfNeeded();
+  await f.page
+    .locator("#sales-trend-graph")
+    .screenshot({ path: "/tmp/sales-margin-mobile.png" });
+  await f.page.setViewportSize({ width: 1280, height: 720 });
   await f.page.getByText("Fixture Bike", { exact: true }).first().waitFor();
   assert.ok(f.requests.some((r) => r.url.includes("grant_type=password")));
   assert.ok(
@@ -358,4 +376,147 @@ test("signup confirmation and OAuth provider launch still work", async (t) => {
       (r) => r.url.includes("/authorize?") && r.url.includes("provider=google"),
     ),
   );
+});
+
+test("revenue donut and country map render under enforced CSP", async (t) => {
+  const f = await pageFixture(t, { signedIn: true });
+  await f.page.goto(`${fixture.origin}/dashboard`);
+  await dashboardReady(f);
+  const donutReady = async () => {
+    await f.page.waitForFunction(
+      () =>
+        document.querySelector("#category-pie-graph .js-plotly-plot")
+          ?._fullData?.[0]?.type === "pie",
+    );
+    assert.ok(await f.page.locator("#category-pie-graph .slice").count());
+    assert.match(
+      await f.page
+        .locator("#category-pie-graph .annotation")
+        .allTextContents()
+        .then((text) => text.join(" ")),
+      /Total revenue.*\$50/,
+    );
+  };
+  await donutReady();
+  await f.page.getByRole("button", { name: "Replace revenue chart" }).click();
+  // External Bootstrap CSS is stubbed in this offline fixture; use keyboard
+  // activation so the dropdown is not covered by the unstyled graph container.
+  await f.page.locator("#overview-revenue-map").focus();
+  await f.page.locator("#overview-revenue-map").press("Enter");
+  await f.page
+    .locator("#category-pie-graph .choroplethlayer path")
+    .first()
+    .waitFor();
+  assert.ok(
+    f.requests.some(
+      (r) => r.url === `${fixture.origin}/assets/topojson/world_110m.json`,
+    ),
+  );
+  await assertHealthy(f);
+  await f.page
+    .locator("#category-pie-graph")
+    .screenshot({ path: "/tmp/revenue-map.png" });
+  // A saved map view must load on page navigation, then switch back cleanly.
+  await f.page.reload();
+  await dashboardReady(f);
+  await f.page
+    .locator("#category-pie-graph .choroplethlayer path")
+    .first()
+    .waitFor();
+  await f.page.getByRole("button", { name: "Replace revenue chart" }).click();
+  await f.page.locator("#overview-revenue-donut").focus();
+  await f.page.locator("#overview-revenue-donut").press("Enter");
+  await donutReady();
+  await assertHealthy(f);
+  await f.page
+    .locator("#category-pie-graph")
+    .screenshot({ path: "/tmp/revenue-donut.png" });
+  await f.page.setViewportSize({ width: 375, height: 812 });
+  await f.page.emulateMedia({ reducedMotion: "reduce" });
+  await f.page.locator("#category-pie-graph").scrollIntoViewIfNeeded();
+  await f.page
+    .locator("#category-pie-graph")
+    .screenshot({ path: "/tmp/revenue-donut-mobile.png" });
+  await donutReady();
+});
+
+test("KPI sparklines load on both pages, follow filters and fit narrow cards", async (t) => {
+  const f = await pageFixture(t, { signedIn: true });
+  f.page.setDefaultTimeout(8000);
+  await f.page.setViewportSize({ width: 1600, height: 900 });
+  await f.page.goto(`${fixture.origin}/dashboard`);
+  await dashboardReady(f);
+  const sparklineReady = async () => {
+    await f.page.waitForFunction(
+      () => {
+        const graphs = [
+          ...document.querySelectorAll(".kpi-sparkline .js-plotly-plot"),
+        ];
+        return (
+          graphs.length === 4 &&
+          graphs.every((graph) => graph._fullData?.[0]?.type === "scatter")
+        );
+      },
+      null,
+      { timeout: 15000 },
+    );
+  };
+  const checkMobileCards = async (name) => {
+    await f.page.setViewportSize({ width: 375, height: 812 });
+    await f.page.emulateMedia({ reducedMotion: "reduce" });
+    await f.page.locator(".kpi-grid").scrollIntoViewIfNeeded();
+    await f.page
+      .locator(".kpi-grid")
+      .screenshot({ path: `/tmp/${name}-kpi-sparklines-mobile.png` });
+    const bounds = await f.page
+      .locator(".kpi-card-with-trend")
+      .evaluateAll((cards) =>
+        cards.map((card) => {
+          const value = card
+            .querySelector(".kpi-summary")
+            .getBoundingClientRect();
+          const graph = card
+            .querySelector(".kpi-sparkline")
+            .getBoundingClientRect();
+          const outer = card.getBoundingClientRect();
+          return {
+            stacked: graph.top >= value.bottom,
+            contained:
+              graph.right <= outer.right &&
+              graph.left >= outer.left &&
+              graph.bottom <= outer.bottom &&
+              graph.height >= 60,
+          };
+        }),
+      );
+    assert.ok(bounds.every((card) => card.stacked && card.contained));
+  };
+  await sparklineReady();
+  await f.page
+    .locator(".kpi-grid")
+    .screenshot({ path: "/tmp/product-kpi-sparklines.png" });
+  await f.page.locator("#country-dropdown").click();
+  await f.page.getByRole("option", { name: "PH", exact: true }).click();
+  await f.page.waitForFunction(
+    () => {
+      const graph = document.querySelector(
+        "#kpi-sales-sparkline .js-plotly-plot",
+      );
+      return (
+        graph?._fullData?.[0]?.y?.reduce((sum, value) => sum + value, 0) === 40
+      );
+    },
+    null,
+    { timeout: 15000 },
+  );
+  await checkMobileCards("product");
+  await f.page.setViewportSize({ width: 1600, height: 900 });
+  await f.page.locator('a[href="/customers"]').first().click();
+  await f.page.locator("#c360-page-loaded").waitFor({ state: "attached" });
+  await sparklineReady();
+  await f.page
+    .locator(".kpi-grid")
+    .screenshot({ path: "/tmp/customer-kpi-sparklines.png" });
+  await checkMobileCards("customer");
+  await assertHealthy(f);
 });
