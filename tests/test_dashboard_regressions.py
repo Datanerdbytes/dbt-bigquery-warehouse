@@ -133,12 +133,15 @@ class DashboardRegressionTests(unittest.TestCase):
         sales, products, customers = self.frames(["2026-09-01", "2026-09-02"])
         sales["gross_sales_amount"] = [Decimal("10.50"), Decimal("20.25")]
         sales["unit_price"] = [Decimal("5.25"), Decimal("10.125")]
+        products["cost"] = [Decimal("2.75")]
         (df, *_), _ = self.load_sales((sales, products, customers))
 
         self.assertEqual(df["gross_sales_amount"].dtype, "float64")
         self.assertEqual(df["unit_price"].dtype, "float64")
         self.assertEqual(df["gross_sales_amount"].sum(), 30.75)
         self.assertEqual(df["unit_price"].sum(), 15.375)
+        self.assertEqual(df["cost"].dtype, "float64")
+        self.assertEqual(list(df["cost"]), [2.75, 2.75])
 
     def test_non_numeric_amounts_become_nan_not_strings(self):
         sales, products, customers = self.frames(["2026-09-01"])
@@ -150,6 +153,14 @@ class DashboardRegressionTests(unittest.TestCase):
         self.assertEqual(df["unit_price"].dtype, "float64")
         self.assertTrue(df["gross_sales_amount"].isna().all())
         self.assertTrue(df["unit_price"].isna().all())
+
+    def test_cost_schema_version_separates_cached_datasets(self):
+        loader = data_loader.load_and_prep_data
+        current = loader.make_cache_key(loader.uncached, limit=10000)
+        old = loader.make_cache_key(loader.uncached, limit=10000, cost_schema_version=0)
+        self.assertNotEqual(current, old)
+        (_, *_), client = self.load_sales(self.frames(["2026-09-01"]))
+        self.assertIn("cost", client.query.call_args_list[1].args[0])
 
     def test_prepared_dataset_reuses_one_frame_per_ttl_window(self):
         loader = Mock(side_effect=lambda limit=10000: (pd.DataFrame({"a": [1]}),) * 5)

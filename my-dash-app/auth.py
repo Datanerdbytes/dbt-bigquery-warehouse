@@ -220,7 +220,6 @@ def install_auth(server):
         return response
 
     @server.get("/auth/config")
-    @limiter.limit("30 per minute")
     def config():
         try:
             url, key, _, _ = settings()
@@ -235,7 +234,6 @@ def install_auth(server):
     @server.get("/login")
     @server.get("/signup")
     @server.get("/auth/callback")
-    @limiter.limit("5 per minute")
     def auth_page():
         return render_template(
             "auth.html",
@@ -243,8 +241,13 @@ def install_auth(server):
         )
 
     @server.route("/auth/session", methods=["POST", "DELETE", "GET"])
-    # Logout only clears a cookie; keep it available when verification is throttled.
-    @limiter.limit("10 per minute", methods=["POST"])
+    # Count rejected attempts, not normal page loads, tab events or token refreshes.
+    # Logout only clears a cookie and must remain available when throttled.
+    @limiter.limit(
+        "10 per minute",
+        methods=["POST"],
+        deduct_when=lambda response: response.status_code in (401, 403),
+    )
     def session_bridge():
         if request.method == "GET":
             return jsonify(error="method_not_allowed"), 405
