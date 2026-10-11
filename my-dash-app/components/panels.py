@@ -62,6 +62,7 @@ def chart_panel(
     actions=None,
     title_id=None,
     footer=None,
+    graph_config=None,
 ):
     return panel(
         title,
@@ -69,7 +70,11 @@ def chart_panel(
             loading(
                 dcc.Graph(
                     id=graph_id,
-                    config={"displayModeBar": False, "responsive": True},
+                    config={
+                        "displayModeBar": False,
+                        "responsive": True,
+                        **(graph_config or {}),
+                    },
                     className="dashboard-chart",
                 ),
                 loading_id,

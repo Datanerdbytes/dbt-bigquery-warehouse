@@ -8,6 +8,7 @@ from components.filter_bar import create_filter_bar
 
 # pyrefly: ignore [missing-import]
 from components.kpi_bar import create_kpi_bar
+from components.kpi_sparklines import kpi_sparkline_figures, sparkline_descriptions
 
 # pyrefly: ignore [missing-import]
 from components.panels import chart_panel, create_grid, loading, panel
@@ -46,7 +47,8 @@ def layout():
                         ("Average spend", "c360-kpi-avg-spend"),
                         ("Order frequency", "c360-kpi-avg-freq"),
                         ("Repeat rate", "c360-kpi-repeat-rate"),
-                    ]
+                    ],
+                    sparklines=True,
                 ),
                 "c360-kpi-loading",
             ),
@@ -135,10 +137,19 @@ def sync_c360_filters_to_store(start_date, end_date, category, country):
         Output("c360-kpi-avg-spend-tooltip", "children"),
         Output("c360-kpi-avg-freq-tooltip", "children"),
         Output("c360-kpi-repeat-rate-tooltip", "children"),
+        Output("c360-kpi-active-cust-sparkline", "figure"),
+        Output("c360-kpi-avg-spend-sparkline", "figure"),
+        Output("c360-kpi-avg-freq-sparkline", "figure"),
+        Output("c360-kpi-repeat-rate-sparkline", "figure"),
+        Output("c360-kpi-active-cust-sparkline-container", "aria-label"),
+        Output("c360-kpi-avg-spend-sparkline-container", "aria-label"),
+        Output("c360-kpi-avg-freq-sparkline-container", "aria-label"),
+        Output("c360-kpi-repeat-rate-sparkline-container", "aria-label"),
     ],
     Input("global-filter-store", "data"),
 )
 def update_customer_kpis(filter_data):
+    sparklines = kpi_sparkline_figures(page="customer")
     empty_badge = dbc.Badge("N/A", color="secondary", className="small")
 
     if not filter_data:
@@ -155,6 +166,8 @@ def update_customer_kpis(filter_data):
             "",
             "",
             "",
+            *sparklines,
+            *sparkline_descriptions(sparklines, "customer"),
         )
 
     start_date = filter_data.get("start_date")
@@ -176,6 +189,8 @@ def update_customer_kpis(filter_data):
             "",
             "",
             "",
+            *sparklines,
+            *sparkline_descriptions(sparklines, "customer"),
         )
 
     df_merged = get_prepared_dataset()
@@ -194,6 +209,8 @@ def update_customer_kpis(filter_data):
         df_merged, prev_start, prev_end, selected_category, selected_country
     )
 
+    sparklines = kpi_sparkline_figures(curr_df, start_date, end_date, "customer")
+
     if curr_df.empty:
         return (
             "0",
@@ -208,6 +225,8 @@ def update_customer_kpis(filter_data):
             "No data",
             "No data",
             "No data",
+            *sparklines,
+            *sparkline_descriptions(sparklines, "customer"),
         )
 
     curr_summary = (
@@ -293,6 +312,8 @@ def update_customer_kpis(filter_data):
         tt_spend,
         tt_freq,
         tt_repeat,
+        *sparklines,
+        *sparkline_descriptions(sparklines, "customer"),
     )
 
 

@@ -8,12 +8,14 @@ from components.filter_bar import create_filter_bar
 
 # pyrefly: ignore [missing-import]
 from components.kpi_bar import create_kpi_bar
+from components.kpi_sparklines import kpi_sparkline_figures, sparkline_descriptions
 
 # pyrefly: ignore [missing-import]
 from components.panels import chart_panel, create_grid, loading, panel
 
 # pyrefly: ignore [missing-import]
 from components.revenue_chart import map_figure, normalize_view, revenue_menu
+from components.sales_trend import sales_trend_figure
 from dash import (
     Input,
     Output,
@@ -59,17 +61,19 @@ def layout():
                         ("Orders", "kpi-orders"),
                         ("Units sold", "kpi-quantity"),
                         ("Customers", "kpi-customers"),
-                    ]
+                    ],
+                    sparklines=True,
                 ),
                 "kpi-loading",
             ),
             html.Div(
                 [
                     chart_panel(
-                        "Sales revenue",
+                        "Sales revenue & profit margin",
                         "sales-trend-graph",
                         "sales-trend-loading",
                         "span-8",
+                        description="Gross margin uses standard product cost × units sold. Daily up to 60 days; monthly for longer ranges.",
                     ),
                     chart_panel(
                         "Revenue by category",
@@ -79,6 +83,7 @@ def layout():
                         actions=revenue_menu(),
                         title_id="overview-revenue-title",
                         footer=html.Div(id="overview-revenue-details"),
+                        graph_config={"topojsonURL": "/assets/topojson/"},
                     ),
                     panel(
                         "Top-performing products",
@@ -235,11 +240,19 @@ def update_filter_store(start_date, end_date, category, country):
     Output("kpi-orders-badge", "children"),
     Output("kpi-quantity-badge", "children"),
     Output("kpi-customers-badge", "children"),
+    Output("kpi-sales-sparkline", "figure"),
+    Output("kpi-orders-sparkline", "figure"),
+    Output("kpi-quantity-sparkline", "figure"),
+    Output("kpi-customers-sparkline", "figure"),
+    Output("kpi-sales-sparkline-container", "aria-label"),
+    Output("kpi-orders-sparkline-container", "aria-label"),
+    Output("kpi-quantity-sparkline-container", "aria-label"),
+    Output("kpi-customers-sparkline-container", "aria-label"),
     Input("global-filter-store", "data"),
 )
 def update_all_kpis(filter_data):
     if not filter_data:
-        return (no_update,) * 12
+        return (no_update,) * 20
 
     start_date = filter_data.get("start_date")
     end_date = filter_data.get("end_date")
@@ -247,12 +260,14 @@ def update_all_kpis(filter_data):
     selected_country = filter_data.get("country")
 
     if not start_date or not end_date:
-        return (no_update,) * 12
+        return (no_update,) * 20
 
     df_merged = get_prepared_dataset()
     filtered_df = filter_dataframe(
         df_merged, start_date, end_date, selected_category, selected_country
     )
+
+    sparklines = kpi_sparkline_figures(filtered_df, start_date, end_date, "product")
 
     # 1. Handle Empty DataFrame Case
     if filtered_df.empty:
@@ -271,6 +286,8 @@ def update_all_kpis(filter_data):
             empty_badge,
             empty_badge,
             empty_badge,
+            *sparklines,
+            *sparkline_descriptions(sparklines, "product"),
         )
 
     # 2. Main KPI Aggregations
@@ -384,6 +401,8 @@ def update_all_kpis(filter_data):
         orders_badge,
         quantity_badge,
         customers_badge,
+        *sparklines,
+        *sparkline_descriptions(sparklines, "product"),
     )
 
 
@@ -413,43 +432,7 @@ def update_sales_trend(filter_data):
     end_dt = pd.to_datetime(end_date)
     resample_freq = "D" if (end_dt - start_dt).days <= 60 else "ME"
 
-    trend_df = (
-        filtered_df.set_index("order_date")
-        .resample(resample_freq)["gross_sales_amount"]
-        .sum()
-        .reset_index()
-    )
-
-    fig = px.area(
-        trend_df,
-        x="order_date",
-        y="gross_sales_amount",
-        labels={"order_date": "", "gross_sales_amount": "Revenue ($)"},
-    )
-
-    fig.update_traces(
-        line_color=COLORS["spinner"],
-        fillcolor="rgba(46, 204, 113, 0.15)",
-        hovertemplate="<b>Date:</b> %{x|%b %d, %Y}<br><b>Revenue:</b> $%{y:,.0f}<extra></extra>",
-        line=dict(shape="linear", color=COLORS["spinner"], width=3),
-    )
-
-    fig.update_layout(
-        margin=dict(l=10, r=10, t=10, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color=COLORS["muted"]),
-        xaxis=dict(showgrid=False, zeroline=False, color=COLORS["muted"]),
-        yaxis=dict(
-            showgrid=True,
-            gridcolor=COLORS["border"],
-            zeroline=False,
-            color=COLORS["muted"],
-        ),
-        height=260,
-    )
-
-    return style_figure(fig)
+    return sales_trend_figure(filtered_df, resample_freq)
 
 
 # --- CHART 2 CALLBACK: Revenue by Product Category ---
@@ -510,7 +493,7 @@ def update_category_pie(filter_data, view="donut"):
         cat_df,
         names="category",
         values="gross_sales_amount",
-        hole=0.55,
+        hole=0.65,
         color_discrete_sequence=[
             COLORS["success"],
             COLORS["accent"],
@@ -521,13 +504,42 @@ def update_category_pie(filter_data, view="donut"):
     )
 
     fig.update_traces(
-        textinfo="percent+label",
+        textinfo="none",
         hovertemplate="<b>Category:</b> %{label}<br><b>Revenue:</b> $%{value:,.0f} (%{percent})<extra></extra>",
         marker=dict(line=dict(color=COLORS["text"], width=2)),
     )
 
     fig.update_layout(
-        showlegend=False,
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            x=0.5,
+            xanchor="center",
+            y=-0.08,
+            yanchor="top",
+        ),
+        annotations=[
+            dict(
+                text="Total revenue",
+                x=0.5,
+                y=0.57,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+                font=dict(size=12, color=COLORS["muted"]),
+            ),
+            dict(
+                text=format_compact_number(
+                    float(filtered_df["gross_sales_amount"].sum()), is_currency=True
+                ),
+                x=0.5,
+                y=0.43,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+                font=dict(size=22, color=COLORS["text"]),
+            ),
+        ],
         margin=dict(l=10, r=10, t=10, b=10),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",

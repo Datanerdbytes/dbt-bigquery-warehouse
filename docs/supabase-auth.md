@@ -70,6 +70,14 @@ shell during initialization or session loss. Sign-out clears the server cookie
 and local Supabase session; Supabase events synchronize other tabs. Outages and
 expired callbacks display recovery instructions rather than an indefinite loader.
 
+Public auth page and configuration reads do not consume the login attempt budget.
+The session bridge limits rejected POST attempts to ten per minute per remote
+address; successful verification and logout do not consume that budget. The
+browser shares synchronization results for repeated events with the same access
+token, including rejected results. A refreshed token or an explicit sign-in
+attempt triggers a new synchronization. Every protected request still verifies
+the token, confirmed email, and allowlist with Supabase.
+
 ## Offline validation
 
 ```sh

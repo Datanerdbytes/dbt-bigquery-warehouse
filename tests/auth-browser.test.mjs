@@ -33,6 +33,7 @@ async function fixture(
   const w = dom.window,
     calls = [];
   let listener;
+  let responseStatus = status;
   if (showcase) w.document.documentElement.dataset.authPage = mode;
   let advanceSlide;
   let motionChanged;
@@ -62,10 +63,11 @@ async function fixture(
   w.fetch = async (url, options) => {
     calls.push([url, options]);
     return {
-      ok: status === 200,
-      status,
+      ok: responseStatus === 200,
+      status: responseStatus,
       json: async () => ({
-        error: status === 403 ? "approval_required" : "auth_unavailable",
+        error:
+          responseStatus === 403 ? "approval_required" : "auth_unavailable",
       }),
     };
   };
@@ -98,6 +100,9 @@ async function fixture(
     calls,
     auth,
     event: (...args) => listener(...args),
+    setStatus: (value) => {
+      responseStatus = value;
+    },
     advanceSlide: () => advanceSlide?.(),
     setReducedMotion: () => {
       motion.matches = true;
@@ -323,4 +328,66 @@ test("throttled login page explains retry without starting auth requests", async
   assert.equal(calls.length, 0);
   assert.equal(w.document.getElementById("auth-content").hidden, true);
   w.close();
+});
+
+test("repeated session events share one synchronization and refresh still works", async () => {
+  const f = await fixture("", { access_token: "initial" });
+  for (let i = 0; i < 15; i++)
+    f.event("SIGNED_IN", { access_token: "initial" });
+  await tick();
+  assert.equal(
+    f.calls.filter(([url, o]) => url === "/auth/session" && o.method === "POST")
+      .length,
+    1,
+  );
+  f.event("TOKEN_REFRESHED", { access_token: "new-token" });
+  f.event("SIGNED_IN", { access_token: "new-token" });
+  await tick();
+  assert.equal(
+    f.calls.filter(([url, o]) => url === "/auth/session" && o.method === "POST")
+      .length,
+    2,
+  );
+  await f.w.fetch("/_dash-layout");
+  f.close();
+});
+
+test("sign-in event and form result do not duplicate the session POST", async () => {
+  const f = await fixture();
+  f.auth.signInWithPassword = async () => {
+    const session = { access_token: "valid" };
+    f.event("SIGNED_IN", session);
+    return { data: { session } };
+  };
+  submit(f.w);
+  await tick();
+  assert.equal(
+    f.calls.filter(([url, o]) => url === "/auth/session" && o.method === "POST")
+      .length,
+    1,
+  );
+  f.close();
+});
+
+test("rejected session events do not replay mutations; explicit sign-in can retry", async () => {
+  const f = await fixture();
+  f.setStatus(503);
+  submit(f.w);
+  await tick();
+  for (let i = 0; i < 12; i++) f.event("SIGNED_IN", { access_token: "valid" });
+  await tick();
+  assert.equal(
+    f.calls.filter(([url, o]) => url === "/auth/session" && o.method === "POST")
+      .length,
+    1,
+  );
+  submit(f.w);
+  await tick();
+  assert.equal(
+    f.calls.filter(([url, o]) => url === "/auth/session" && o.method === "POST")
+      .length,
+    2,
+  );
+  assert.equal(f.w.document.documentElement.dataset.authReady, undefined);
+  f.close();
 });
