@@ -77,7 +77,7 @@ class RevenueChartTests(unittest.TestCase):
             is_map = view == "map"
             self.assertEqual(fig.data[0].type, "choropleth" if is_map else "pie")
             self.assertEqual(
-                title, "Revenue by country" if is_map else "Revenue by category"
+                title, "Revenue by Country" if is_map else "Revenue by Category"
             )
             self.assertEqual((donut, map_active), (not is_map, is_map))
             self.assertEqual(

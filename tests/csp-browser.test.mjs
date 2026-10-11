@@ -246,6 +246,62 @@ test("HTML nonces match headers and change on reload; landing bundle runs", asyn
   await assertHealthy(f);
 });
 
+test("landing autoplay resumes after tab return and pauses only while hovered", async (t) => {
+  const f = await pageFixture(t);
+  await f.page.clock.install();
+  await f.page.goto(fixture.origin);
+  await f.page.locator(".auth-carousel-controls:not([hidden])").waitFor();
+  assert.equal(await f.page.locator("[data-carousel]").count(), 0);
+  await f.page.clock.runFor(6100);
+  assert.equal(
+    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
+    true,
+  );
+  await f.page.locator(".auth-slide:not([hidden]) .auth-preview").hover();
+  await f.page.clock.runFor(6100);
+  assert.equal(
+    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
+    true,
+  );
+  await f.page.locator(".landing-header").hover();
+  await f.page.clock.runFor(6100);
+  assert.equal(
+    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
+    false,
+  );
+  await f.page.evaluate(() => {
+    Object.defineProperty(document, "hidden", {
+      value: true,
+      configurable: true,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await f.page.clock.runFor(6100);
+  assert.equal(
+    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
+    false,
+  );
+  await f.page.evaluate(() => {
+    Object.defineProperty(document, "hidden", {
+      value: false,
+      configurable: true,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await f.page.clock.runFor(6100);
+  assert.equal(
+    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
+    true,
+  );
+  await f.page.locator('.landing-nav [data-slide="0"]').click();
+  await f.page.clock.runFor(6100);
+  assert.equal(
+    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
+    true,
+  );
+  await assertHealthy(f);
+});
+
 test("actual password login, Dash bootstrap/chunks, Plotly, client callbacks and navigation work under CSP", async (t) => {
   const f = await pageFixture(t);
   await f.page.goto(`${fixture.origin}/login`);
@@ -292,12 +348,16 @@ test("actual password login, Dash bootstrap/chunks, Plotly, client callbacks and
   // The sidebar toggle exercises a server callback after the Dash auth gate.
   const toggle = f.page.locator("#sidebar-toggle-btn");
   if (await toggle.count()) {
+    assert.equal(await toggle.getAttribute("aria-expanded"), "true");
+    assert.equal(await toggle.locator(".bi-chevron-double-left").count(), 1);
     const before = await f.page.locator("#app-wrapper").getAttribute("class");
     await toggle.click();
     await f.page.waitForFunction(
       (value) => document.getElementById("app-wrapper").className !== value,
       before,
     );
+    assert.equal(await toggle.getAttribute("aria-expanded"), "false");
+    assert.equal(await toggle.locator(".bi-chevron-double-right").count(), 1);
   } else {
     throw new Error("Expected sidebar toggle for real callback verification");
   }
@@ -312,6 +372,9 @@ test("actual password login, Dash bootstrap/chunks, Plotly, client callbacks and
     )
   ) {
     await f.page.locator("#sidebar-toggle-btn").click();
+    await f.page
+      .locator("#sidebar-toggle-btn .bi-chevron-double-left")
+      .waitFor({ state: "attached" });
   }
   await f.page.locator("#sidebar-account summary").click();
   await f.page.locator("#dashboard-signout").click();

@@ -38,7 +38,7 @@
         >Login <span aria-hidden="true">↗</span></a
       >
     </header>
-    <main id="landing-main">{% include 'showcase.html' %}</main>
+    <main id="landing-main">{% set landing_showcase = true %}{% include 'showcase.html' %}</main>
     <footer class="landing-footer">
       <span>Business clarity. Data confidence.</span
       ><span>Built with BigQuery & dbt</span>

@@ -319,6 +319,93 @@ test("public landing slideshow works without authentication and preserves focus"
   dom.window.close();
 });
 
+test("landing rotates faster without playback buttons and pauses on hover or focus", async () => {
+  const showcase = readFileSync(
+    "my-dash-app/templates/showcase.html",
+    "utf8",
+  ).replace(/\{% if not landing_showcase %\}[\s\S]*?\{% endif %\}/, "");
+  const dom = new JSDOM(
+    `<body class="landing-page"><button id="test-nav" data-slide="1">Data pipeline</button>${showcase}</body>`,
+    {
+      runScripts: "outside-only",
+    },
+  );
+  const w = dom.window;
+  Object.defineProperty(w.document, "hidden", {
+    value: false,
+    configurable: true,
+  });
+  let advance, delay, motionChanged;
+  const motion = {
+    matches: false,
+    addEventListener: (_event, callback) => {
+      motionChanged = callback;
+    },
+  };
+  w.matchMedia = () => motion;
+  w.setInterval = (callback, milliseconds) => {
+    advance = callback;
+    delay = milliseconds;
+    return 1;
+  };
+  w.clearInterval = () => {
+    advance = null;
+  };
+  w.eval(readFileSync("my-dash-app/auth_frontend/showcase.js", "utf8"));
+  const panel = w.document.querySelector(".auth-preview");
+  const analytics = w.document.getElementById("auth-slide-analytics");
+  assert.equal(w.document.querySelector("[data-carousel]"), null);
+  assert.equal(delay, 6000);
+  advance();
+  assert.equal(analytics.hidden, true);
+  panel.dispatchEvent(new w.Event("pointerenter"));
+  assert.equal(advance, null);
+  panel.dispatchEvent(new w.Event("pointerleave"));
+  advance();
+  assert.equal(analytics.hidden, false);
+  const tab = w.document.querySelector('[data-slide="0"]');
+  tab.focus();
+  assert.equal(advance, null);
+  panel.dispatchEvent(new w.Event("pointerenter"));
+  panel.dispatchEvent(new w.Event("pointerleave"));
+  assert.equal(advance, null);
+  tab.blur();
+  await tick();
+  assert.equal(typeof advance, "function");
+  motion.matches = true;
+  motionChanged();
+  panel.dispatchEvent(new w.Event("pointerleave"));
+  assert.equal(advance, null);
+  motion.matches = false;
+  motionChanged();
+  assert.equal(typeof advance, "function");
+  Object.defineProperty(w.document, "hidden", {
+    value: true,
+    configurable: true,
+  });
+  w.document.dispatchEvent(new w.Event("visibilitychange"));
+  assert.equal(advance, null);
+  Object.defineProperty(w.document, "hidden", {
+    value: false,
+    configurable: true,
+  });
+  w.document.dispatchEvent(new w.Event("visibilitychange"));
+  assert.equal(typeof advance, "function");
+  w.dispatchEvent(new w.Event("pagehide"));
+  assert.equal(advance, null);
+  w.dispatchEvent(new w.Event("pageshow"));
+  assert.equal(typeof advance, "function");
+  const outside = w.document.createElement("button");
+  w.document.body.append(outside);
+  outside.focus();
+  assert.equal(typeof advance, "function");
+  // Existing slide selectors outside the showcase must resume autoplay.
+  outside.click();
+  w.document.getElementById("test-nav").click();
+  assert.equal(typeof advance, "function");
+  dom.window.close();
+});
+
 test("throttled login page explains retry without starting auth requests", async () => {
   const { w, calls } = await fixture("rate_limited");
   assert.match(

@@ -382,7 +382,7 @@ def layout():
                 [
                     dbc.Tab(
                         panel(
-                            "Execution logs",
+                            "Execution Logs",
                             [
                                 loading(
                                     create_grid(
@@ -395,12 +395,12 @@ def layout():
                             ],
                             description="Latest 200 model and test executions.",
                         ),
-                        label="Execution logs",
+                        label="Execution Logs",
                         tab_id="tab-execution",
                     ),
                     dbc.Tab(
                         panel(
-                            "Model coverage",
+                            "Model Coverage",
                             [
                                 loading(
                                     dcc.Graph(
@@ -423,12 +423,12 @@ def layout():
                             ],
                             description="Test coverage by model.",
                         ),
-                        label="Model coverage",
+                        label="Model Coverage",
                         tab_id="tab-model-coverage",
                     ),
                     dbc.Tab(
                         panel(
-                            "Column coverage",
+                            "Column Coverage",
                             [
                                 loading(
                                     dcc.Graph(
@@ -451,7 +451,7 @@ def layout():
                             ],
                             description="Inspect tested and untested columns.",
                         ),
-                        label="Column coverage",
+                        label="Column Coverage",
                         tab_id="tab-column-coverage",
                     ),
                     dbc.Tab(
@@ -484,7 +484,7 @@ def layout():
                     ),
                     dbc.Tab(
                         panel(
-                            "BigQuery costs",
+                            "BigQuery Costs",
                             [
                                 loading(
                                     dcc.Graph(
@@ -507,7 +507,7 @@ def layout():
                             ],
                             description="Query activity over 30 days and the 25 most expensive queries from the past 7 days.",
                         ),
-                        label="BigQuery costs",
+                        label="BigQuery Costs",
                         tab_id="tab-bq-costs",
                     ),
                 ],
