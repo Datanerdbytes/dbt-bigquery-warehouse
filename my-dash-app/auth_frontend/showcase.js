@@ -10,6 +10,8 @@ function initializeShowcase() {
   let active = 0;
   let timer = null;
   let hovered = false;
+  let pausedByUser = false;
+  let rotationFocusAllowed = false;
   function show(index) {
     const moveFocus = slides[active].contains(document.activeElement);
     active = (index + slides.length) % slides.length;
@@ -42,9 +44,13 @@ function initializeShowcase() {
   function play() {
     stop();
     if (
+      pausedByUser ||
       motion.matches ||
       document.hidden ||
-      (landing && (hovered || showcase.querySelector(":focus-visible")))
+      (landing &&
+        (hovered ||
+          (showcase.querySelector(":focus-visible") &&
+            !(rotationFocusAllowed && document.activeElement === rotation))))
     )
       return;
     showcase.querySelector(".auth-slides").setAttribute("aria-live", "off");
@@ -72,7 +78,17 @@ function initializeShowcase() {
         show(active + delta);
       });
   }
-  rotation?.addEventListener("click", () => (timer === null ? play() : stop()));
+  rotation?.addEventListener("click", () => {
+    if (timer === null) {
+      pausedByUser = false;
+      rotationFocusAllowed = true;
+      play();
+    } else {
+      pausedByUser = true;
+      rotationFocusAllowed = false;
+      stop();
+    }
+  });
   const hoverTargets = landing
     ? [...showcase.querySelectorAll(".auth-preview")]
     : [showcase];
@@ -87,6 +103,7 @@ function initializeShowcase() {
     });
   });
   document.addEventListener("focusin", (event) => {
+    rotationFocusAllowed = false;
     if (landing) play();
     else if (event.target !== rotation) stop();
   });

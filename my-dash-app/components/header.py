@@ -121,6 +121,7 @@ def refresh_header_health(_pathname, _n_intervals, previous_alert):
 
 
 PAGE_HEADINGS = {
+    "/admin/users": ("User management", "Accounts, verification, and workspace access"),
     "/dashboard": ("Product Overview", "Revenue, demand, and product performance"),
     "/customers": ("Customer 360", "Customer value, engagement, and retention"),
     "/pipeline-health": (

@@ -1,6 +1,7 @@
 import dash_bootstrap_components as dbc
 from dash import html
 from flask import g, has_request_context
+from user_admin import is_admin
 
 
 def create_account_menu():
@@ -69,6 +70,9 @@ def create_sidebar():
         ("Customer 360", "/customers", "bi-people"),
         ("Pipeline Health", "/pipeline-health", "bi-activity"),
     ]
+    user = getattr(g, "auth_user", {}) if has_request_context() else {}
+    if is_admin(user):
+        links.append(("User management", "/admin/users", "bi-person-gear"))
     return html.Aside(
         [
             html.Div(

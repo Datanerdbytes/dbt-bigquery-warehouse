@@ -52,17 +52,28 @@ after(async () => {
   }
 });
 
-function session() {
+function session(admin = false, manager = false) {
   return {
-    access_token: fixture.token,
+    access_token: manager
+      ? fixture.managerToken
+      : admin
+        ? fixture.adminToken
+        : fixture.token,
     refresh_token: "synthetic-refresh",
     token_type: "bearer",
     expires_in: 3600,
     expires_at: Math.floor(Date.now() / 1000) + 3600,
-    user: fixture.user,
+    user: manager
+      ? fixture.managerUser
+      : admin
+        ? fixture.adminUser
+        : fixture.user,
   };
 }
-async function pageFixture(t, { signedIn = false, refresh = false } = {}) {
+async function pageFixture(
+  t,
+  { signedIn = false, refresh = false, admin = false, manager = false } = {},
+) {
   const context = await browser.newContext();
   t.after(() => context.close());
   const requests = [],
@@ -78,19 +89,35 @@ async function pageFixture(t, { signedIn = false, refresh = false } = {}) {
       const headers = {
         "access-control-allow-origin": fixture.origin,
         "access-control-allow-headers": "*",
-        "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
+        "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS",
       };
       if (request.method() === "OPTIONS")
         return route.fulfill({ status: 204, headers });
+      if (url.pathname === "/auth/v1/recover")
+        return route.fulfill({ json: {}, headers });
       if (url.pathname === "/auth/v1/user")
-        return route.fulfill({ json: fixture.user, headers });
+        return route.fulfill({
+          json: manager
+            ? fixture.managerUser
+            : admin
+              ? fixture.adminUser
+              : fixture.user,
+          headers,
+        });
       if (url.pathname === "/auth/v1/token")
-        return route.fulfill({ json: session(), headers });
+        return route.fulfill({ json: session(admin, manager), headers });
       if (url.pathname === "/auth/v1/logout")
         return route.fulfill({ status: 204, headers });
       if (url.pathname === "/auth/v1/signup")
         return route.fulfill({
-          json: { user: fixture.user, session: null },
+          json: {
+            user: manager
+              ? fixture.managerUser
+              : admin
+                ? fixture.adminUser
+                : fixture.user,
+            session: null,
+          },
           headers,
         });
       if (url.pathname === "/auth/v1/authorize")
@@ -114,8 +141,8 @@ async function pageFixture(t, { signedIn = false, refresh = false } = {}) {
     external.push(request.url());
     return route.abort();
   });
-  if (signedIn || refresh) {
-    const value = session();
+  if (signedIn || refresh || admin || manager) {
+    const value = session(admin, manager);
     if (refresh) {
       value.expires_at = 1;
     }
@@ -126,7 +153,11 @@ async function pageFixture(t, { signedIn = false, refresh = false } = {}) {
     await context.addCookies([
       {
         name: "qe_access_token",
-        value: fixture.token,
+        value: manager
+          ? fixture.managerToken
+          : admin
+            ? fixture.adminToken
+            : fixture.token,
         url: fixture.origin,
         httpOnly: true,
         sameSite: "Lax",
@@ -251,7 +282,7 @@ test("landing autoplay resumes after tab return and pauses only while hovered", 
   await f.page.clock.install();
   await f.page.goto(fixture.origin);
   await f.page.locator(".auth-carousel-controls:not([hidden])").waitFor();
-  assert.equal(await f.page.locator("[data-carousel]").count(), 0);
+  assert.equal(await f.page.locator('[data-carousel="rotation"]').count(), 1);
   await f.page.clock.runFor(6100);
   assert.equal(
     await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
@@ -299,6 +330,32 @@ test("landing autoplay resumes after tab return and pauses only while hovered", 
     await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
     true,
   );
+  const rotation = f.page.locator('[data-carousel="rotation"]');
+  await rotation.click();
+  await f.page.locator(".landing-header").hover();
+  await f.page.clock.runFor(6100);
+  assert.equal(
+    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
+    true,
+  );
+  assert.equal(
+    await rotation.textContent().then((text) => text.trim()),
+    "Play",
+  );
+  await rotation.focus();
+  await rotation.press("Enter");
+  await f.page.locator(".landing-header").hover();
+  await f.page.clock.runFor(6100);
+  assert.equal(
+    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
+    false,
+  );
+  assert.equal(
+    await f.page
+      .locator("#auth-slide-analytics")
+      .evaluate((el) => getComputedStyle(el).animationDuration),
+    "0.45s",
+  );
   await assertHealthy(f);
 });
 
@@ -335,7 +392,9 @@ test("actual password login, Dash bootstrap/chunks, Plotly, client callbacks and
     .screenshot({ path: "/tmp/sales-margin-mobile.png" });
   await f.page.setViewportSize({ width: 1280, height: 720 });
   await f.page.getByText("Fixture Bike", { exact: true }).first().waitFor();
-  assert.ok(f.requests.some((r) => r.url.includes("grant_type=password")));
+  assert.ok(
+    f.requests.some((r) => r.url === `${fixture.origin}/auth/password`),
+  );
   assert.ok(
     f.requests.some((r) => /async-graph|plotly.*\.js/.test(r.url)),
     "Dash dynamic graph/Plotly chunk must load",
@@ -412,7 +471,7 @@ test("OAuth callback exchange and canceled OAuth recovery work under CSP", async
   await f.page.waitForFunction(() =>
     document
       .getElementById("auth-message")
-      ?.textContent.includes("invalid or canceled"),
+      ?.textContent.includes("Sign-in was canceled"),
   );
   await assertHealthy(f);
 });
@@ -582,4 +641,396 @@ test("KPI sparklines load on both pages, follow filters and fit narrow cards", a
     .screenshot({ path: "/tmp/customer-kpi-sparklines.png" });
   await checkMobileCards("customer");
   await assertHealthy(f);
+});
+
+test("signup password Show and Hide work with pointer and keyboard under CSP", async (t) => {
+  const f = await pageFixture(t);
+  await f.page.goto(`${fixture.origin}/signup`);
+  await f.page.locator("#auth-content:not([hidden])").waitFor();
+  const input = f.page.locator("#auth-password");
+  const toggle = f.page.locator("#auth-show-password");
+  await input.fill("synthetic-password");
+  await toggle.click();
+  assert.equal(await input.getAttribute("type"), "text");
+  assert.equal(await toggle.getAttribute("aria-label"), "Hide password");
+  await toggle.focus();
+  await toggle.press("Enter");
+  assert.equal(await input.getAttribute("type"), "password");
+  assert.equal(await input.inputValue(), "synthetic-password");
+  assert.equal(await toggle.getAttribute("aria-pressed"), "false");
+  assert.equal(
+    await f.page.locator(".auth-note").textContent(),
+    "Verify your email to access your workspace.",
+  );
+  assert.equal(
+    f.requests.some((r) => r.url.includes("grant_type=password")),
+    false,
+  );
+  await assertHealthy(f);
+});
+
+test("members cannot open user management or its API", async (t) => {
+  const f = await pageFixture(t, { signedIn: true });
+  const response = await f.page.goto(`${fixture.origin}/admin/users`);
+  assert.equal(response.status(), 403);
+  await f.page
+    .getByRole("heading", { name: "Admin access required" })
+    .waitFor();
+  const api = await f.context.request.get(`${fixture.origin}/api/admin/users`);
+  assert.equal(api.status(), 403);
+  assert.equal(await f.page.locator("#admin-users-grid").count(), 0);
+  await assertHealthy(f);
+});
+test("admin directory manages access and roles, confirms actions, and fits mobile", async (t) => {
+  const f = await pageFixture(t, { admin: true });
+  await f.page.setViewportSize({ width: 1440, height: 1000 });
+  await f.page.goto(`${fixture.origin}/admin/users`);
+  await f.page.locator("#admin-users-grid .ag-row").first().waitFor();
+  await f.page.getByText("member@example.com", { exact: true }).first().click();
+  await f.page.waitForFunction(
+    () => !document.getElementById("admin-users-suspend").disabled,
+  );
+  await f.page.screenshot({
+    path: "/tmp/quantum-echo-user-management-desktop.png",
+    fullPage: true,
+  });
+  const perform = async (action, expected) => {
+    const row = f.page
+      .locator("#admin-users-grid .ag-row")
+      .filter({ hasText: "member@example.com" });
+    if ((await row.getAttribute("aria-selected")) !== "true") await row.click();
+    await f.page.locator(`#admin-users-${action}`).click();
+    await f.page.locator("#admin-users-confirm-modal").waitFor();
+    await f.page.locator("#admin-users-confirm").focus();
+    await f.page.locator("#admin-users-confirm").press("Enter");
+    await f.page.getByText(expected, { exact: true }).waitFor();
+    const feedback = f.page.locator("#admin-users-action-message");
+    await f.page.waitForFunction(() => {
+      const bounds = document
+        .getElementById("admin-users-action-message")
+        .getBoundingClientRect();
+      return bounds.top >= 0 && bounds.top < innerHeight;
+    });
+    assert.equal(
+      await feedback.evaluate(
+        (el) =>
+          el.getBoundingClientRect().top >= 0 &&
+          el.getBoundingClientRect().top < innerHeight,
+      ),
+      true,
+    );
+    assert.equal(
+      await feedback.evaluate((el) =>
+        Boolean(
+          el.compareDocumentPosition(document.querySelector(".admin-hero")) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+        ),
+      ),
+      true,
+    );
+
+    await f.page.waitForFunction(
+      () =>
+        document.getElementById("admin-users-selected")?.textContent ===
+        "Select an account",
+    );
+  };
+  // Cancel must not perform the selected mutation.
+  await f.page.locator("#admin-users-suspend").click();
+  await f.page.locator("#admin-users-confirm-modal").waitFor();
+  // External Bootstrap CSS is stubbed in this offline fixture. Use keyboard
+  // activation for modal controls, as in the existing export-menu tests.
+  await f.page.locator("#admin-users-cancel").focus();
+  await f.page.locator("#admin-users-cancel").press("Enter");
+  await f.page
+    .locator("#admin-users-confirm-modal")
+    .waitFor({ state: "hidden" });
+  await perform("grant_admin", "Administrator access granted.");
+  await perform("revoke_admin", "Administrator access revoked.");
+  await perform("suspend", "Account suspended.");
+  assert.equal(
+    await f.page.locator("#admin-users-restore").isDisabled(),
+    true,
+    "Selection resets after a change",
+  );
+  await f.page
+    .locator("#admin-users-grid .ag-row")
+    .filter({ hasText: "member@example.com" })
+    .click();
+  await f.page.waitForFunction(
+    () => !document.getElementById("admin-users-restore").disabled,
+  );
+  assert.equal(
+    await f.page.locator("#admin-users-revoke_admin").isDisabled(),
+    true,
+    "Members do not have admin access to revoke",
+  );
+
+  await perform("restore", "Account access restored.");
+  await f.page
+    .locator("#admin-users-grid .ag-row")
+    .filter({ hasText: "admin@example.com" })
+    .click();
+  await f.page.waitForFunction(
+    () => document.getElementById("admin-users-revoke_admin").disabled,
+  );
+  assert.equal(await f.page.locator("#admin-users-suspend").isDisabled(), true);
+  await f.page.setViewportSize({ width: 375, height: 812 });
+  await f.page.emulateMedia({ reducedMotion: "reduce" });
+  await f.page.waitForFunction(
+    () =>
+      parseFloat(
+        getComputedStyle(document.querySelector(".main-content-wrapper"))
+          .marginLeft,
+      ) === 0,
+  );
+  await f.page.screenshot({
+    animations: "disabled",
+    path: "/tmp/quantum-echo-user-management-mobile.png",
+    fullPage: true,
+  });
+  assert.equal(
+    await f.page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+    true,
+  );
+  await assertHealthy(f);
+});
+
+test("non-owner administrators cannot see or invoke account deletion", async (t) => {
+  const f = await pageFixture(t, { manager: true });
+  await f.page.goto(`${fixture.origin}/admin/users`);
+  await f.page.locator("#admin-users-grid .ag-row").first().waitFor();
+  assert.equal(
+    await f.page.locator("#admin-users-delete-section").isVisible(),
+    false,
+  );
+  const response = await f.context.request.delete(
+    `${fixture.origin}/api/admin/users/44444444-4444-4444-8444-444444444444`,
+    {
+      headers: { Origin: fixture.origin },
+      data: { confirmation_email: "delete-test@example.com" },
+    },
+  );
+  assert.equal(response.status(), 403);
+  await assertHealthy(f);
+});
+test("owner deletes only a suspended account after typed email confirmation", async (t) => {
+  const f = await pageFixture(t, { admin: true });
+  await f.page.goto(`${fixture.origin}/admin/users`);
+  await f.page.locator("#admin-users-grid .ag-row").first().waitFor();
+  const row = f.page
+    .locator("#admin-users-grid .ag-row")
+    .filter({ hasText: "delete-test@example.com" });
+  await row.click();
+  const start = f.page.locator("#admin-users-delete");
+  await start.click();
+  const modal = f.page.locator("#admin-users-delete-modal");
+  await modal.waitFor();
+  const confirm = f.page.locator("#admin-users-delete-confirm");
+  const email = f.page.locator("#admin-users-delete-confirmation");
+  assert.equal(await confirm.isDisabled(), true);
+  await email.fill("wrong@example.com");
+  assert.equal(await confirm.isDisabled(), true);
+  await f.page.locator("#admin-users-delete-cancel").focus();
+  await f.page.locator("#admin-users-delete-cancel").press("Enter");
+  await modal.waitFor({ state: "hidden" });
+  assert.equal(await row.count(), 1);
+  await start.click();
+  await modal.waitFor();
+  assert.equal(await email.inputValue(), "");
+  await email.fill("delete-test@example.com");
+  await f.page.waitForFunction(
+    () => !document.getElementById("admin-users-delete-confirm").disabled,
+  );
+  await f.page.clock.install();
+  await confirm.focus();
+  await confirm.press("Enter");
+  await f.page.getByText("Account deleted.", { exact: true }).waitFor();
+  await row.waitFor({ state: "detached" });
+  await f.page.waitForFunction(
+    () =>
+      document
+        .getElementById("admin-users-action-message")
+        .getBoundingClientRect().top < innerHeight,
+  );
+  await f.page
+    .locator("#admin-users-grid .ag-row")
+    .filter({ hasText: "admin@example.com" })
+    .click();
+  assert.equal(await start.isDisabled(), true);
+  await f.page.clock.runFor(5100);
+  await f.page
+    .getByText("Account deleted.", { exact: true })
+    .waitFor({ state: "hidden" });
+  await assertHealthy(f);
+});
+
+test("password recovery uses built bundle and matching passwords under CSP", async (t) => {
+  const { page, context, requests } = await pageFixture(t);
+  await page.goto(`${fixture.origin}/login`);
+  await page.getByRole("link", { name: "Forgot password?" }).click();
+  await page.locator("#auth-email").fill("test@example.com");
+  await page.getByRole("button", { name: "Send reset link" }).click();
+  await page.getByText("If an account exists", { exact: false }).waitFor();
+  assert.equal(
+    requests.some(({ url }) => url.startsWith(`${mockOrigin}/auth/v1/recover`)),
+    true,
+  );
+  await page.goto(
+    `${fixture.origin}/reset-password?code=synthetic-recovery-code`,
+  );
+  await page.locator("#auth-password").waitFor({ state: "visible" });
+  assert.equal(page.url(), `${fixture.origin}/reset-password`);
+  await page.locator("#auth-password").fill("new-long-password");
+  await page.getByRole("button", { name: "Show password" }).click();
+  assert.equal(
+    await page.locator("#auth-password").getAttribute("type"),
+    "text",
+  );
+  await page.locator("#auth-confirm-password").fill("different-password");
+  await page.getByRole("button", { name: "Save new password" }).click();
+  await page.getByText("Passwords must match.", { exact: true }).waitFor();
+  await page.locator("#auth-confirm-password").fill("new-long-password");
+  await page.getByRole("button", { name: "Save new password" }).click();
+  await page
+    .getByText("Password updated. Sign in with your new password.", {
+      exact: true,
+    })
+    .waitFor();
+  assert.equal(
+    requests.some(
+      ({ url, method }) =>
+        url === `${fixture.origin}/auth/session` && method === "POST",
+    ),
+    false,
+  );
+  assert.equal(
+    (await context.cookies()).some(({ name }) => name === "qe_access_token"),
+    false,
+  );
+  assert.deepEqual(await page.evaluate(() => window.cspViolations), []);
+});
+
+test("five wrong passwords lock sign-in across browser contexts while reset remains available", async (t) => {
+  const f = await pageFixture(t);
+  await f.page.goto(`${fixture.origin}/login`);
+  await f.page.locator("#auth-email").fill("lockout@example.com");
+  for (let i = 0; i < 5; i++) {
+    await f.page.locator("#auth-password").fill("incorrect-password");
+    const response = f.page.waitForResponse(
+      (r) => r.url() === `${fixture.origin}/auth/password`,
+    );
+    await f.page.locator('#auth-form button[type="submit"]').click();
+    assert.equal((await response).status(), i === 4 ? 423 : 401);
+    await f.page.locator('#auth-form button[type="submit"]:enabled').waitFor();
+  }
+  await f.page.getByText(/Try again in 15 minute/).waitFor();
+  assert.equal(
+    f.requests.some((r) => r.url.includes("grant_type=password")),
+    false,
+  );
+  const other = await pageFixture(t);
+  await other.page.goto(`${fixture.origin}/login`);
+  await other.page.locator("#auth-email").fill("LOCKOUT@example.com");
+  await other.page.locator("#auth-password").fill("synthetic-password");
+  await other.page.locator('#auth-form button[type="submit"]').click();
+  await other.page.getByText(/Try again in 15 minute/).waitFor();
+  await other.page.getByRole("link", { name: "Forgot password?" }).click();
+  await other.page
+    .getByRole("button", { name: "Send reset link" })
+    .waitFor({ state: "visible" });
+  assert.equal(
+    (await other.context.cookies()).some((c) => c.name === "qe_access_token"),
+    false,
+  );
+  await assertHealthy(other);
+});
+
+test("recovery stays bound to its account when another tab changes the normal session", async (t) => {
+  const f = await pageFixture(t);
+  await f.page.goto(`${fixture.origin}/forgot-password`);
+  await f.page.locator("#auth-email").fill("test@example.com");
+  await f.page.getByRole("button", { name: "Send reset link" }).click();
+  await f.page.getByText("If an account exists", { exact: false }).waitFor();
+  await f.page.goto(
+    `${fixture.origin}/reset-password?code=synthetic-recovery-code`,
+  );
+  await f.page.locator("#auth-password").waitFor({ state: "visible" });
+  const other = await f.context.newPage();
+  await other.goto(`${fixture.origin}/login`);
+  const differentSession = session(true);
+  await other.evaluate(
+    ({ key, value }) => localStorage.setItem(key, JSON.stringify(value)),
+    { key: storageKey, value: differentSession },
+  );
+  await f.page.locator("#auth-password").fill("new-long-password");
+  await f.page.locator("#auth-confirm-password").fill("new-long-password");
+  const update = f.page.waitForRequest(
+    (r) => r.url() === `${mockOrigin}/auth/v1/user` && r.method() === "PUT",
+  );
+  await f.page.getByRole("button", { name: "Save new password" }).click();
+  assert.equal(
+    (await update).headers().authorization,
+    `Bearer ${fixture.token}`,
+  );
+  await f.page
+    .getByText("Password updated. Sign in with your new password.", {
+      exact: true,
+    })
+    .waitFor();
+  const stored = await other.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key)),
+    storageKey,
+  );
+  assert.equal(
+    stored,
+    null,
+    "the browser requires a fresh sign-in after recovery",
+  );
+  await assertHealthy(f);
+});
+
+test("keyboard focus on Play does not restart the slideshow without activation", async (t) => {
+  const f = await pageFixture(t);
+  await f.page.clock.install();
+  await f.page.goto(fixture.origin);
+  const selector = f.page.locator('.auth-carousel-tabs [data-slide="0"]');
+  const rotation = f.page.locator('[data-carousel="rotation"]');
+  await selector.focus();
+  await rotation.focus();
+  await f.page.clock.runFor(100);
+  assert.equal((await rotation.textContent()).trim(), "Play");
+  await f.page.clock.runFor(6100);
+  assert.equal(
+    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
+    false,
+  );
+  await rotation.press("Enter");
+  await f.page.clock.runFor(6100);
+  assert.equal(
+    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
+    true,
+  );
+  await assertHealthy(f);
+});
+
+test("callback fragment sessions cannot sign the browser into an injected account", async (t) => {
+  const f = await pageFixture(t);
+  await f.page.goto(
+    `${fixture.origin}/auth/callback#access_token=untrusted&refresh_token=untrusted`,
+  );
+  await f.page.getByText(/unsupported sign-in format/).waitFor();
+  assert.equal(new URL(f.page.url()).hash, "");
+  assert.equal(
+    f.requests.some(
+      (r) => r.url === `${fixture.origin}/auth/session` && r.method === "POST",
+    ),
+    false,
+  );
+  assert.equal(
+    (await f.context.cookies()).some((c) => c.name === "qe_access_token"),
+    false,
+  );
 });

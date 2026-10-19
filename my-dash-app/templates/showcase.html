@@ -32,7 +32,10 @@
           </button>
         </div>
       </div>
-      <figure class="auth-preview" aria-labelledby="auth-preview-caption">
+      <figure
+        class="auth-preview"
+        aria-labelledby="auth-preview-caption"
+      >
         <figcaption id="auth-preview-caption">
           <span class="auth-preview-title"
             ><span class="auth-preview-mark" aria-hidden="true">Q</span>
@@ -332,8 +335,8 @@
         02 <span>Data pipeline</span>
       </button>
     </div>
-    {% if not landing_showcase %}
     <div class="auth-carousel-actions">
+      {% if not landing_showcase %}
       <button
         type="button"
         data-carousel="previous"
@@ -344,6 +347,7 @@
       <button type="button" data-carousel="next" aria-label="Next slide">
         →
       </button>
+      {% endif %}
       <button
         type="button"
         data-carousel="rotation"
@@ -352,6 +356,5 @@
         Pause
       </button>
     </div>
-    {% endif %}
   </div>
 </section>

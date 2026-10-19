@@ -25,11 +25,11 @@ sys.path.insert(0, str(ROOT / "my-dash-app"))
 os.environ.update(
     NEXT_PUBLIC_SUPABASE_URL="https://csp-test.supabase.co",
     NEXT_PUBLIC_SUPABASE_ANON_KEY="mock-test-anon-key",
-    AUTH_ALLOWED_EMAILS="test@example.com",
     AUTH_APP_ORIGIN="http://127.0.0.1",
     GCP_PROJECT_ID="mock-test-project",
     GCP_KEY_PATH="",
     GOOGLE_APPLICATION_CREDENTIALS="",
+    AUTH_PASSWORD_LOCKOUT_ENABLED="true",
 )
 
 # Keep all patches active until this child process exits.
@@ -58,13 +58,138 @@ def encode(value):
 TOKEN = f"{encode({'alg': 'HS256'})}.{encode({'exp': int(time.time()) + 3600})}.test-signature"
 
 
+ADMIN_TOKEN = TOKEN.rsplit(".", 1)[0] + ".admin-signature"
+ADMIN_USER = dict(
+    USER,
+    id="11111111-1111-4111-8111-111111111111",
+    email="admin@example.com",
+    app_metadata={"qe_role": "admin", "qe_owner": True},
+)
+DIRECTORY_MEMBER = dict(
+    USER,
+    id="22222222-2222-4222-8222-222222222222",
+    email="member@example.com",
+    app_metadata={},
+    created_at="2026-10-01T08:00:00Z",
+)
+DELETE_MEMBER = dict(
+    USER,
+    id="44444444-4444-4444-8444-444444444444",
+    email="delete-test@example.com",
+    app_metadata={"qe_suspended": True},
+)
+MANAGER_TOKEN = TOKEN.rsplit(".", 1)[0] + ".manager-signature"
+MANAGER_USER = dict(
+    USER,
+    id="55555555-5555-4555-8555-555555555555",
+    email="manager@example.com",
+    app_metadata={"qe_role": "admin"},
+)
+DIRECTORY = {
+    user["id"]: user
+    for user in [
+        ADMIN_USER,
+        DIRECTORY_MEMBER,
+        DELETE_MEMBER,
+        dict(
+            USER,
+            id="33333333-3333-4333-8333-333333333333",
+            email="pending@example.com",
+            email_confirmed_at=None,
+        ),
+    ]
+}
+
+
 def fake_user(request, **kwargs):
     if request.full_url != "https://csp-test.supabase.co/auth/v1/user":
         raise AssertionError("Unexpected external verification URL")
-    if request.get_header("Authorization") != f"Bearer {TOKEN}":
+    value = request.get_header("Authorization")
+    if value == f"Bearer {TOKEN}":
+        user = USER
+    elif value == f"Bearer {ADMIN_TOKEN}":
+        user = ADMIN_USER
+    elif value == f"Bearer {MANAGER_TOKEN}":
+        user = MANAGER_USER
+    else:
         raise auth.HTTPError(request.full_url, 401, "Synthetic invalid token", {}, None)
-    return io.BytesIO(json.dumps(USER).encode())
+    return io.BytesIO(json.dumps(user).encode())
 
+
+import user_admin
+
+
+def fake_admin_request(method, path, body=None):
+    if method == "GET" and path.startswith("?page="):
+        from urllib.parse import parse_qs
+
+        page = int(parse_qs(path[1:])["page"][0])
+        return {"users": list(DIRECTORY.values())[(page - 1) * 25 : page * 25]}
+    target = DIRECTORY.get(path.lstrip("/"))
+    if target is None:
+        raise user_admin.AdminError("user_not_found", 404)
+    if method == "DELETE":
+        assert body == {"should_soft_delete": False}
+        del DIRECTORY[target["id"]]
+        return {}
+    if method == "PUT":
+        target.setdefault("app_metadata", {}).update(body.get("app_metadata", {}))
+    return target
+
+
+patch.object(user_admin, "_service_request", side_effect=fake_admin_request).start()
+
+
+# Password gateway exercises the real Flask route; only provider/storage I/O is fake.
+from threading import Lock
+from uuid import uuid4
+
+import password_auth
+
+password_states = {}
+password_state_lock = Lock()
+
+
+def fake_password_request(path, body, privileged=False):
+    if path == "/rest/v1/rpc/qe_account_deletion_guard_ready":
+        assert privileged
+        return {"ready": True}
+    if path == "/auth/v1/token?grant_type=password":
+        if body["password"] == "incorrect-password":
+            raise password_auth.PasswordAuthError("invalid_credentials", 401)
+        return {"access_token": TOKEN, "refresh_token": "synthetic-refresh"}
+    assert privileged and path == "/rest/v1/rpc/qe_password_attempt"
+    with password_state_lock:
+        state = password_states.setdefault(body["p_email"], {"failures": 0})
+        if state["failures"] >= 5:
+            return {"allowed": False, "error": "account_locked", "retry_after": 900}
+        if body["p_action"] == "start":
+            state["lease"] = str(uuid4())
+            return {"allowed": True, "attempt_id": state["lease"], "retry_after": 0}
+        if body["p_action"] == "status":
+            return {"allowed": True, "retry_after": 0}
+        assert body["p_attempt"] == state["lease"]
+        if body["p_valid"] is False:
+            state["failures"] += 1
+            return {
+                "allowed": False,
+                "error": (
+                    "account_locked"
+                    if state["failures"] >= 5
+                    else "invalid_credentials"
+                ),
+                "retry_after": 900 if state["failures"] >= 5 else 0,
+            }
+        if body["p_valid"] is True:
+            state["failures"] = 0
+        return {
+            "allowed": body["p_valid"] is True,
+            "error": "auth_unavailable",
+            "retry_after": 0,
+        }
+
+
+patch.object(password_auth, "_request", side_effect=fake_password_request).start()
 
 patch.object(auth, "urlopen", side_effect=fake_user).start()
 # Rate-limit behavior remains covered by auth tests. This single fixture server
@@ -124,5 +249,18 @@ cache.init_app(dashboard.server, config={"CACHE_TYPE": "SimpleCache"})
 httpd = make_server("127.0.0.1", 0, dashboard.server, threaded=True)
 origin = f"http://127.0.0.1:{httpd.server_port}"
 os.environ["AUTH_APP_ORIGIN"] = origin
-print(json.dumps({"origin": origin, "token": TOKEN, "user": USER}), flush=True)
+print(
+    json.dumps(
+        {
+            "origin": origin,
+            "token": TOKEN,
+            "user": USER,
+            "adminToken": ADMIN_TOKEN,
+            "adminUser": ADMIN_USER,
+            "managerToken": MANAGER_TOKEN,
+            "managerUser": MANAGER_USER,
+        }
+    ),
+    flush=True,
+)
 httpd.serve_forever()
