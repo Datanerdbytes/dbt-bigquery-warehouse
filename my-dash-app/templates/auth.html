@@ -4,7 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>
-      {{ 'Create account' if mode == 'signup' else 'Sign in' }} · Quantum Echo
+      {{ 'Reset password' if mode in ['forgot', 'reset'] else 'Create account'
+      if mode == 'signup' else 'Sign in' }} · Quantum Echo
     </title>
     <link
       rel="stylesheet"
@@ -13,9 +14,8 @@
     <link rel="stylesheet" href="/assets/00-theme.css" />
     <link rel="stylesheet" href="/assets/08-auth.css" />
     {% if csp_nonce %}
-    <meta name="csp-nonce" content="{{ csp_nonce }}">
-    {% endif %}
-    {% if csp_nonce %}
+    <meta name="csp-nonce" content="{{ csp_nonce }}" />
+    {% endif %} {% if csp_nonce %}
     <script nonce="{{ csp_nonce }}">
       setTimeout(function () {
         if (!window.qeAuthStarted) {
@@ -60,9 +60,11 @@
           <section id="auth-content" hidden>
             <h1 class="auth-heading">
               <span class="auth-eyebrow">YOUR ANALYTICS WORKSPACE</span>
-              {{ 'Create your account' if mode == 'signup' else 'Welcome back'
-              }}
+              {{ 'Forgot your password?' if mode == 'forgot' else 'Choose a new
+              password' if mode == 'reset' else 'Create your account' if mode ==
+              'signup' else 'Welcome back' }}
             </h1>
+            {% if mode not in ['forgot', 'reset'] %}
             <div class="auth-providers">
               <button type="button" data-provider="google">
                 <svg
@@ -106,7 +108,19 @@
               </button>
             </div>
             <div class="auth-divider">or continue with email</div>
+            {% endif %} {% if mode == 'forgot' %}
+            <p class="auth-hint">
+              Enter your account email. We’ll send a link to reset your
+              password. Open it in this browser.
+            </p>
+            {% elif mode == 'reset' %}
+            <p class="auth-hint">
+              Use at least 8 characters and choose a password you haven’t used
+              before.
+            </p>
+            {% endif %}
             <form id="auth-form" novalidate>
+              {% if mode != 'reset' %}
               <label for="auth-email">Email address</label
               ><input
                 id="auth-email"
@@ -117,13 +131,16 @@
                 aria-describedby="auth-email-error"
                 placeholder="you@company.com"
               /><span id="auth-email-error" class="auth-field-error"></span>
-              <label for="auth-password">Password</label>
+              {% endif %} {% if mode != 'forgot' %}
+              <label for="auth-password"
+                >{{ 'New password' if mode == 'reset' else 'Password' }}</label
+              >
               <div class="auth-password-row">
                 <input
                   id="auth-password"
                   name="password"
                   type="password"
-                  autocomplete="{{ 'new-password' if mode == 'signup' else 'current-password' }}"
+                  autocomplete="{{ 'new-password' if mode in ['signup', 'reset'] else 'current-password' }}"
                   required
                   aria-describedby="auth-password-error"
                 /><button
@@ -138,11 +155,37 @@
               <span id="auth-password-error" class="auth-field-error"></span> {%
               if mode == 'signup' %}
               <p class="auth-hint">Use at least 8 characters.</p>
+              {% endif %} {% if mode == 'reset' %}
+              <label for="auth-confirm-password">Confirm new password</label>
+              <input
+                id="auth-confirm-password"
+                name="confirm-password"
+                type="password"
+                autocomplete="new-password"
+                required
+                aria-describedby="auth-confirm-password-error"
+              />
+              <span
+                id="auth-confirm-password-error"
+                class="auth-field-error"
+              ></span>
+              {% endif %} {% endif %} {% if mode == 'login' %}
+              <p class="auth-switch">
+                <a href="/forgot-password">Forgot password?</a>
+              </p>
               {% endif %}
               <button class="auth-primary" type="submit">
-                {{ 'Create account' if mode == 'signup' else 'Sign in' }}
+                {{ 'Send reset link' if mode == 'forgot' else 'Save new
+                password' if mode == 'reset' else 'Create account' if mode ==
+                'signup' else 'Sign in' }}
               </button>
             </form>
+            {% if mode in ['forgot', 'reset'] %}
+            <p class="auth-switch">
+              <a href="/login">Back to sign in</a> ·
+              <a href="/forgot-password">Request a new reset link</a>
+            </p>
+            {% else %}
             <p class="auth-switch">
               {{ 'Already have an account?' if mode == 'signup' else 'New to
               Quantum Echo?' }}
@@ -150,11 +193,18 @@
                 >{{ 'Sign in' if mode == 'signup' else 'Create an account' }}</a
               >
             </p>
+            {% endif %}
           </section>
           <div id="auth-message" role="alert" tabindex="-1" hidden></div>
           <button id="auth-signout" type="button" hidden>Sign out</button
-          ><a id="auth-back" href="/login" hidden>Back to sign in</a>
-          <p class="auth-note">Approved team members only.</p>
+          ><a
+            id="auth-back"
+            href="{{ '/forgot-password' if mode == 'reset' else '/login' }}"
+            hidden
+            >{{ 'Request a new reset link' if mode == 'reset' else 'Back to sign
+            in' }}</a
+          >
+          <p class="auth-note">Verify your email to access your workspace.</p>
           <noscript>Enable JavaScript and reload to sign in securely.</noscript>
         </div>
       </div>

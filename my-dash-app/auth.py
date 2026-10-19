@@ -14,13 +14,25 @@ from dotenv import load_dotenv
 from flask import g, jsonify, redirect, render_template, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from password_auth import (
+    PasswordAuthError,
+    ensure_not_locked,
+    password_sign_in,
+)
+from password_auth import (
+    enabled as lockout_enabled,
+)
+from user_admin import account_suspended, install_admin_routes, is_admin
 
 COOKIE = "qe_access_token"
 PUBLIC = {
     "/login",
     "/signup",
+    "/forgot-password",
+    "/reset-password",
     "/auth/callback",
     "/auth/session",
+    "/auth/password",
     "/auth/config",
     "/healthz",
 }
@@ -88,15 +100,21 @@ def verify_access(token):
         raise AuthError("auth_unavailable", 503) from None
     if not isinstance(user, dict) or not user.get("id"):
         raise AuthError("session_expired", 401)
-    if not user.get("email_confirmed_at"):
+    email = user.get("email")
+    if (
+        not isinstance(email, str)
+        or not email.strip()
+        or not user.get("email_confirmed_at")
+    ):
         raise AuthError("email_confirmation_required", 403)
-    allowed = {
-        x.strip().casefold()
-        for x in os.getenv("AUTH_ALLOWED_EMAILS", "").split(",")
-        if x.strip()
-    }
-    if str(user.get("email", "")).casefold() not in allowed:
-        raise AuthError("approval_required", 403)
+    if account_suspended(user):
+        raise AuthError("account_suspended", 403)
+    try:
+        ensure_not_locked(email)
+    except PasswordAuthError as error:
+        raise AuthError(
+            error.code, 403 if error.code == "account_locked" else 503
+        ) from None
     # Decode expiry only after remote verification; identity always comes from Auth.
     try:
         payload = token.split(".")[1]
@@ -121,6 +139,8 @@ def _rate_limit_exceeded_handler(e):
 def install_auth(server):
     load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
     server.template_folder = str(Path(__file__).parent / "templates")
+
+    install_admin_routes(server)
 
     # Initialize rate limiter
     limiter = Limiter(
@@ -150,7 +170,7 @@ def install_auth(server):
             if request.headers.get("Origin") != origin:
                 return jsonify(error="origin_rejected"), 403
         # The public product page never needs dashboard data or a valid session.
-        # Preserve the existing root redirect for verified, approved members.
+        # Preserve the existing root redirect for verified users.
         if request.path == "/" and request.method in {"GET", "HEAD"}:
             if request.cookies.get(COOKIE):
                 try:
@@ -166,12 +186,18 @@ def install_auth(server):
             g.auth_user, _ = verify_access(request.cookies.get(COOKIE))
         except AuthError as error:
             if request.method in {"GET", "HEAD"} and not request.path.startswith(
-                ("/_dash", "/assets/")
+                ("/_dash", "/assets/", "/api/")
             ):
                 if error.status in (401, 403):
                     return redirect("/login")
                 return render_template("auth.html", mode="unavailable"), 503
             return jsonify(error=GENERIC_AUTH_ERROR), error.status
+        if (
+            request.path == "/admin/users" or request.path.startswith("/api/admin/")
+        ) and not is_admin(g.auth_user):
+            if request.path.startswith("/api/"):
+                return jsonify(error="admin_required"), 403
+            return render_template("access_denied.html"), 403
 
     @server.after_request
     def private(response):
@@ -225,7 +251,25 @@ def install_auth(server):
             url, key, _, _ = settings()
         except AuthError as error:
             return jsonify(error=error.code), error.status
-        return jsonify(url=url, anonKey=key)
+        return jsonify(url=url, anonKey=key, passwordLockoutEnabled=lockout_enabled())
+
+    @server.post("/auth/password")
+    @limiter.limit("20 per minute")
+    def password_login():
+        if request.content_length and request.content_length > 8192:
+            return jsonify(error="invalid_request"), 400
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict) or set(body) != {"email", "password"}:
+            return jsonify(error="invalid_request"), 400
+        try:
+            tokens = password_sign_in(body["email"], body["password"])
+        except PasswordAuthError as error:
+            response = jsonify(error=error.code, retry_after=error.retry_after)
+            response.status_code = error.status
+            if error.retry_after:
+                response.headers["Retry-After"] = str(error.retry_after)
+            return response
+        return jsonify(tokens)
 
     @server.get("/healthz")
     def health():
@@ -233,11 +277,18 @@ def install_auth(server):
 
     @server.get("/login")
     @server.get("/signup")
+    @server.get("/forgot-password")
+    @server.get("/reset-password")
     @server.get("/auth/callback")
     def auth_page():
         return render_template(
             "auth.html",
-            mode={"/login": "login", "/signup": "signup"}.get(request.path, "callback"),
+            mode={
+                "/login": "login",
+                "/signup": "signup",
+                "/forgot-password": "forgot",
+                "/reset-password": "reset",
+            }.get(request.path, "callback"),
         )
 
     @server.route("/auth/session", methods=["POST", "DELETE", "GET"])
@@ -263,7 +314,13 @@ def install_auth(server):
         try:
             _, remaining = verify_access(token)
         except AuthError as error:
-            response = jsonify(error=GENERIC_AUTH_ERROR)
+            response = jsonify(
+                error=(
+                    "account_locked"
+                    if error.code == "account_locked"
+                    else GENERIC_AUTH_ERROR
+                )
+            )
             response.status_code = error.status
             response.delete_cookie(
                 COOKIE, path="/", secure=secure, httponly=True, samesite="Lax"

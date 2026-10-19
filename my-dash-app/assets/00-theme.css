@@ -7,6 +7,9 @@
   --dashboard-muted: #a7b5c9;
   --dashboard-border: #354258;
   --dashboard-accent: #69a5ff;
+  --dashboard-accent-secondary: #f59e0b;
+  --dashboard-accent-tertiary: #22d3ee;
+  --dashboard-grid: #1e293b;
   --dashboard-success: #5ddd98;
   --dashboard-warning: #f6c56b;
   --dashboard-danger: #ff8585;
@@ -14,6 +17,7 @@
   --dashboard-spinner: #10b981;
   --dashboard-font-body: "Fira Sans", system-ui, sans-serif;
   --dashboard-font-number: "Fira Code", ui-monospace, monospace;
+  --dashboard-font-display: "Share Tech Mono", ui-monospace, monospace;
   --dashboard-gap: 12px;
   --dashboard-panel: 16px;
   --dashboard-sidebar: 208px;

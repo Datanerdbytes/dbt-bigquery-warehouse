@@ -8,6 +8,9 @@ COLORS = {
     "muted": "#a7b5c9",
     "border": "#354258",
     "accent": "#69a5ff",
+    "accent_secondary": "#f59e0b",
+    "accent_tertiary": "#22d3ee",
+    "grid": "#1e293b",
     "success": "#5ddd98",
     "warning": "#f6c56b",
     "danger": "#ff8585",
@@ -17,6 +20,7 @@ COLORS = {
 FONTS = {
     "body": '"Fira Sans", system-ui, sans-serif',
     "number": '"Fira Code", ui-monospace, monospace',
+    "display": '"Share Tech Mono", ui-monospace, monospace',
 }
 SPACING = {"gap": "12px", "panel": "16px", "sidebar": "208px", "rail": "64px"}
 

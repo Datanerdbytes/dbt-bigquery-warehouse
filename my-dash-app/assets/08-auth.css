@@ -1002,3 +1002,265 @@ html[data-auth-ready="true"] #auth-session-loading {
     display: grid !important;
   }
 }
+
+/* ===== Industrial Control Room — Landing Page Aesthetic =====
+   Grid texture, monospace display, amber/cyan accents, border-heavy panels,
+   Original slideshow timing is preserved. */
+
+/* Subtle grid texture behind the header and hero */
+.landing-grid-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.35;
+  background-image:
+    linear-gradient(var(--dashboard-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--dashboard-border) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+}
+
+.landing-header {
+  position: relative;
+  z-index: 1;
+}
+
+.landing-brand {
+  font-family: var(--dashboard-font-display);
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  color: var(--dashboard-accent-tertiary);
+}
+
+.landing-brand svg {
+  stroke: var(--dashboard-accent-tertiary);
+}
+
+.landing-nav a,
+.landing-login {
+  font-family: var(--dashboard-font-display);
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  color: var(--dashboard-muted);
+}
+
+.landing-nav a:hover,
+.landing-nav a[aria-current="true"],
+.landing-login:hover {
+  color: var(--dashboard-accent-tertiary);
+}
+
+/* Eyebrow: monospace, letter-spaced, amber */
+.auth-eyebrow {
+  font-family: var(--dashboard-font-display);
+  color: var(--dashboard-accent-secondary);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: 500;
+  margin: 0 0 16px;
+  display: block;
+}
+
+/* H1: display font, bold, with accent highlight on span */
+.landing-page .auth-showcase h1 {
+  font-family: var(--dashboard-font-display);
+  font-size: clamp(40px, 5vw, 72px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-weight: 500;
+  margin: 0 0 24px;
+  color: var(--dashboard-text);
+}
+
+.landing-page .auth-showcase h1 span {
+  color: var(--dashboard-accent-secondary);
+}
+
+/* Intro text */
+.landing-page .auth-product-intro {
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--dashboard-muted);
+  max-width: 520px;
+  margin: 0 0 30px;
+}
+
+/* Preview panel: border-heavy, grid background, inset shadow */
+.landing-page .auth-preview {
+  position: relative;
+  border: 1px solid var(--dashboard-border);
+  border-radius: 0;
+  background: var(--dashboard-surface);
+  box-shadow:
+    0 0 0 1px var(--dashboard-grid) inset,
+    0 30px 70px #00000020;
+}
+
+.landing-page .auth-preview::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--dashboard-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--dashboard-border) 1px, transparent 1px);
+  background-size: 24px 24px;
+  opacity: 0.25;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.landing-page .auth-preview figcaption {
+  border-bottom: 1px solid var(--dashboard-border);
+  padding: 14px 18px;
+  background: color-mix(in srgb, var(--dashboard-surface) 85%, transparent);
+}
+
+.landing-page .auth-preview-title {
+  font-family: var(--dashboard-font-display);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+}
+
+.landing-page .auth-preview-mark {
+  background: var(--dashboard-raised);
+  border: 1px solid var(--dashboard-accent-secondary);
+  color: var(--dashboard-accent-secondary);
+}
+
+.landing-page .auth-preview-body {
+  padding: 20px 18px 16px;
+}
+
+.landing-page .auth-preview-value {
+  font-family: var(--dashboard-font-number);
+  font-size: 32px;
+  letter-spacing: -0.05em;
+}
+
+.landing-page .auth-preview-value span {
+  color: var(--dashboard-success);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+/* Hero actions: amber primary, outline secondary */
+.landing-hero-actions {
+  gap: 14px;
+}
+
+.landing-hero-actions .landing-primary {
+  background: var(--dashboard-accent-secondary);
+  color: var(--dashboard-background);
+  font-family: var(--dashboard-font-display);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  font-weight: 500;
+  padding: 14px 24px;
+  border-radius: 0;
+  border: 0;
+}
+
+.landing-hero-actions .landing-primary:hover {
+  background: var(--dashboard-text);
+  color: var(--dashboard-background);
+}
+
+.landing-hero-actions button {
+  background: transparent;
+  color: var(--dashboard-text);
+  border: 1px solid var(--dashboard-border);
+  font-family: var(--dashboard-font-display);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  font-weight: 500;
+  padding: 14px 24px;
+  border-radius: 0;
+}
+
+.landing-hero-actions button:hover {
+  border-color: var(--dashboard-accent-tertiary);
+  color: var(--dashboard-accent-tertiary);
+  background: transparent;
+}
+
+/* Feature section: asymmetric, numbered */
+.landing-page .auth-features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 48px;
+  margin: 0;
+}
+
+.landing-page .auth-feature-number {
+  font-family: var(--dashboard-font-display);
+  color: var(--dashboard-accent-secondary);
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.landing-page .auth-features h3 {
+  font-family: var(--dashboard-font-display);
+  font-size: 15px;
+  letter-spacing: 0.05em;
+  margin: 0 0 8px;
+  color: var(--dashboard-text);
+}
+
+.landing-page .auth-features p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dashboard-muted);
+  max-width: 340px;
+  margin: 0;
+}
+
+/* Footer: monospace, subtle */
+.landing-footer {
+  font-family: var(--dashboard-font-display);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--dashboard-muted);
+  border-top: 1px solid var(--dashboard-border);
+  padding-top: 32px;
+}
+
+/* Hover surprise: border color shift on preview */
+.landing-page .auth-preview:hover {
+  border-color: var(--dashboard-accent-tertiary);
+  box-shadow:
+    0 0 0 1px var(--dashboard-accent-tertiary) inset,
+    0 30px 70px #00000020;
+}
+
+/* Feature hover: accent number */
+.landing-page .auth-features section:hover .auth-feature-number {
+  color: var(--dashboard-accent-tertiary);
+}
+
+/* Skip link: amber */
+.landing-skip-link {
+  background: var(--dashboard-accent-secondary);
+  color: var(--dashboard-background);
+}
+
+@media (max-width: 959px) {
+  .landing-page .auth-features {
+    gap: 24px;
+  }
+  .landing-grid-bg {
+    background-size: 32px 32px;
+  }
+}
+
+@media (max-width: 639px) {
+  .landing-page .auth-features {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .landing-page .auth-showcase h1 {
+    font-size: 40px;
+  }
+}

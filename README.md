@@ -57,7 +57,7 @@ Modern enterprise analytics demands not only timely reporting, but also transpar
 3. **Validates** every stage with automated assertions (uniqueness, referential integrity, range constraints, whitespace validation).
 4. **Captures Telemetry** from dbt artifacts (`manifest.json` and `run_results.json`) to track run durations, failures, warnings, and column-level test coverage over time.
 5. **Presents Business & Data Health Insights** through an interactive, multi-page **Plotly Dash** interface equipped with server-side caching (`Flask-Caching`), client-side session store (`dcc.Store`), asynchronous loading spinners, modal drill-downs, and executive CSV export capabilities.
-6. **Secures Dashboard Access** with Supabase email/password authentication, Google/GitHub OAuth support, confirmed-email approval, and server-side protection of pages, data callbacks, and exports.
+6. **Secures Dashboard Access** with Supabase email/password authentication, Google/GitHub OAuth support, verified-email access, and server-side protection of pages, data callbacks, and exports.
 7. **Continuous Delivery** automatically compiles and tests dbt models on pull requests, builds an optimized Docker container, and deploys to **Google Cloud Run** on pushes to `main`.
 
 ---
@@ -272,13 +272,13 @@ The dashboard uses Supabase Auth with `@supabase/supabase-js` and a Flask author
 | `/auth/session` | Same-origin POST validates a session and sets the access cookie; DELETE clears it |
 | `/dashboard` | Protected Product Overview and successful-login destination |
 | `/customers`, `/pipeline-health` | Protected analytics pages |
-| `/` | Redirects approved users to `/dashboard`, unauthenticated users to `/login` |
+| `/` | Redirects verified users to `/dashboard`; otherwise shows the public landing page |
 
-Flask verifies tokens with Supabase and requires a confirmed email on the server-side `AUTH_ALLOWED_EMAILS` list before executing Dash callbacks or exports. Browser checks alone do not grant access. The access-token cookie is HttpOnly and SameSite=Lax, with Secure enabled for HTTPS deployments. Authentication and dashboard responses use `private, no-store`.
+Flask verifies tokens with Supabase and requires a confirmed email before executing Dash callbacks or exports. Browser checks alone do not grant access. The access-token cookie is HttpOnly and SameSite=Lax, with Secure enabled for HTTPS deployments. Authentication and dashboard responses use `private, no-store`.
 
 Supabase JS manages session persistence and refresh. The dashboard stays hidden while the browser synchronizes its session with Flask, and sign-out clears the server cookie and local browser session across tabs. Google and GitHub buttons require their respective providers to be enabled in Supabase; they are not enabled by deploying the app.
 
-**User management:** Users register through `/signup` or an enabled OAuth provider. Inspect accounts in Supabase → Authentication → Users. Add verified email addresses to `AUTH_ALLOWED_EMAILS` to approve dashboard access; remove them to revoke it, then restart/redeploy all app instances. An empty allowlist grants nobody access. All approved users have the same dashboard capabilities; there is no in-app admin or role-management page.
+**User management:** Users register through `/signup` or an enabled OAuth provider. Inspect accounts in Supabase → Authentication → Users. Any account in the configured Supabase project can access the dashboard after verifying its email. No manual approval is required; legacy `AUTH_ALLOWED_EMAILS` settings are ignored. All verified users have the same dashboard capabilities; administrators can manage accounts at `/admin/users`. The initial owner and service-role setup are described in [the authentication guide](docs/supabase-auth.md#administrator-user-management).
 
 See [the detailed authentication guide](docs/supabase-auth.md) for session behavior and deployment notes.
 
@@ -509,7 +509,6 @@ TARGET_DATASET=bronze
 NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<public-anon-key>
 AUTH_APP_ORIGIN=http://localhost:8050
-AUTH_ALLOWED_EMAILS=analyst@example.com
 ```
 
 Ensure your `~/.dbt/profiles.yml` is configured for BigQuery:
@@ -571,7 +570,7 @@ uv run analytics_layer/scripts/calculate_coverage.py
 
 ### Supabase & OAuth Configuration
 
-The Flask app loads root `.env` without overriding existing environment values. Configure the same four auth variables in Cloud Run for production, with `AUTH_APP_ORIGIN=https://dash-observability-app-1022429033383.us-central1.run.app`. Keep the allowlist and provider secrets server-side. The anon key is intentionally public; never substitute a service-role key.
+The Flask app loads root `.env` without overriding existing environment values. Configure the same three auth variables in Cloud Run for production, with `AUTH_APP_ORIGIN=https://dash-observability-app-1022429033383.us-central1.run.app`. Keep provider secrets server-side. The anon key is intentionally public; never substitute a service-role key.
 
 1. In Supabase **Authentication → Sign In / Providers**, keep **Confirm email** enabled. For Google, open the provider, enter your Google OAuth client ID and secret, turn **Enable Sign in with Google** on, and **Save**. Configure and enable GitHub separately if needed.
 2. In **Google Cloud → Google Auth Platform → Clients → your Web application client**, add the following under **Authorized redirect URIs** and save:
@@ -589,7 +588,7 @@ The Flask app loads root `.env` without overriding existing environment values. 
    ```
 
    Also add `http://localhost:8080/auth/callback` if testing with the Docker command below.
-4. Add the email returned by Google/GitHub (or the verified email/password account) to `AUTH_ALLOWED_EMAILS`. Restart/redeploy after approval changes. An existing confirmed account can sign in immediately once approved; no replacement signup is needed.
+4. Keep email confirmation enabled. Once a user verifies their email, they can sign in immediately without an environment email list or administrator approval.
 
 Google redirects to **Supabase's `/auth/v1/callback`**, and Supabase redirects to **the app's `/auth/callback`**. These are two distinct configuration steps.
 
@@ -600,7 +599,7 @@ Google redirects to **Supabase's `/auth/v1/callback`**, and Supabase redirects t
 | `Unsupported provider: provider is not enabled` | Enable the provider toggle and save in the same Supabase project the app uses; entering client credentials alone is insufficient. |
 | Google `redirect_uri_mismatch` | Add the exact Supabase callback above to the Google client's **Authorized redirect URIs**. Retry from the app's login page after the change propagates. |
 | Email confirmed but callback cannot finish | Open confirmation links in the browser where signup began. If already confirmed, return to `/login` and sign in with the existing account. |
-| Account awaits approval | Add the verified account email to the server's `AUTH_ALLOWED_EMAILS` and restart/redeploy. |
+| Verified account still awaits approval | Deploy the updated server and frontend together; legacy `AUTH_ALLOWED_EMAILS` settings are no longer used. |
 | Origin rejected | Match `AUTH_APP_ORIGIN` to the browser's scheme, host, and port. `localhost` and `127.0.0.1` are different origins. |
 | Dashboard remains on “Loading…” | Build the frontend and deploy all auth source files together. Confirm `/login`, `/auth/config`, and `/auth/session` are registered; an orphaned `auth.bundle.js` cannot function without the backend. |
 | Authentication unavailable | Check runtime variables and Supabase availability; the app intentionally denies data access until verification succeeds. |
