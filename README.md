@@ -3,8 +3,8 @@
 > 🌐 **Live Interactive App:** [https://dash-observability-app-1022429033383.us-central1.run.app/](https://dash-observability-app-1022429033383.us-central1.run.app/)
 
 **Login Credentials**
-username: ```datanerdbytes@gmail.com```
-password: ```necnor-jYzjuh-kisti0```
+username: ```nivero9893@moblha.com```
+password: ```pofcu2-siDfes-vimryt```
 
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![dbt](https://img.shields.io/badge/dbt-Core%201.12+-FF694B?style=for-the-badge&logo=dbt&logoColor=white)](https://www.getdbt.com/)
