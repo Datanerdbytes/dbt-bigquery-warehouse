@@ -9,6 +9,22 @@ const source = readFileSync("my-dash-app/auth_frontend/main.js", "utf8")
   )
   .replaceAll("location.replace(", "window.navigate(");
 const tick = () => new Promise((resolve) => setTimeout(resolve, 25));
+function stubVideos(window) {
+  for (const video of window.document.querySelectorAll("video")) {
+    Object.defineProperties(video, {
+      paused: { configurable: true, writable: true, value: true },
+      readyState: { configurable: true, value: 1 },
+      currentTime: { configurable: true, writable: true, value: 0 },
+    });
+    video.pause = () => {
+      video.paused = true;
+    };
+    video.play = () => {
+      video.paused = false;
+      return Promise.resolve();
+    };
+  }
+}
 async function fixture(
   mode = "login",
   session = null,
@@ -125,8 +141,10 @@ async function fixture(
   };
   Object.assign(auth, authOverrides);
   w.mockClient = { auth };
-  if (showcase)
+  if (showcase) {
+    stubVideos(w);
     w.eval(readFileSync("my-dash-app/auth_frontend/showcase.js", "utf8"));
+  }
   w.eval(source);
   await tick();
   return {
@@ -334,8 +352,10 @@ test("public landing slideshow works without authentication and preserves focus"
     runScripts: "outside-only",
   });
   const w = dom.window;
+  stubVideos(w);
   w.matchMedia = () => ({ matches: true, addEventListener() {} });
   w.eval(readFileSync("my-dash-app/auth_frontend/showcase.js", "utf8"));
+  assert.ok([...w.document.querySelectorAll("video")].every((v) => v.paused));
   assert.equal(w.document.getElementById("auth-form"), null);
   assert.equal(
     w.document.querySelector(".landing-login").getAttribute("href"),
@@ -368,6 +388,7 @@ test("landing preserves timing with playback control and pauses on hover or focu
     },
   );
   const w = dom.window;
+  stubVideos(w);
   Object.defineProperty(w.document, "hidden", {
     value: false,
     configurable: true,
@@ -392,7 +413,7 @@ test("landing preserves timing with playback control and pauses on hover or focu
   const panel = w.document.querySelector(".auth-preview");
   const analytics = w.document.getElementById("auth-slide-analytics");
   assert.ok(w.document.querySelector('[data-carousel="rotation"]'));
-  assert.equal(delay, 6000);
+  assert.equal(delay, 8000);
   const rotation = w.document.querySelector('[data-carousel="rotation"]');
   rotation.click();
   assert.equal(advance, null);
@@ -404,10 +425,20 @@ test("landing preserves timing with playback control and pauses on hover or focu
     "explicit pause survives automatic resume events",
   );
   rotation.click();
-  assert.equal(delay, 6000);
+  assert.equal(delay, 8000);
+
+  const overviewVideo = w.document.querySelector(
+    "#auth-slide-analytics video",
+  );
+  const lineageVideo = w.document.querySelector("#auth-slide-lineage video");
+  assert.equal(overviewVideo.paused, false);
+  assert.equal(lineageVideo.paused, true);
 
   advance();
   assert.equal(analytics.hidden, true);
+  assert.equal(overviewVideo.paused, true);
+  assert.equal(lineageVideo.paused, false);
+  assert.equal(lineageVideo.currentTime, 0);
   panel.dispatchEvent(new w.Event("pointerenter"));
   assert.equal(advance, null);
   panel.dispatchEvent(new w.Event("pointerleave"));

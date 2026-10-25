@@ -283,19 +283,19 @@ test("landing autoplay resumes after tab return and pauses only while hovered", 
   await f.page.goto(fixture.origin);
   await f.page.locator(".auth-carousel-controls:not([hidden])").waitFor();
   assert.equal(await f.page.locator('[data-carousel="rotation"]').count(), 1);
-  await f.page.clock.runFor(6100);
+  await f.page.clock.runFor(8100);
   assert.equal(
     await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
     true,
   );
   await f.page.locator(".auth-slide:not([hidden]) .auth-preview").hover();
-  await f.page.clock.runFor(6100);
+  await f.page.clock.runFor(8100);
   assert.equal(
     await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
     true,
   );
   await f.page.locator(".landing-header").hover();
-  await f.page.clock.runFor(6100);
+  await f.page.clock.runFor(8100);
   assert.equal(
     await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
     false,
@@ -307,7 +307,7 @@ test("landing autoplay resumes after tab return and pauses only while hovered", 
     });
     document.dispatchEvent(new Event("visibilitychange"));
   });
-  await f.page.clock.runFor(6100);
+  await f.page.clock.runFor(8100);
   assert.equal(
     await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
     false,
@@ -319,13 +319,13 @@ test("landing autoplay resumes after tab return and pauses only while hovered", 
     });
     document.dispatchEvent(new Event("visibilitychange"));
   });
-  await f.page.clock.runFor(6100);
+  await f.page.clock.runFor(8100);
   assert.equal(
     await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
     true,
   );
   await f.page.locator('.landing-nav [data-slide="0"]').click();
-  await f.page.clock.runFor(6100);
+  await f.page.clock.runFor(8100);
   assert.equal(
     await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
     true,
@@ -333,7 +333,7 @@ test("landing autoplay resumes after tab return and pauses only while hovered", 
   const rotation = f.page.locator('[data-carousel="rotation"]');
   await rotation.click();
   await f.page.locator(".landing-header").hover();
-  await f.page.clock.runFor(6100);
+  await f.page.clock.runFor(8100);
   assert.equal(
     await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
     true,
@@ -345,7 +345,7 @@ test("landing autoplay resumes after tab return and pauses only while hovered", 
   await rotation.focus();
   await rotation.press("Enter");
   await f.page.locator(".landing-header").hover();
-  await f.page.clock.runFor(6100);
+  await f.page.clock.runFor(8100);
   assert.equal(
     await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
     false,
@@ -1002,13 +1002,13 @@ test("keyboard focus on Play does not restart the slideshow without activation",
   await rotation.focus();
   await f.page.clock.runFor(100);
   assert.equal((await rotation.textContent()).trim(), "Play");
-  await f.page.clock.runFor(6100);
+  await f.page.clock.runFor(8100);
   assert.equal(
     await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
     false,
   );
   await rotation.press("Enter");
-  await f.page.clock.runFor(6100);
+  await f.page.clock.runFor(8100);
   assert.equal(
     await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
     true,
