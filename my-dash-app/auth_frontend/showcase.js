@@ -1,5 +1,6 @@
 // Product storytelling is independent of session initialization and data loading.
 function initializeShowcase() {
+  const landingCycleMs = 8000;
   const showcase = document.getElementById("auth-showcase");
   if (!showcase) return;
   const slides = [...showcase.querySelectorAll(".auth-slide")];
@@ -12,6 +13,25 @@ function initializeShowcase() {
   let hovered = false;
   let pausedByUser = false;
   let rotationFocusAllowed = false;
+  function syncVideos() {
+    slides.forEach((slide, index) => {
+      slide.querySelectorAll("video").forEach((video) => {
+        video.pause();
+        try {
+          video.currentTime = 0;
+        } catch {
+          // The video may not have loaded metadata yet.
+        }
+        if (index !== active || motion.matches) return;
+        const start = () => {
+          if (!slide.hidden && !document.hidden && !motion.matches)
+            video.play().catch(() => {});
+        };
+        if (video.readyState >= 1) start();
+        else video.addEventListener("loadedmetadata", start, { once: true });
+      });
+    });
+  }
   function show(index) {
     const moveFocus = slides[active].contains(document.activeElement);
     active = (index + slides.length) % slides.length;
@@ -26,6 +46,7 @@ function initializeShowcase() {
         button.setAttribute("aria-current", "true");
       else button.removeAttribute("aria-current");
     });
+    syncVideos();
     if (moveFocus) {
       showcase
         .querySelector(`.auth-carousel-tabs [data-slide="${active}"]`)
@@ -58,7 +79,12 @@ function initializeShowcase() {
       rotation.textContent = "Pause";
       rotation.setAttribute("aria-label", "Pause slideshow");
     }
-    timer = window.setInterval(() => show(active + 1), landing ? 6000 : 9000);
+    if (landing) syncVideos();
+    timer = window.setTimeout(() => {
+      timer = null;
+      show(active + 1);
+      play();
+    }, landing ? landingCycleMs : 9000);
   }
   selectors.forEach((button) =>
     button.addEventListener("click", () => {

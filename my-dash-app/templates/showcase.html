@@ -42,6 +42,27 @@
             Workspace Overview</span
           ><span class="auth-preview-label">Illustrative preview</span>
         </figcaption>
+        {% if landing_showcase %}
+        <div class="landing-preview-media">
+          <video
+            class="landing-preview-video"
+            loop
+            muted
+            playsinline
+            preload="metadata"
+            poster="/assets/animations/workspace-overview-poster.png"
+            aria-label="Workspace Overview: Sales performance and pipeline health metrics"
+          >
+            <source src="/assets/animations/workspace-overview.webm" type="video/webm" />
+            <source src="/assets/animations/workspace-overview.mp4" type="video/mp4" />
+          </video>
+          <img
+            class="landing-preview-poster-fallback"
+            src="/assets/animations/workspace-overview-poster.png"
+            alt="Workspace Overview: sales performance and pipeline health metrics"
+          />
+        </div>
+        {% else %}
         <div class="auth-preview-body">
           <div class="auth-preview-summary">
             <div>
@@ -143,6 +164,7 @@
             </section>
           </div>
         </div>
+        {% endif %}
       </figure>
       <div class="auth-features">
         <section>
@@ -201,6 +223,27 @@
             Lineage</span
           ><span class="auth-preview-label">Illustrative architecture</span>
         </figcaption>
+        {% if landing_showcase %}
+        <div class="landing-preview-media">
+          <video
+            class="landing-preview-video"
+            loop
+            muted
+            playsinline
+            preload="metadata"
+            poster="/assets/animations/data-lineage-poster.png"
+            aria-label="Data Lineage: End-to-end data pipeline flow from CRM and ERP to the BigQuery mart"
+          >
+            <source src="/assets/animations/data-lineage.webm" type="video/webm" />
+            <source src="/assets/animations/data-lineage.mp4" type="video/mp4" />
+          </video>
+          <img
+            class="landing-preview-poster-fallback"
+            src="/assets/animations/data-lineage-poster.png"
+            alt="Data Lineage: diagram showing data flow from CRM and ERP through dbt to BigQuery"
+          />
+        </div>
+        {% else %}
         <p class="auth-lineage-scroll-hint">
           Scroll to explore the full lineage →
         </p>
@@ -297,6 +340,7 @@
           A simplified view of the project’s data flow. Quality checks and run
           telemetry help reveal issues along the way.
         </p>
+        {% endif %}
       </figure>
       <div class="auth-features">
         <section>
