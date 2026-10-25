@@ -41,6 +41,12 @@ PUBLIC_ASSETS = {
     "/assets/08-auth.css",
     "/assets/auth.bundle.js",
     "/assets/showcase.bundle.js",
+    "/assets/animations/workspace-overview.webm",
+    "/assets/animations/workspace-overview.mp4",
+    "/assets/animations/workspace-overview-poster.png",
+    "/assets/animations/data-lineage.webm",
+    "/assets/animations/data-lineage.mp4",
+    "/assets/animations/data-lineage-poster.png",
 }
 
 

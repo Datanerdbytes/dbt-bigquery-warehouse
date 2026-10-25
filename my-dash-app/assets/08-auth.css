@@ -731,6 +731,23 @@ html[data-auth-ready="true"] #auth-session-loading {
   min-width: 0;
   box-shadow: 0 30px 70px #00000020;
 }
+.landing-preview-media {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--dashboard-background);
+}
+.landing-preview-video,
+.landing-preview-poster-fallback {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.22);
+}
+.landing-preview-poster-fallback {
+  display: none;
+}
 .landing-page .auth-trend {
   height: 230px;
 }
@@ -814,6 +831,14 @@ html[data-auth-ready="true"] #auth-session-loading {
 }
 .landing-skip-link:focus {
   top: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-preview-video {
+    display: none;
+  }
+  .landing-preview-poster-fallback {
+    display: block;
+  }
 }
 .auth-dedicated .auth-shell {
   display: block;
