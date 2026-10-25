@@ -14,6 +14,7 @@ function initializeShowcase() {
   let pausedByUser = false;
   let rotationFocusAllowed = false;
   function syncVideos() {
+    if (!landing) return;
     slides.forEach((slide, index) => {
       slide.querySelectorAll("video").forEach((video) => {
         video.pause();
@@ -80,11 +81,10 @@ function initializeShowcase() {
       rotation.setAttribute("aria-label", "Pause slideshow");
     }
     if (landing) syncVideos();
-    timer = window.setTimeout(() => {
-      timer = null;
-      show(active + 1);
-      play();
-    }, landing ? landingCycleMs : 9000);
+    timer = window.setInterval(
+      () => show(active + 1),
+      landing ? landingCycleMs : 9000,
+    );
   }
   selectors.forEach((button) =>
     button.addEventListener("click", () => {
@@ -143,7 +143,10 @@ function initializeShowcase() {
   window.addEventListener("pagehide", stop);
   if (landing) window.addEventListener("pageshow", play);
   motion.addEventListener("change", () => {
-    if (landing) play();
+    if (landing && motion.matches) {
+      stop();
+      syncVideos();
+    } else if (landing) play();
     else if (motion.matches) stop();
     if (rotation) rotation.hidden = motion.matches;
   });
