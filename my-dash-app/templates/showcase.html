@@ -34,14 +34,18 @@
       </div>
       <figure
         class="auth-preview"
+        {% if not landing_showcase %}
         aria-labelledby="auth-preview-caption"
+        {% endif %}
       >
+        {% if not landing_showcase %}
         <figcaption id="auth-preview-caption">
           <span class="auth-preview-title"
             ><span class="auth-preview-mark" aria-hidden="true">Q</span>
             Workspace Overview</span
           ><span class="auth-preview-label">Illustrative preview</span>
         </figcaption>
+        {% endif %}
         {% if landing_showcase %}
         <div class="landing-preview-media">
           <video
@@ -215,14 +219,18 @@
       </div>
       <figure
         class="auth-preview auth-lineage-preview"
+        {% if not landing_showcase %}
         aria-labelledby="auth-lineage-caption"
+        {% endif %}
       >
+        {% if not landing_showcase %}
         <figcaption id="auth-lineage-caption">
           <span class="auth-preview-title"
             ><span class="auth-preview-mark" aria-hidden="true">Q</span> Data
             Lineage</span
           ><span class="auth-preview-label">Illustrative architecture</span>
         </figcaption>
+        {% endif %}
         {% if landing_showcase %}
         <div class="landing-preview-media">
           <video

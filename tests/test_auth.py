@@ -109,6 +109,16 @@ class AuthTests(unittest.TestCase):
             html = page.get_data(as_text=True)
             self.assertIn('href="/login"', html)
             self.assertIn('id="auth-showcase"', html)
+            self.assertNotIn('id="auth-preview-caption"', html)
+            self.assertNotIn('id="auth-lineage-caption"', html)
+            self.assertIn(
+                'aria-label="Workspace Overview: Sales performance and pipeline health metrics"',
+                html,
+            )
+            self.assertIn(
+                'aria-label="Data Lineage: End-to-end data pipeline flow from CRM and ERP to the BigQuery mart"',
+                html,
+            )
             self.assertIn('src="/assets/showcase.bundle.js"', html)
             self.assertNotIn('id="auth-form"', html)
             self.assertNotIn('src="/assets/auth.bundle.js"', html)
