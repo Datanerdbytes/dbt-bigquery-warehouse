@@ -1,0 +1,969 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Data Lineage</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600&family=Share+Tech+Mono&display=swap");
+
+      :root {
+        --dashboard-background: #0f172a;
+        --dashboard-surface: #1b2336;
+        --dashboard-raised: #263249;
+        --dashboard-text: #f8fafc;
+        --dashboard-muted: #a7b5c9;
+        --dashboard-border: #354258;
+        --dashboard-accent: #69a5ff;
+        --dashboard-accent-secondary: #f59e0b;
+        --dashboard-accent-tertiary: #22d3ee;
+        --dashboard-grid: #1e293b;
+        --dashboard-success: #5ddd98;
+        --dashboard-bronze: #e8a23a;
+        --dashboard-silver: #94a3b8;
+        --dashboard-gold: #fbbf24;
+        --dashboard-font-body: "Fira Sans", system-ui, sans-serif;
+        --dashboard-font-number: "Fira Code", ui-monospace, monospace;
+        --dashboard-font-display: "Share Tech Mono", ui-monospace, monospace;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background-color: var(--dashboard-background);
+        font-family: var(--dashboard-font-body);
+        color: var(--dashboard-text);
+      }
+
+      #root {
+        position: absolute;
+        inset: 0;
+        width: 1920px;
+        height: 1080px;
+        background-color: var(--dashboard-background);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* Panel container */
+      #panel-card {
+        position: relative;
+        width: 1560px;
+        height: 878px;
+        background-color: var(--dashboard-surface);
+        box-shadow:
+          0 0 0 1px rgba(34, 211, 238, 0.2) inset,
+          0 30px 80px rgba(0, 0, 0, 0.45);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      /* Blueprint Grid Background */
+      #panel-grid {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(var(--dashboard-border) 1px, transparent 1px),
+          linear-gradient(90deg, var(--dashboard-border) 1px, transparent 1px);
+        background-size: 24px 24px;
+        opacity: 0.22;
+        pointer-events: none;
+      }
+
+      /* Animated Cyan Border Overlay */
+      #border-svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 10;
+      }
+
+      #border-rect {
+        fill: none;
+        stroke: var(--dashboard-accent-tertiary);
+        stroke-width: 1.5;
+        stroke-linecap: square;
+      }
+
+      /* Header / Figcaption */
+      #panel-header {
+        position: relative;
+        z-index: 2;
+        height: 72px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 32px;
+        border-bottom: 1px solid var(--dashboard-border);
+        background: rgba(27, 35, 54, 0.85);
+        backdrop-filter: blur(8px);
+      }
+
+      .header-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      #header-mark {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        background: var(--dashboard-raised);
+        border: 1.5px solid var(--dashboard-accent-secondary);
+        color: var(--dashboard-accent-secondary);
+        font-family: var(--dashboard-font-display);
+        font-size: 17px;
+        font-weight: 600;
+      }
+
+      #header-title {
+        font-family: var(--dashboard-font-display);
+        font-size: 15px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--dashboard-text);
+      }
+
+      .type-char {
+        display: inline-block;
+        opacity: 0;
+      }
+
+      .type-cursor {
+        display: inline-block;
+        color: var(--dashboard-accent-tertiary);
+        font-weight: bold;
+        margin-left: 2px;
+      }
+
+      #header-label {
+        font-size: 13px;
+        color: var(--dashboard-muted);
+        letter-spacing: 0.05em;
+      }
+
+      /* Panel Body */
+      #panel-body {
+        position: relative;
+        z-index: 2;
+        flex: 1;
+        padding: 24px 36px 20px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      /* Diagram Area */
+      #diagram-wrap {
+        position: relative;
+        width: 100%;
+        height: 680px;
+      }
+
+      #lineage-svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+        overflow: visible;
+      }
+
+      /* SVG Typography & Components */
+      .col-header-text {
+        font-family: var(--dashboard-font-display);
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        fill: var(--dashboard-muted);
+        opacity: 0;
+      }
+
+      /* Node styling */
+      .node-group {
+        opacity: 0;
+        transform-origin: center center;
+      }
+
+      .node-card {
+        fill: var(--dashboard-raised);
+        stroke: var(--dashboard-border);
+        stroke-width: 1.2;
+      }
+
+      .node-card-hero {
+        fill: var(--dashboard-surface);
+        stroke: var(--dashboard-accent-secondary);
+        stroke-width: 1.8;
+        filter: drop-shadow(0 0 14px rgba(245, 158, 11, 0.45));
+      }
+
+      .node-title {
+        font-family: var(--dashboard-font-display);
+        font-size: 14.5px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        fill: var(--dashboard-text);
+        pointer-events: none;
+      }
+
+      .node-title-hero {
+        font-family: var(--dashboard-font-display);
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        fill: #fbbf24;
+        pointer-events: none;
+      }
+
+      .node-subtext {
+        font-family: var(--dashboard-font-body);
+        font-size: 11.5px;
+        fill: var(--dashboard-muted);
+        pointer-events: none;
+      }
+
+      .node-subtext-hero {
+        font-family: var(--dashboard-font-body);
+        font-size: 12px;
+        fill: var(--dashboard-accent-secondary);
+        font-weight: 500;
+        pointer-events: none;
+      }
+
+      /* Connector paths */
+      .edge-path {
+        fill: none;
+        stroke: var(--dashboard-border);
+        stroke-width: 1.4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        opacity: 0;
+      }
+
+      .arrow-marker {
+        fill: var(--dashboard-accent-secondary);
+      }
+
+      /* Pulse comets */
+      .pulse-path {
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        opacity: 0;
+      }
+
+      .pulse-bronze {
+        stroke: #f59e0b;
+        stroke-width: 3.5;
+        filter: drop-shadow(0 0 5px #f59e0b);
+      }
+
+      .pulse-silver {
+        stroke: #69a5ff;
+        stroke-width: 3.5;
+        filter: drop-shadow(0 0 5px #69a5ff);
+      }
+
+      .pulse-gold {
+        stroke: #fbbf24;
+        stroke-width: 4;
+        filter: drop-shadow(0 0 7px #fbbf24);
+      }
+
+      /* Caption & Footer */
+      .caption-text {
+        font-family: var(--dashboard-font-display);
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        fill: var(--dashboard-muted);
+      }
+
+      .caption-arrow {
+        fill: #94a3b8;
+      }
+
+      .footer-note {
+        font-size: 13px;
+        color: var(--dashboard-muted);
+        letter-spacing: 0.01em;
+        opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="8"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div id="panel-card" class="clip" data-start="0" data-duration="8">
+        <!-- Blueprint Grid -->
+        <div id="panel-grid"></div>
+
+        <!-- SVG Border Draw Overlay -->
+        <svg id="border-svg" viewBox="0 0 1560 878">
+          <rect
+            id="border-rect"
+            x="0.75"
+            y="0.75"
+            width="1558.5"
+            height="876.5"
+          />
+        </svg>
+
+        <!-- Header -->
+        <div id="panel-header">
+          <div class="header-left">
+            <div id="header-mark">Q</div>
+            <div id="header-title">
+              <span class="type-char">D</span><span class="type-char">a</span><span class="type-char">t</span><span class="type-char">a</span> <span class="type-char">L</span><span class="type-char">i</span><span class="type-char">n</span><span class="type-char">e</span><span class="type-char">a</span><span class="type-char">g</span><span class="type-char">e</span><span id="type-cursor" class="type-cursor">_</span>
+            </div>
+          </div>
+          <div id="header-label">Illustrative architecture</div>
+        </div>
+
+        <!-- Body Content -->
+        <div id="panel-body">
+          <div id="diagram-wrap">
+            <svg
+              id="lineage-svg"
+              viewBox="0 0 760 350"
+              preserveAspectRatio="xMidYMid meet"
+            >
+              <defs>
+                <marker
+                  id="lineage-arrow"
+                  markerWidth="8"
+                  markerHeight="8"
+                  refX="7"
+                  refY="4"
+                  orient="auto"
+                >
+                  <path d="M0 0 L8 4 L0 8 Z" class="arrow-marker" />
+                </marker>
+
+                <filter id="hero-glow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="6" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+
+              <!-- 1. Column Labels -->
+              <g id="col-headers">
+                <text id="lbl-col-1" class="col-header-text" x="20" y="30">01 / SOURCES</text>
+                <text id="lbl-col-2" class="col-header-text" x="208" y="30">02 / STAGING</text>
+                <text id="lbl-col-3" class="col-header-text" x="424" y="30">03 / DIMENSIONS</text>
+                <text id="lbl-col-4" class="col-header-text" x="632" y="30">04 / MART</text>
+              </g>
+
+              <!-- 2. Connector Lines (Edges) -->
+              <g id="edges-group">
+                <!-- Col 1 Out: CRM -->
+                <path id="edge-crm-cust" class="edge-path" d="M154 109 H180 V85 H208" />
+                <path id="edge-crm-prod" class="edge-path" d="M154 109 H180 V175 H208" />
+                <path id="edge-crm-sales" class="edge-path" d="M154 109 H180 V265 H208" />
+
+                <!-- Col 1 Out: ERP -->
+                <path id="edge-erp-cust" class="edge-path" d="M154 239 H170 V85 H208" />
+                <path id="edge-erp-prod" class="edge-path" d="M154 239 H170 V175 H208" />
+
+                <!-- Col 2 Out: Staging -->
+                <path id="edge-cust-dim" class="edge-path" d="M376 85 H424" />
+                <path id="edge-prod-dim" class="edge-path" d="M376 175 H424" />
+
+                <!-- Col 3 Out & Sales details into fct_sales with Arrowhead -->
+                <path id="edge-dim-cust-fct" class="edge-path" d="M586 85 H608 V175 H632" marker-end="url(#lineage-arrow)" />
+                <path id="edge-dim-prod-fct" class="edge-path" d="M586 175 H632" marker-end="url(#lineage-arrow)" />
+                <path id="edge-sales-fct" class="edge-path" d="M376 265 H610 V175 H632" marker-end="url(#lineage-arrow)" />
+              </g>
+
+              <!-- 3. Pulse Waves Overlay -->
+              <!-- Wave 1 Pulses -->
+              <g id="wave-1-pulses">
+                <path id="p1-crm-cust" class="pulse-path pulse-bronze" d="M154 109 H180 V85 H208" />
+                <path id="p1-crm-prod" class="pulse-path pulse-bronze" d="M154 109 H180 V175 H208" />
+                <path id="p1-crm-sales" class="pulse-path pulse-bronze" d="M154 109 H180 V265 H208" />
+                <path id="p1-erp-cust" class="pulse-path pulse-bronze" d="M154 239 H170 V85 H208" />
+                <path id="p1-erp-prod" class="pulse-path pulse-bronze" d="M154 239 H170 V175 H208" />
+
+                <path id="p1-cust-dim" class="pulse-path pulse-silver" d="M376 85 H424" />
+                <path id="p1-prod-dim" class="pulse-path pulse-silver" d="M376 175 H424" />
+
+                <path id="p1-dim-cust-fct" class="pulse-path pulse-gold" d="M586 85 H608 V175 H632" />
+                <path id="p1-dim-prod-fct" class="pulse-path pulse-gold" d="M586 175 H632" />
+                <path id="p1-sales-fct" class="pulse-path pulse-gold" d="M376 265 H610 V175 H632" />
+              </g>
+
+              <!-- Wave 2 Pulses -->
+              <g id="wave-2-pulses">
+                <path id="p2-crm-cust" class="pulse-path pulse-bronze" d="M154 109 H180 V85 H208" />
+                <path id="p2-crm-prod" class="pulse-path pulse-bronze" d="M154 109 H180 V175 H208" />
+                <path id="p2-crm-sales" class="pulse-path pulse-bronze" d="M154 109 H180 V265 H208" />
+                <path id="p2-erp-cust" class="pulse-path pulse-bronze" d="M154 239 H170 V85 H208" />
+                <path id="p2-erp-prod" class="pulse-path pulse-bronze" d="M154 239 H170 V175 H208" />
+
+                <path id="p2-cust-dim" class="pulse-path pulse-silver" d="M376 85 H424" />
+                <path id="p2-prod-dim" class="pulse-path pulse-silver" d="M376 175 H424" />
+
+                <path id="p2-dim-cust-fct" class="pulse-path pulse-gold" d="M586 85 H608 V175 H632" />
+                <path id="p2-dim-prod-fct" class="pulse-path pulse-gold" d="M586 175 H632" />
+                <path id="p2-sales-fct" class="pulse-path pulse-gold" d="M376 265 H610 V175 H632" />
+              </g>
+
+              <!-- Wave 3 Pulses -->
+              <g id="wave-3-pulses">
+                <path id="p3-crm-cust" class="pulse-path pulse-bronze" d="M154 109 H180 V85 H208" />
+                <path id="p3-crm-prod" class="pulse-path pulse-bronze" d="M154 109 H180 V175 H208" />
+                <path id="p3-crm-sales" class="pulse-path pulse-bronze" d="M154 109 H180 V265 H208" />
+                <path id="p3-erp-cust" class="pulse-path pulse-bronze" d="M154 239 H170 V85 H208" />
+                <path id="p3-erp-prod" class="pulse-path pulse-bronze" d="M154 239 H170 V175 H208" />
+
+                <path id="p3-cust-dim" class="pulse-path pulse-silver" d="M376 85 H424" />
+                <path id="p3-prod-dim" class="pulse-path pulse-silver" d="M376 175 H424" />
+
+                <path id="p3-dim-cust-fct" class="pulse-path pulse-gold" d="M586 85 H608 V175 H632" />
+                <path id="p3-dim-prod-fct" class="pulse-path pulse-gold" d="M586 175 H632" />
+                <path id="p3-sales-fct" class="pulse-path pulse-gold" d="M376 265 H610 V175 H632" />
+              </g>
+
+              <!-- Ripple Rings on Hero node fct_sales (center ~ 688, 175) -->
+              <circle
+                id="fct-ripple-1"
+                cx="688"
+                cy="175"
+                r="12"
+                fill="none"
+                stroke="#fbbf24"
+                stroke-width="2"
+                opacity="0"
+              />
+              <circle
+                id="fct-ripple-2"
+                cx="688"
+                cy="175"
+                r="12"
+                fill="none"
+                stroke="#f59e0b"
+                stroke-width="1.5"
+                opacity="0"
+              />
+
+              <!-- 4. Nodes (Cards) -->
+              <!-- Col 1: Sources -->
+              <g id="node-crm" class="node-group">
+                <rect class="node-card" x="20" y="76" width="134" height="66" rx="12" />
+                <text class="node-title" x="36" y="104">CRM</text>
+                <text class="node-subtext" x="36" y="125">Sales &amp; customers</text>
+              </g>
+
+              <g id="node-erp" class="node-group">
+                <rect class="node-card" x="20" y="206" width="134" height="66" rx="12" />
+                <text class="node-title" x="36" y="234">ERP</text>
+                <text class="node-subtext" x="36" y="255">Reference data</text>
+              </g>
+
+              <!-- Col 2: Staging -->
+              <g id="node-customers" class="node-group">
+                <rect class="node-card" x="208" y="52" width="168" height="66" rx="12" />
+                <text class="node-title" x="224" y="80">Customers</text>
+                <text class="node-subtext" x="224" y="101">Clean &amp; standardize</text>
+              </g>
+
+              <g id="node-products" class="node-group">
+                <rect class="node-card" x="208" y="142" width="168" height="66" rx="12" />
+                <text class="node-title" x="224" y="170">Products</text>
+                <text class="node-subtext" x="224" y="191">Enrich &amp; categorize</text>
+              </g>
+
+              <g id="node-sales" class="node-group">
+                <rect class="node-card" x="208" y="232" width="168" height="66" rx="12" />
+                <text class="node-title" x="224" y="260">Sales details</text>
+                <text class="node-subtext" x="224" y="281">Validate transactions</text>
+              </g>
+
+              <!-- Col 3: Dimensions -->
+              <g id="node-dim-cust" class="node-group">
+                <rect class="node-card" x="424" y="52" width="162" height="66" rx="12" />
+                <text class="node-title" x="440" y="80">dim_customers</text>
+                <text class="node-subtext" x="440" y="101">Customer dimension</text>
+              </g>
+
+              <g id="node-dim-prod" class="node-group">
+                <rect class="node-card" x="424" y="142" width="162" height="66" rx="12" />
+                <text class="node-title" x="440" y="170">dim_products</text>
+                <text class="node-subtext" x="440" y="191">Product dimension</text>
+              </g>
+
+              <!-- Col 4: Hero Mart (fct_sales) -->
+              <g id="node-fct-sales" class="node-group">
+                <rect
+                  id="rect-fct"
+                  class="node-card-hero"
+                  x="632"
+                  y="137"
+                  width="112"
+                  height="76"
+                  rx="12"
+                />
+                <text id="text-fct-title" class="node-title-hero" x="648" y="171">fct_sales</text>
+                <text id="text-fct-sub" class="node-subtext-hero" x="648" y="194">Sales facts</text>
+              </g>
+
+              <!-- 5. Captions & Footer -->
+              <g id="caption-group">
+                <text class="caption-text" x="20" y="337">
+                  <tspan id="tok-bronze" class="caption-token">BRONZE</tspan>
+                  <tspan class="caption-arrow"> → </tspan>
+                  <tspan id="tok-silver" class="caption-token">SILVER</tspan>
+                  <tspan class="caption-arrow"> → </tspan>
+                  <tspan id="tok-gold" class="caption-token">GOLD</tspan>
+                </text>
+                <text id="caption-tech" class="caption-text" x="744" y="337" text-anchor="end" opacity="0">
+                  BigQuery + dbt
+                </text>
+              </g>
+            </svg>
+          </div>
+
+          <p id="footer-note" class="footer-note">
+            A simplified view of the project’s data flow. Quality checks and run telemetry help reveal issues along the way.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Setup border drawing
+      const borderRect = document.getElementById("border-rect");
+      const perimeter = 2 * (1558.5 + 876.5); // 4870
+      borderRect.style.strokeDasharray = perimeter;
+      borderRect.style.strokeDashoffset = perimeter;
+
+      // Edge path definitions and lengths
+      const edgeElements = [
+        { id: "#edge-crm-cust", len: 78 },
+        { id: "#edge-crm-prod", len: 120 },
+        { id: "#edge-crm-sales", len: 210 },
+        { id: "#edge-erp-cust", len: 208 },
+        { id: "#edge-erp-prod", len: 118 },
+        { id: "#edge-cust-dim", len: 48 },
+        { id: "#edge-prod-dim", len: 48 },
+        { id: "#edge-dim-cust-fct", len: 136 },
+        { id: "#edge-dim-prod-fct", len: 46 },
+        { id: "#edge-sales-fct", len: 346 }
+      ];
+
+      edgeElements.forEach((e) => {
+        const el = document.querySelector(e.id);
+        if (el) {
+          el.style.strokeDasharray = e.len;
+          el.style.strokeDashoffset = e.len;
+        }
+      });
+
+      // Pulse path configuration
+      const pulseDefs = [
+        { key: "crm-cust", len: 78 },
+        { key: "crm-prod", len: 120 },
+        { key: "crm-sales", len: 210 },
+        { key: "erp-cust", len: 208 },
+        { key: "erp-prod", len: 118 },
+        { key: "cust-dim", len: 48 },
+        { key: "prod-dim", len: 48 },
+        { key: "dim-cust-fct", len: 136 },
+        { key: "dim-prod-fct", len: 46 },
+        { key: "sales-fct", len: 346 }
+      ];
+
+      // Setup pulse stroke dash arrays
+      [1, 2, 3].forEach((w) => {
+        pulseDefs.forEach((p) => {
+          const el = document.getElementById(`p${w}-${p.key}`);
+          if (el) {
+            el.style.strokeDasharray = `14 ${p.len + 30}`;
+            el.style.strokeDashoffset = "14";
+          }
+        });
+      });
+
+      // Timeline build
+      const tl = gsap.timeline({ paused: true });
+
+      // 1. PANEL ENTRANCE (0.0s - 0.6s)
+      tl.fromTo(
+        borderRect,
+        { strokeDashoffset: perimeter },
+        { strokeDashoffset: 0, duration: 0.6, ease: "power3.out" },
+        0.0
+      );
+
+      tl.fromTo(
+        "#panel-card",
+        { opacity: 0, scale: 0.985 },
+        { opacity: 1, scale: 1.0, duration: 0.45, ease: "power2.out" },
+        0.05
+      );
+
+      tl.fromTo(
+        "#panel-grid",
+        { opacity: 0 },
+        { opacity: 0.22, duration: 0.5, ease: "power2.out" },
+        0.1
+      );
+
+      // Amber "Q" Badge
+      tl.fromTo(
+        "#header-mark",
+        { scale: 0, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.28, ease: "back.out(1.4)" },
+        0.15
+      );
+
+      // "Data Lineage" Typewriter
+      const typeChars = document.querySelectorAll(".type-char");
+      tl.fromTo(
+        typeChars,
+        { opacity: 0 },
+        { opacity: 1, duration: 0.02, stagger: 0.025, ease: "none" },
+        0.24
+      );
+
+      tl.fromTo(
+        "#type-cursor",
+        { opacity: 1 },
+        { opacity: 0, duration: 0.2, repeat: 3, yoyo: true, ease: "steps(1)" },
+        0.24
+      );
+      tl.to("#type-cursor", { opacity: 0, duration: 0.15 }, 1.05);
+
+      tl.fromTo(
+        "#header-label",
+        { opacity: 0, x: 10 },
+        { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" },
+        0.35
+      );
+
+      // Column Labels (01/SOURCES, 02/STAGING, 03/DIMENSIONS, 04/MART)
+      const colLabels = ["#lbl-col-1", "#lbl-col-2", "#lbl-col-3", "#lbl-col-4"];
+      colLabels.forEach((id, i) => {
+        tl.fromTo(
+          id,
+          { opacity: 0, y: -6 },
+          { opacity: 1, y: 0, duration: 0.35, ease: "power2.out" },
+          0.4 + i * 0.12
+        );
+      });
+
+      // 2. NODE BUILD-IN & CONNECTOR LINES (0.7s - 2.8s)
+      // Column 1 Nodes: CRM, ERP (0.7s - 1.05s)
+      const col1Nodes = ["#node-crm", "#node-erp"];
+      col1Nodes.forEach((id, i) => {
+        tl.fromTo(
+          id,
+          { opacity: 0, y: 12 },
+          { opacity: 1, y: 0, duration: 0.38, ease: "power3.out" },
+          0.7 + i * 0.1
+        );
+        // Landing flash
+        tl.fromTo(
+          `${id} .node-card`,
+          { stroke: "#22d3ee", filter: "drop-shadow(0 0 10px rgba(34, 211, 238, 0.7))" },
+          { stroke: "#354258", filter: "drop-shadow(0 0 0px rgba(34, 211, 238, 0))", duration: 0.3, ease: "power2.out", immediateRender: false },
+          1.0 + i * 0.08
+        );
+      });
+
+      // Column 1 Outgoing Lines (CRM -> Staging, ERP -> Staging)
+      const col1Edges = [
+        { id: "#edge-crm-cust", len: 78, t: 1.05 },
+        { id: "#edge-crm-prod", len: 120, t: 1.1 },
+        { id: "#edge-crm-sales", len: 210, t: 1.15 },
+        { id: "#edge-erp-cust", len: 208, t: 1.15 },
+        { id: "#edge-erp-prod", len: 118, t: 1.1 }
+      ];
+      col1Edges.forEach((e) => {
+        tl.fromTo(
+          e.id,
+          { strokeDashoffset: e.len, opacity: 0 },
+          { strokeDashoffset: 0, opacity: 1, duration: 0.45, ease: "power2.out" },
+          e.t
+        );
+      });
+
+      // Column 2 Nodes: Customers, Products, Sales details (1.25s - 1.65s)
+      const col2Nodes = ["#node-customers", "#node-products", "#node-sales"];
+      col2Nodes.forEach((id, i) => {
+        tl.fromTo(
+          id,
+          { opacity: 0, y: 12 },
+          { opacity: 1, y: 0, duration: 0.38, ease: "power3.out" },
+          1.25 + i * 0.09
+        );
+        // Landing flash
+        tl.fromTo(
+          `${id} .node-card`,
+          { stroke: "#22d3ee", filter: "drop-shadow(0 0 10px rgba(34, 211, 238, 0.7))" },
+          { stroke: "#354258", filter: "drop-shadow(0 0 0px rgba(34, 211, 238, 0))", duration: 0.3, ease: "power2.out", immediateRender: false },
+          1.55 + i * 0.08
+        );
+      });
+
+      // Column 2 Outgoing Lines (Staging -> Dimensions)
+      const col2Edges = [
+        { id: "#edge-cust-dim", len: 48, t: 1.65 },
+        { id: "#edge-prod-dim", len: 48, t: 1.7 }
+      ];
+      col2Edges.forEach((e) => {
+        tl.fromTo(
+          e.id,
+          { strokeDashoffset: e.len, opacity: 0 },
+          { strokeDashoffset: 0, opacity: 1, duration: 0.4, ease: "power2.out" },
+          e.t
+        );
+      });
+
+      // Column 3 Nodes: dim_customers, dim_products (1.85s - 2.25s)
+      const col3Nodes = ["#node-dim-cust", "#node-dim-prod"];
+      col3Nodes.forEach((id, i) => {
+        tl.fromTo(
+          id,
+          { opacity: 0, y: 12 },
+          { opacity: 1, y: 0, duration: 0.38, ease: "power3.out" },
+          1.85 + i * 0.1
+        );
+        // Landing flash
+        tl.fromTo(
+          `${id} .node-card`,
+          { stroke: "#22d3ee", filter: "drop-shadow(0 0 10px rgba(34, 211, 238, 0.7))" },
+          { stroke: "#354258", filter: "drop-shadow(0 0 0px rgba(34, 211, 238, 0))", duration: 0.3, ease: "power2.out", immediateRender: false },
+          2.15 + i * 0.08
+        );
+      });
+
+      // Column 3 Outgoing Lines & Sales Details into fct_sales (2.25s - 2.7s)
+      const col3Edges = [
+        { id: "#edge-dim-cust-fct", len: 136, t: 2.25 },
+        { id: "#edge-dim-prod-fct", len: 46, t: 2.3 },
+        { id: "#edge-sales-fct", len: 346, t: 2.25 }
+      ];
+      col3Edges.forEach((e) => {
+        tl.fromTo(
+          e.id,
+          { strokeDashoffset: e.len, opacity: 0 },
+          { strokeDashoffset: 0, opacity: 1, duration: 0.5, ease: "power2.out" },
+          e.t
+        );
+      });
+
+      // Column 4: Hero Node fct_sales (2.5s - 2.9s)
+      tl.fromTo(
+        "#node-fct-sales",
+        { opacity: 0, y: 12, scale: 0.94 },
+        { opacity: 1, y: 0, scale: 1.0, duration: 0.45, ease: "back.out(1.4)" },
+        2.5
+      );
+      // Hero amber landing pulse
+      tl.fromTo(
+        "#rect-fct",
+        { stroke: "#fbbf24", filter: "drop-shadow(0 0 20px rgba(251, 191, 36, 0.9))" },
+        { stroke: "#f59e0b", filter: "drop-shadow(0 0 12px rgba(245, 158, 11, 0.45))", duration: 0.45, ease: "power2.out", immediateRender: false },
+        2.85
+      );
+
+      // Helper function to animate one complete pulse wave through the pipeline
+      function animateWave(waveNum, startT) {
+        // Stage 1: Bronze pulses from Sources to Staging (startT -> startT + 0.45s)
+        const s1Pulses = [
+          { id: `#p${waveNum}-crm-cust`, len: 78 },
+          { id: `#p${waveNum}-crm-prod`, len: 120 },
+          { id: `#p${waveNum}-crm-sales`, len: 210 },
+          { id: `#p${waveNum}-erp-cust`, len: 208 },
+          { id: `#p${waveNum}-erp-prod`, len: 118 }
+        ];
+
+        // Sources emit flash
+        tl.fromTo(
+          ["#node-crm .node-card", "#node-erp .node-card"],
+          { stroke: "#f59e0b", scale: 1.025 },
+          { stroke: "#354258", scale: 1.0, duration: 0.35, ease: "power2.out", immediateRender: false },
+          startT
+        );
+
+        s1Pulses.forEach((p) => {
+          tl.fromTo(
+            p.id,
+            { strokeDashoffset: 14, opacity: 1 },
+            { strokeDashoffset: -p.len, opacity: 1, duration: 0.45, ease: "power1.inOut", immediateRender: false },
+            startT
+          );
+          tl.to(p.id, { opacity: 0, duration: 0.08 }, startT + 0.44);
+        });
+
+        // Stage 2: Arrive at Staging (startT + 0.45s) & travel to Dimensions (startT + 0.45s -> startT + 0.85s)
+        const tStage2 = startT + 0.45;
+
+        // Staging nodes light up
+        tl.fromTo(
+          ["#node-customers .node-card", "#node-products .node-card", "#node-sales .node-card"],
+          { stroke: "#69a5ff", scale: 1.025, filter: "drop-shadow(0 0 8px rgba(105, 165, 255, 0.6))" },
+          { stroke: "#354258", scale: 1.0, filter: "drop-shadow(0 0 0px rgba(0, 0, 0, 0))", duration: 0.35, ease: "power2.out", immediateRender: false },
+          tStage2
+        );
+
+        const s2Pulses = [
+          { id: `#p${waveNum}-cust-dim`, len: 48 },
+          { id: `#p${waveNum}-prod-dim`, len: 48 }
+        ];
+        s2Pulses.forEach((p) => {
+          tl.fromTo(
+            p.id,
+            { strokeDashoffset: 14, opacity: 1 },
+            { strokeDashoffset: -p.len, opacity: 1, duration: 0.4, ease: "power1.inOut", immediateRender: false },
+            tStage2
+          );
+          tl.to(p.id, { opacity: 0, duration: 0.08 }, tStage2 + 0.39);
+        });
+
+        // Stage 3: Arrive at Dimensions (startT + 0.85s) & travel into fct_sales (startT + 0.85s -> startT + 1.35s)
+        const tStage3 = startT + 0.85;
+
+        // Dimension nodes light up
+        tl.fromTo(
+          ["#node-dim-cust .node-card", "#node-dim-prod .node-card"],
+          { stroke: "#38bdf8", scale: 1.025, filter: "drop-shadow(0 0 8px rgba(56, 189, 248, 0.6))" },
+          { stroke: "#354258", scale: 1.0, filter: "drop-shadow(0 0 0px rgba(0, 0, 0, 0))", duration: 0.35, ease: "power2.out", immediateRender: false },
+          tStage3
+        );
+
+        const s3Pulses = [
+          { id: `#p${waveNum}-dim-cust-fct`, len: 136 },
+          { id: `#p${waveNum}-dim-prod-fct`, len: 46 },
+          { id: `#p${waveNum}-sales-fct`, len: 346 }
+        ];
+        s3Pulses.forEach((p) => {
+          tl.fromTo(
+            p.id,
+            { strokeDashoffset: 14, opacity: 1 },
+            { strokeDashoffset: -p.len, opacity: 1, duration: 0.5, ease: "power1.inOut", immediateRender: false },
+            tStage3
+          );
+          tl.to(p.id, { opacity: 0, duration: 0.08 }, tStage3 + 0.49);
+        });
+
+        // Stage 4: fct_sales absorbs pulses (startT + 1.35s)
+        const tAbsorb = startT + 1.35;
+
+        // Hero node absorbs pulses: scale pulse, amber glow
+        tl.fromTo(
+          "#rect-fct",
+          { stroke: "#fbbf24", scale: 1.04, filter: "drop-shadow(0 0 24px rgba(251, 191, 36, 0.95))" },
+          { stroke: "#f59e0b", scale: 1.0, filter: "drop-shadow(0 0 12px rgba(245, 158, 11, 0.45))", duration: 0.45, ease: "power2.out", immediateRender: false },
+          tAbsorb
+        );
+
+        // "Sales facts" text flickers brighter
+        tl.fromTo(
+          "#text-fct-sub",
+          { fill: "#ffffff", fontWeight: 700 },
+          { fill: "#f59e0b", fontWeight: 500, duration: 0.4, ease: "power1.out", immediateRender: false },
+          tAbsorb
+        );
+
+        // Ripple rings from fct_sales
+        tl.fromTo(
+          "#fct-ripple-1",
+          { attr: { r: 12 }, opacity: 0.8 },
+          { attr: { r: 48 }, opacity: 0, duration: 0.65, ease: "power2.out", immediateRender: false },
+          tAbsorb
+        );
+        tl.fromTo(
+          "#fct-ripple-2",
+          { attr: { r: 12 }, opacity: 0.6 },
+          { attr: { r: 62 }, opacity: 0, duration: 0.75, ease: "power2.out", immediateRender: false },
+          tAbsorb + 0.1
+        );
+      }
+
+      // 3 WAVES of traveling pulses
+      animateWave(1, 2.8);
+      animateWave(2, 4.1);
+      animateWave(3, 5.4);
+
+      // 4. CAPTION & FOOTER SYNC (2.8s - 4.5s)
+      // BRONZE highlight
+      tl.fromTo(
+        "#tok-bronze",
+        { fill: "#a7b5c9" },
+        { fill: "#fbbf24", filter: "drop-shadow(0 0 8px rgba(251, 191, 36, 0.8))", duration: 0.35, ease: "power2.out" },
+        2.8
+      );
+      tl.to("#tok-bronze", { fill: "#a7b5c9", filter: "drop-shadow(0 0 0px rgba(0, 0, 0, 0))", duration: 0.4 }, 3.4);
+
+      // SILVER highlight
+      tl.fromTo(
+        "#tok-silver",
+        { fill: "#a7b5c9" },
+        { fill: "#93c5fd", filter: "drop-shadow(0 0 8px rgba(147, 197, 253, 0.8))", duration: 0.35, ease: "power2.out" },
+        3.25
+      );
+      tl.to("#tok-silver", { fill: "#a7b5c9", filter: "drop-shadow(0 0 0px rgba(0, 0, 0, 0))", duration: 0.4 }, 3.85);
+
+      // GOLD highlight
+      tl.fromTo(
+        "#tok-gold",
+        { fill: "#a7b5c9" },
+        { fill: "#fde047", filter: "drop-shadow(0 0 10px rgba(253, 224, 71, 0.9))", duration: 0.35, ease: "power2.out" },
+        4.15
+      );
+      tl.to("#tok-gold", { fill: "#a7b5c9", filter: "drop-shadow(0 0 0px rgba(0, 0, 0, 0))", duration: 0.4 }, 4.75);
+
+      // "BigQuery + dbt" fades in
+      tl.fromTo(
+        "#caption-tech",
+        { opacity: 0, x: 10 },
+        { opacity: 1, x: 0, duration: 0.45, ease: "power2.out" },
+        3.4
+      );
+
+      // Footer sentence note
+      tl.fromTo(
+        "#footer-note",
+        { opacity: 0, y: 6 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" },
+        3.5
+      );
+
+      // 5. LOOP RESET (7.0s - 8.0s)
+      tl.to(
+        "#panel-card",
+        { opacity: 0, duration: 0.8, ease: "power2.inOut" },
+        7.0
+      );
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

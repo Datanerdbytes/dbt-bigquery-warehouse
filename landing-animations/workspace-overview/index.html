@@ -1,0 +1,1197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Workspace Overview</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600&family=Share+Tech+Mono&display=swap");
+
+      :root {
+        --dashboard-background: #0f172a;
+        --dashboard-surface: #1b2336;
+        --dashboard-raised: #263249;
+        --dashboard-text: #f8fafc;
+        --dashboard-muted: #a7b5c9;
+        --dashboard-border: #354258;
+        --dashboard-accent: #69a5ff;
+        --dashboard-accent-secondary: #f59e0b;
+        --dashboard-accent-tertiary: #22d3ee;
+        --dashboard-grid: #1e293b;
+        --dashboard-success: #5ddd98;
+        --dashboard-purple: #b6a0ff;
+        --dashboard-font-body: "Fira Sans", system-ui, sans-serif;
+        --dashboard-font-number: "Fira Code", ui-monospace, monospace;
+        --dashboard-font-display: "Share Tech Mono", ui-monospace, monospace;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background-color: var(--dashboard-background);
+        font-family: var(--dashboard-font-body);
+        color: var(--dashboard-text);
+      }
+
+      #root {
+        position: absolute;
+        inset: 0;
+        width: 1920px;
+        height: 1080px;
+        background-color: var(--dashboard-background);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* Panel container */
+      #panel-card {
+        position: relative;
+        width: 1560px;
+        height: 878px;
+        background-color: var(--dashboard-surface);
+        box-shadow:
+          0 0 0 1px rgba(34, 211, 238, 0.2) inset,
+          0 30px 80px rgba(0, 0, 0, 0.45);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      /* Blueprint Grid Background */
+      #panel-grid {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(var(--dashboard-border) 1px, transparent 1px),
+          linear-gradient(90deg, var(--dashboard-border) 1px, transparent 1px);
+        background-size: 24px 24px;
+        opacity: 0.22;
+        pointer-events: none;
+      }
+
+      /* Animated Cyan Border Overlay */
+      #border-svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 10;
+      }
+
+      #border-rect {
+        fill: none;
+        stroke: var(--dashboard-accent-tertiary);
+        stroke-width: 1.5;
+        stroke-linecap: square;
+      }
+
+      /* Header / Figcaption */
+      #panel-header {
+        position: relative;
+        z-index: 2;
+        height: 72px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 32px;
+        border-bottom: 1px solid var(--dashboard-border);
+        background: rgba(27, 35, 54, 0.85);
+        backdrop-filter: blur(8px);
+      }
+
+      .header-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      #header-mark {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        background: var(--dashboard-raised);
+        border: 1.5px solid var(--dashboard-accent-secondary);
+        color: var(--dashboard-accent-secondary);
+        font-family: var(--dashboard-font-display);
+        font-size: 17px;
+        font-weight: 600;
+      }
+
+      #header-title {
+        font-family: var(--dashboard-font-display);
+        font-size: 15px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--dashboard-text);
+      }
+
+      .type-char {
+        display: inline-block;
+        opacity: 0;
+      }
+
+      .type-cursor {
+        display: inline-block;
+        color: var(--dashboard-accent-tertiary);
+        font-weight: bold;
+        margin-left: 2px;
+      }
+
+      #header-label {
+        font-size: 13px;
+        color: var(--dashboard-muted);
+        letter-spacing: 0.05em;
+      }
+
+      /* Panel Body */
+      #panel-body {
+        position: relative;
+        z-index: 2;
+        flex: 1;
+        padding: 28px 40px 24px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      /* Summary Row */
+      .summary-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+
+      .metric-group {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .metric-label {
+        font-size: 14px;
+        color: var(--dashboard-muted);
+        margin-bottom: 6px;
+        letter-spacing: 0.02em;
+      }
+
+      .metric-value-wrap {
+        display: flex;
+        align-items: baseline;
+        gap: 16px;
+      }
+
+      #metric-val {
+        font-family: var(--dashboard-font-number);
+        font-size: 46px;
+        font-weight: 600;
+        letter-spacing: -0.04em;
+        color: var(--dashboard-text);
+        font-variant-numeric: tabular-nums;
+        min-width: 250px;
+      }
+
+      #metric-chip {
+        display: inline-flex;
+        align-items: center;
+        background: rgba(93, 221, 152, 0.12);
+        color: var(--dashboard-success);
+        border: 1px solid rgba(93, 221, 152, 0.3);
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 14px;
+        font-family: var(--dashboard-font-number);
+        font-weight: 500;
+        font-variant-numeric: tabular-nums;
+      }
+
+      #period-pill {
+        color: var(--dashboard-muted);
+        font-size: 13px;
+        padding: 8px 16px;
+        border: 1px solid var(--dashboard-border);
+        border-radius: 6px;
+        background: rgba(38, 50, 73, 0.4);
+        font-family: var(--dashboard-font-body);
+        letter-spacing: 0.02em;
+      }
+
+      /* Trend Chart Section */
+      #chart-wrap {
+        position: relative;
+        width: 100%;
+        height: 290px;
+        margin: 6px 0 12px;
+      }
+
+      #trend-svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+        overflow: visible;
+      }
+
+      .chart-grid-line {
+        stroke: var(--dashboard-border);
+        stroke-width: 1.2;
+        stroke-dasharray: 4 6;
+        fill: none;
+      }
+
+      .axis-label {
+        fill: var(--dashboard-muted);
+        font-family: var(--dashboard-font-body);
+        font-size: 14px;
+        font-weight: 400;
+      }
+
+      /* Tooltip */
+      #chart-tooltip {
+        position: absolute;
+        padding: 6px 12px;
+        background: #111827;
+        border: 1px solid var(--dashboard-accent-tertiary);
+        border-radius: 5px;
+        font-family: var(--dashboard-font-number);
+        font-size: 13px;
+        color: var(--dashboard-text);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+        pointer-events: none;
+        white-space: nowrap;
+        transform: translate(-50%, -100%);
+      }
+
+      #chart-tooltip::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        margin-left: -5px;
+        border-width: 5px;
+        border-style: solid;
+        border-color: var(--dashboard-accent-tertiary) transparent transparent transparent;
+      }
+
+      /* Bottom Section: Details Columns */
+      .details-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 60px;
+        border-top: 1px solid rgba(53, 66, 88, 0.5);
+        padding-top: 24px;
+      }
+
+      #col-category,
+      #col-pipeline {
+        opacity: 0;
+      }
+
+      .section-heading {
+        font-family: var(--dashboard-font-display);
+        font-size: 15px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--dashboard-text);
+        margin-bottom: 16px;
+      }
+
+      /* Sales by Category */
+      .category-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        color: var(--dashboard-muted);
+        margin-bottom: 6px;
+      }
+
+      .cat-pct {
+        font-family: var(--dashboard-font-number);
+        font-variant-numeric: tabular-nums;
+        color: var(--dashboard-text);
+      }
+
+      .category-track {
+        height: 6px;
+        border-radius: 3px;
+        background: var(--dashboard-raised);
+        margin-bottom: 14px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .category-bar {
+        height: 100%;
+        border-radius: 3px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .shimmer-sweep {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 60px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.6),
+          transparent
+        );
+        transform: translateX(-100%);
+      }
+
+      .bar-tech {
+        background: var(--dashboard-accent);
+      }
+
+      .bar-furniture {
+        background: var(--dashboard-purple);
+      }
+
+      .bar-office {
+        background: var(--dashboard-success);
+      }
+
+      /* Pipeline Health */
+      .pipeline-status {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--dashboard-success);
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 16px;
+      }
+
+      .status-dot-wrap {
+        position: relative;
+        width: 10px;
+        height: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--dashboard-success);
+        box-shadow: 0 0 8px var(--dashboard-success);
+      }
+
+      .status-pulse-ring {
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 1.5px solid var(--dashboard-success);
+        opacity: 0;
+      }
+
+      .pipeline-metrics {
+        display: flex;
+        gap: 48px;
+        margin-bottom: 16px;
+      }
+
+      .metric-box strong {
+        display: block;
+        font-family: var(--dashboard-font-number);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--dashboard-text);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .metric-box span {
+        display: block;
+        font-size: 12px;
+        color: var(--dashboard-muted);
+        margin-top: 4px;
+      }
+
+      .pipeline-note {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 13px;
+        color: var(--dashboard-muted);
+      }
+
+      .passed-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--dashboard-success);
+        font-family: var(--dashboard-font-display);
+        font-size: 13px;
+        letter-spacing: 0.05em;
+      }
+
+      .checkmark-svg {
+        width: 14px;
+        height: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="8"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div id="panel-card" class="clip" data-start="0" data-duration="8">
+        <!-- Blueprint Grid -->
+        <div id="panel-grid"></div>
+
+        <!-- SVG Border Draw Overlay -->
+        <svg id="border-svg" viewBox="0 0 1560 878">
+          <rect
+            id="border-rect"
+            x="0.75"
+            y="0.75"
+            width="1558.5"
+            height="876.5"
+          />
+        </svg>
+
+        <!-- Header -->
+        <div id="panel-header">
+          <div class="header-left">
+            <div id="header-mark">Q</div>
+            <div id="header-title">
+              <span class="type-char">W</span><span class="type-char">o</span><span class="type-char">r</span><span class="type-char">k</span><span class="type-char">s</span><span class="type-char">p</span><span class="type-char">a</span><span class="type-char">c</span><span class="type-char">e</span> <span class="type-char">O</span><span class="type-char">v</span><span class="type-char">e</span><span class="type-char">r</span><span class="type-char">v</span><span class="type-char">i</span><span class="type-char">e</span><span class="type-char">w</span><span id="type-cursor" class="type-cursor">_</span>
+            </div>
+          </div>
+          <div id="header-label">Illustrative preview</div>
+        </div>
+
+        <!-- Body Content -->
+        <div id="panel-body">
+          <!-- Summary Row -->
+          <div class="summary-row">
+            <div class="metric-group">
+              <span id="metric-label" class="metric-label">Sales Performance</span>
+              <div class="metric-value-wrap">
+                <span id="metric-val">$0</span>
+                <span id="metric-chip">+18.6%</span>
+              </div>
+            </div>
+            <div id="period-pill">Last 6 months</div>
+          </div>
+
+          <!-- Trend Chart Section -->
+          <div id="chart-wrap">
+            <svg
+              id="trend-svg"
+              viewBox="0 0 560 174"
+              preserveAspectRatio="none"
+            >
+              <defs>
+                <linearGradient id="trend-fill-grad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#69a5ff" stop-opacity="0.32" />
+                  <stop offset="100%" stop-color="#69a5ff" stop-opacity="0" />
+                </linearGradient>
+
+                <!-- Clip Path that reveals area fill in sync with the curve -->
+                <clipPath id="chart-fill-clip">
+                  <rect id="fill-clip-rect" x="0" y="0" width="16" height="174" />
+                </clipPath>
+
+                <!-- Idle shimmer gradient -->
+                <linearGradient id="idle-sheen" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#69a5ff" stop-opacity="0" />
+                  <stop offset="50%" stop-color="#69a5ff" stop-opacity="0.45" />
+                  <stop offset="100%" stop-color="#69a5ff" stop-opacity="0" />
+                </linearGradient>
+
+                <filter id="glow-filter" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="3" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+
+              <!-- Gridlines -->
+              <g id="chart-grid">
+                <line class="chart-grid-line" x1="16" y1="26" x2="544" y2="26" />
+                <line class="chart-grid-line" x1="16" y1="64" x2="544" y2="64" />
+                <line class="chart-grid-line" x1="16" y1="102" x2="544" y2="102" />
+                <line class="chart-grid-line" x1="16" y1="140" x2="544" y2="140" />
+              </g>
+
+              <!-- Area Fill (clipped by leading edge) -->
+              <path
+                id="trend-fill"
+                d="M16 121 C58 121 75 78 122 83 S191 111 228 95 S298 53 334 60 S406 76 440 43 S501 46 544 18 L544 140 H16 Z"
+                fill="url(#trend-fill-grad)"
+                clip-path="url(#chart-fill-clip)"
+              />
+
+              <!-- Idle Sheen Rect (moves across area fill during idle) -->
+              <rect
+                id="sheen-rect"
+                x="-200"
+                y="0"
+                width="150"
+                height="140"
+                fill="url(#idle-sheen)"
+                clip-path="url(#chart-fill-clip)"
+                opacity="0"
+              />
+
+              <!-- Trend Curve Line -->
+              <path
+                id="trend-line"
+                d="M16 121 C58 121 75 78 122 83 S191 111 228 95 S298 53 334 60 S406 76 440 43 S501 46 544 18"
+                fill="none"
+                stroke="#69a5ff"
+                stroke-width="3.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+
+              <!-- Concentric Ripple Rings at Jun (544, 18) -->
+              <circle
+                id="ripple-1"
+                cx="544"
+                cy="18"
+                r="5"
+                fill="none"
+                stroke="#69a5ff"
+                stroke-width="2"
+                opacity="0"
+              />
+              <circle
+                id="ripple-2"
+                cx="544"
+                cy="18"
+                r="5"
+                fill="none"
+                stroke="#22d3ee"
+                stroke-width="1.5"
+                opacity="0"
+              />
+
+              <!-- Leading Glow Dot -->
+              <circle
+                id="leading-dot"
+                cx="16"
+                cy="121"
+                r="6"
+                fill="#69a5ff"
+                stroke="#ffffff"
+                stroke-width="1.5"
+                filter="url(#glow-filter)"
+                opacity="0"
+              />
+
+              <!-- Month Labels -->
+              <g id="axis-labels">
+                <text id="lbl-jan" class="axis-label" x="16" y="166">Jan</text>
+                <text id="lbl-feb" class="axis-label" x="122" y="166">Feb</text>
+                <text id="lbl-mar" class="axis-label" x="228" y="166">Mar</text>
+                <text id="lbl-apr" class="axis-label" x="334" y="166">Apr</text>
+                <text id="lbl-may" class="axis-label" x="440" y="166">May</text>
+                <text id="lbl-jun" class="axis-label" x="544" y="166" text-anchor="end">Jun</text>
+              </g>
+            </svg>
+
+            <!-- Tooltip Card at Jun -->
+            <div id="chart-tooltip">Jun — $128,430</div>
+          </div>
+
+          <!-- Bottom Details Row -->
+          <div class="details-row">
+            <!-- Sales by Category Column -->
+            <div id="col-category">
+              <h3 class="section-heading">Sales by Category</h3>
+
+              <!-- Tech -->
+              <div class="category-row">
+                <span>Technology</span>
+                <span id="pct-tech" class="cat-pct">0%</span>
+              </div>
+              <div class="category-track">
+                <div id="bar-tech" class="category-bar bar-tech" style="width: 0%">
+                  <div id="shimmer-tech" class="shimmer-sweep"></div>
+                </div>
+              </div>
+
+              <!-- Furniture -->
+              <div class="category-row">
+                <span>Furniture</span>
+                <span id="pct-furniture" class="cat-pct">0%</span>
+              </div>
+              <div class="category-track">
+                <div id="bar-furniture" class="category-bar bar-furniture" style="width: 0%">
+                  <div id="shimmer-furniture" class="shimmer-sweep"></div>
+                </div>
+              </div>
+
+              <!-- Office supplies -->
+              <div class="category-row">
+                <span>Office supplies</span>
+                <span id="pct-office" class="cat-pct">0%</span>
+              </div>
+              <div class="category-track">
+                <div id="bar-office" class="category-bar bar-office" style="width: 0%">
+                  <div id="shimmer-office" class="shimmer-sweep"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pipeline Health Column -->
+            <div id="col-pipeline">
+              <h3 class="section-heading">Pipeline Health</h3>
+
+              <!-- Status Dot -->
+              <div class="pipeline-status">
+                <div class="status-dot-wrap">
+                  <div id="status-pulse" class="status-pulse-ring"></div>
+                  <div id="status-dot" class="status-dot"></div>
+                </div>
+                <span id="status-text">All runs completed</span>
+              </div>
+
+              <!-- Metrics -->
+              <div class="pipeline-metrics">
+                <div class="metric-box">
+                  <strong id="metric-models">0/24</strong>
+                  <span>Models built</span>
+                </div>
+                <div class="metric-box">
+                  <strong id="metric-coverage">0.0%</strong>
+                  <span>Test coverage</span>
+                </div>
+              </div>
+
+              <!-- Quality Checks Passed -->
+              <div class="pipeline-note">
+                <span id="checks-label">Quality checks</span>
+                <div id="passed-badge" class="passed-badge">
+                  <svg class="checkmark-svg" viewBox="0 0 16 16">
+                    <path
+                      id="check-path"
+                      d="M3 8.5L6.5 12L13 4"
+                      fill="none"
+                      stroke="#5ddd98"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                  <span>Passed</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Cubic Bezier helper to compute exact (x, y) along the curve
+      function cubicBezier(p0, p1, p2, p3, t) {
+        const mt = 1 - t;
+        return {
+          x: mt*mt*mt*p0.x + 3*mt*mt*t*p1.x + 3*mt*t*t*p2.x + t*t*t*p3.x,
+          y: mt*mt*mt*p0.y + 3*mt*mt*t*p1.y + 3*mt*t*t*p2.y + t*t*t*p3.y
+        };
+      }
+
+      const curveSegments = [
+        { p0: {x:16, y:121}, p1: {x:58, y:121}, p2: {x:75, y:78}, p3: {x:122, y:83} },
+        { p0: {x:122, y:83}, p1: {x:169, y:88}, p2: {x:191, y:111}, p3: {x:228, y:95} },
+        { p0: {x:228, y:95}, p1: {x:265, y:79}, p2: {x:298, y:53}, p3: {x:334, y:60} },
+        { p0: {x:334, y:60}, p1: {x:370, y:67}, p2: {x:406, y:76}, p3: {x:440, y:43} },
+        { p0: {x:440, y:43}, p1: {x:474, y:10}, p2: {x:501, y:46}, p3: {x:544, y:18} }
+      ];
+
+      // Pre-sample points along the curve for fast, deterministic seek
+      const SAMPLES = 200;
+      const sampledPoints = [];
+      let totalCurveLength = 0;
+      let prevPt = curveSegments[0].p0;
+
+      for (let i = 0; i <= SAMPLES; i++) {
+        const globalT = i / SAMPLES;
+        const segIndex = Math.min(Math.floor(globalT * 5), 4);
+        const localT = (globalT * 5) - segIndex;
+        const seg = curveSegments[segIndex];
+        const pt = cubicBezier(seg.p0, seg.p1, seg.p2, seg.p3, localT);
+        if (i > 0) {
+          totalCurveLength += Math.hypot(pt.x - prevPt.x, pt.y - prevPt.y);
+        }
+        sampledPoints.push({ ...pt, dist: totalCurveLength });
+        prevPt = pt;
+      }
+
+      function getPointAtCurveProgress(progress) {
+        const targetDist = progress * totalCurveLength;
+        for (let i = 1; i < sampledPoints.length; i++) {
+          if (sampledPoints[i].dist >= targetDist) {
+            const pA = sampledPoints[i - 1];
+            const pB = sampledPoints[i];
+            const span = pB.dist - pA.dist || 1;
+            const frac = (targetDist - pA.dist) / span;
+            return {
+              x: pA.x + (pB.x - pA.x) * frac,
+              y: pA.y + (pB.y - pA.y) * frac
+            };
+          }
+        }
+        return sampledPoints[sampledPoints.length - 1];
+      }
+
+      // DOM Elements
+      const borderRect = document.getElementById("border-rect");
+      const perimeter = 2 * (1558.5 + 876.5); // 4870
+      borderRect.style.strokeDasharray = perimeter;
+      borderRect.style.strokeDashoffset = perimeter;
+
+      const trendLine = document.getElementById("trend-line");
+      trendLine.style.strokeDasharray = totalCurveLength;
+      trendLine.style.strokeDashoffset = totalCurveLength;
+
+      const fillClipRect = document.getElementById("fill-clip-rect");
+      const leadingDot = document.getElementById("leading-dot");
+      const metricValEl = document.getElementById("metric-val");
+      const pctTechEl = document.getElementById("pct-tech");
+      const pctFurnitureEl = document.getElementById("pct-furniture");
+      const pctOfficeEl = document.getElementById("pct-office");
+      const metricModelsEl = document.getElementById("metric-models");
+      const metricCoverageEl = document.getElementById("metric-coverage");
+      const checkPath = document.getElementById("check-path");
+      checkPath.style.strokeDasharray = 16;
+      checkPath.style.strokeDashoffset = 16;
+
+      // Position Tooltip over Jun (x: 544 in 560 viewbox -> ~97.1%, y: 18 in 174 viewbox -> ~10.3%)
+      const chartTooltip = document.getElementById("chart-tooltip");
+      chartTooltip.style.left = "97.1%";
+      chartTooltip.style.top = "10.3%";
+      chartTooltip.style.opacity = "0";
+
+      // Animation Timeline
+      const tl = gsap.timeline({ paused: true });
+
+      // 1. PANEL ENTRANCE (0.0s - 0.6s)
+      tl.fromTo(
+        borderRect,
+        { strokeDashoffset: perimeter },
+        { strokeDashoffset: 0, duration: 0.6, ease: "power3.out" },
+        0.0
+      );
+
+      tl.fromTo(
+        "#panel-card",
+        { opacity: 0, scale: 0.985 },
+        { opacity: 1, scale: 1.0, duration: 0.45, ease: "power2.out" },
+        0.05
+      );
+
+      tl.fromTo(
+        "#panel-grid",
+        { opacity: 0 },
+        { opacity: 0.22, duration: 0.5, ease: "power2.out" },
+        0.1
+      );
+
+      // Amber "Q" Badge
+      tl.fromTo(
+        "#header-mark",
+        { scale: 0, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.28, ease: "back.out(1.4)" },
+        0.15
+      );
+
+      // "Workspace Overview" Typewriter
+      const typeChars = document.querySelectorAll(".type-char");
+      tl.fromTo(
+        typeChars,
+        { opacity: 0 },
+        { opacity: 1, duration: 0.02, stagger: 0.025, ease: "none" },
+        0.24
+      );
+
+      // Blinking Cursor during typing then fade out
+      tl.fromTo(
+        "#type-cursor",
+        { opacity: 1 },
+        { opacity: 0, duration: 0.2, repeat: 3, yoyo: true, ease: "steps(1)" },
+        0.24
+      );
+      tl.to("#type-cursor", { opacity: 0, duration: 0.15 }, 1.05);
+
+      tl.fromTo(
+        "#header-label",
+        { opacity: 0, x: 10 },
+        { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" },
+        0.35
+      );
+
+      // 2. HEADLINE METRIC (0.4s - 1.6s)
+      tl.fromTo(
+        "#metric-label",
+        { opacity: 0, y: 6 },
+        { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" },
+        0.35
+      );
+
+      tl.fromTo(
+        "#period-pill",
+        { opacity: 0, scale: 0.92 },
+        { opacity: 1, scale: 1, duration: 0.35, ease: "power2.out" },
+        0.45
+      );
+
+      const countMetric = { val: 0 };
+      tl.to(
+        countMetric,
+        {
+          val: 128430,
+          duration: 1.15,
+          ease: "power3.out",
+          onUpdate: () => {
+            metricValEl.textContent = "$" + Math.round(countMetric.val).toLocaleString("en-US");
+          }
+        },
+        0.4
+      );
+
+      // "+18.6%" Green Chip
+      tl.fromTo(
+        "#metric-chip",
+        { opacity: 0, x: -16 },
+        { opacity: 1, x: 0, duration: 0.35, ease: "power3.out" },
+        1.5
+      );
+      tl.fromTo(
+        "#metric-chip",
+        { boxShadow: "0 0 16px rgba(93, 221, 152, 0.7)" },
+        { boxShadow: "0 0 0px rgba(93, 221, 152, 0)", duration: 0.45, ease: "power2.out" },
+        1.65
+      );
+
+      // 3. CHART LINE & AREA FILL (0.8s - 3.0s)
+      tl.fromTo(
+        "#chart-grid",
+        { opacity: 0 },
+        { opacity: 1, duration: 0.45, ease: "power2.out" },
+        0.65
+      );
+
+      // Fade in leading dot at 0.8s
+      tl.fromTo(
+        leadingDot,
+        { opacity: 0 },
+        { opacity: 1, duration: 0.15, ease: "power1.in" },
+        0.8
+      );
+
+      // Line progress proxy
+      const curveProgress = { val: 0 };
+      tl.to(
+        curveProgress,
+        {
+          val: 1,
+          duration: 2.2,
+          ease: "power2.out",
+          onUpdate: () => {
+            const p = curveProgress.val;
+            trendLine.style.strokeDashoffset = totalCurveLength * (1 - p);
+            fillClipRect.setAttribute("width", 16 + (544 - 16) * p);
+            const pt = getPointAtCurveProgress(p);
+            leadingDot.setAttribute("cx", pt.x);
+            leadingDot.setAttribute("cy", pt.y);
+          }
+        },
+        0.8
+      );
+
+      // Month Labels timed to the line passing over them
+      // Jan: x=16 (0.8s), Feb: x=122 (~1.25s), Mar: x=228 (~1.7s), Apr: x=334 (~2.15s), May: x=440 (~2.6s), Jun: x=544 (3.0s)
+      const monthTiming = [
+        { id: "#lbl-jan", time: 0.8 },
+        { id: "#lbl-feb", time: 1.25 },
+        { id: "#lbl-mar", time: 1.7 },
+        { id: "#lbl-apr", time: 2.15 },
+        { id: "#lbl-may", time: 2.6 },
+        { id: "#lbl-jun", time: 3.0 }
+      ];
+
+      monthTiming.forEach((m) => {
+        tl.fromTo(
+          m.id,
+          { opacity: 0.2, y: 4 },
+          { opacity: 1, y: 0, duration: 0.25, ease: "power2.out" },
+          m.time
+        );
+      });
+
+      // 4. LEADING DOT RIPPLE & TOOLTIP (3.0s - 3.8s)
+      tl.fromTo(
+        "#ripple-1",
+        { attr: { r: 5 }, opacity: 0.8 },
+        { attr: { r: 24 }, opacity: 0, duration: 0.7, ease: "power2.out", immediateRender: false },
+        3.0
+      );
+
+      tl.fromTo(
+        "#ripple-2",
+        { attr: { r: 5 }, opacity: 0.6 },
+        { attr: { r: 32 }, opacity: 0, duration: 0.75, ease: "power2.out", immediateRender: false },
+        3.15
+      );
+
+      // Tooltip Card pop-in above Jun
+      tl.fromTo(
+        chartTooltip,
+        { scale: 0.75, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.35, ease: "back.out(1.5)" },
+        3.05
+      );
+
+      // 5. SALES BY CATEGORY (2.0s - 3.6s)
+      tl.fromTo(
+        "#col-category",
+        { opacity: 0, y: 12 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" },
+        1.85
+      );
+
+      // Tech (48%)
+      const techVal = { val: 0 };
+      tl.fromTo(
+        "#bar-tech",
+        { width: "0%" },
+        { width: "48%", duration: 0.85, ease: "power2.out" },
+        2.0
+      );
+      tl.to(
+        techVal,
+        {
+          val: 48,
+          duration: 0.85,
+          ease: "power2.out",
+          onUpdate: () => {
+            pctTechEl.textContent = Math.round(techVal.val) + "%";
+          }
+        },
+        2.0
+      );
+      tl.fromTo(
+        "#shimmer-tech",
+        { x: "-100%" },
+        { x: "250%", duration: 0.35, ease: "power1.inOut" },
+        2.85
+      );
+
+      // Furniture (32%)
+      const furnVal = { val: 0 };
+      tl.fromTo(
+        "#bar-furniture",
+        { width: "0%" },
+        { width: "32%", duration: 0.85, ease: "power2.out" },
+        2.2
+      );
+      tl.to(
+        furnVal,
+        {
+          val: 32,
+          duration: 0.85,
+          ease: "power2.out",
+          onUpdate: () => {
+            pctFurnitureEl.textContent = Math.round(furnVal.val) + "%";
+          }
+        },
+        2.2
+      );
+      tl.fromTo(
+        "#shimmer-furniture",
+        { x: "-100%" },
+        { x: "250%", duration: 0.35, ease: "power1.inOut" },
+        3.05
+      );
+
+      // Office (20%)
+      const offVal = { val: 0 };
+      tl.fromTo(
+        "#bar-office",
+        { width: "0%" },
+        { width: "20%", duration: 0.85, ease: "power2.out" },
+        2.4
+      );
+      tl.to(
+        offVal,
+        {
+          val: 20,
+          duration: 0.85,
+          ease: "power2.out",
+          onUpdate: () => {
+            pctOfficeEl.textContent = Math.round(offVal.val) + "%";
+          }
+        },
+        2.4
+      );
+      tl.fromTo(
+        "#shimmer-office",
+        { x: "-100%" },
+        { x: "250%", duration: 0.35, ease: "power1.inOut" },
+        3.25
+      );
+
+      // 6. PIPELINE HEALTH (2.4s - 4.0s)
+      tl.fromTo(
+        "#col-pipeline",
+        { opacity: 0, y: 12 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power2.out" },
+        2.4
+      );
+
+      // Status Dot Pulse
+      tl.fromTo(
+        "#status-pulse",
+        { scale: 0.5, opacity: 0.8 },
+        { scale: 2.2, opacity: 0, duration: 0.7, ease: "power2.out", immediateRender: false },
+        2.5
+      );
+      tl.fromTo(
+        "#status-text",
+        { opacity: 0, x: -8 },
+        { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" },
+        2.55
+      );
+
+      // Models Built Counter (24/24)
+      const modelsVal = { val: 0 };
+      tl.to(
+        modelsVal,
+        {
+          val: 24,
+          duration: 0.75,
+          ease: "power2.out",
+          onUpdate: () => {
+            metricModelsEl.textContent = Math.round(modelsVal.val) + "/24";
+          }
+        },
+        2.65
+      );
+
+      // Test Coverage Counter (98.2%)
+      const covVal = { val: 0 };
+      tl.to(
+        covVal,
+        {
+          val: 98.2,
+          duration: 0.85,
+          ease: "power2.out",
+          onUpdate: () => {
+            metricCoverageEl.textContent = covVal.val.toFixed(1) + "%";
+          }
+        },
+        2.75
+      );
+
+      // Passed checkmark draw
+      tl.fromTo(
+        "#checks-label",
+        { opacity: 0 },
+        { opacity: 1, duration: 0.3, ease: "power2.out" },
+        3.1
+      );
+      tl.fromTo(
+        "#passed-badge",
+        { opacity: 0, x: 8 },
+        { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" },
+        3.25
+      );
+      tl.fromTo(
+        checkPath,
+        { strokeDashoffset: 16 },
+        { strokeDashoffset: 0, duration: 0.4, ease: "power2.out" },
+        3.35
+      );
+
+      // 7. IDLE LOOP (4.0s - 7.0s)
+      // Jun dot gentle pulse
+      tl.to(
+        leadingDot,
+        {
+          attr: { r: 7.5 },
+          filter: "drop-shadow(0 0 8px #69a5ff)",
+          duration: 1.0,
+          yoyo: true,
+          repeat: 2,
+          ease: "power1.inOut"
+        },
+        4.0
+      );
+
+      // Faint light sweep across area fill every 3s
+      tl.fromTo(
+        "#sheen-rect",
+        { x: -200, opacity: 0 },
+        { x: 600, opacity: 0.35, duration: 1.3, ease: "power1.inOut" },
+        4.2
+      );
+
+      tl.fromTo(
+        "#sheen-rect",
+        { x: -200, opacity: 0 },
+        { x: 600, opacity: 0.35, duration: 1.3, ease: "power1.inOut", immediateRender: false },
+        5.7
+      );
+
+      // Grid drifts subtly by ~2px
+      tl.to(
+        "#panel-grid",
+        { x: 2, y: 2, duration: 3.0, ease: "power1.inOut" },
+        4.0
+      );
+
+      // Period pill subtle hover-like glow
+      tl.to(
+        "#period-pill",
+        {
+          borderColor: "rgba(34, 211, 238, 0.5)",
+          boxShadow: "0 0 12px rgba(34, 211, 238, 0.25)",
+          duration: 1.5,
+          yoyo: true,
+          repeat: 1,
+          ease: "power1.inOut"
+        },
+        4.0
+      );
+
+      // 8. LOOP RESET (7.0s - 8.0s)
+      tl.to(
+        "#panel-card",
+        { opacity: 0, duration: 0.8, ease: "power2.inOut" },
+        7.0
+      );
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
