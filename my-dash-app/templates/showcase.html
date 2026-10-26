@@ -33,7 +33,7 @@
         </div>
       </div>
       <figure
-        class="auth-preview"
+        class="auth-preview{% if landing_showcase %} landing-video-preview{% endif %}"
         {% if not landing_showcase %}
         aria-labelledby="auth-preview-caption"
         {% endif %}
@@ -218,7 +218,7 @@
         </div>
       </div>
       <figure
-        class="auth-preview auth-lineage-preview"
+        class="auth-preview auth-lineage-preview{% if landing_showcase %} landing-video-preview{% endif %}"
         {% if not landing_showcase %}
         aria-labelledby="auth-lineage-caption"
         {% endif %}

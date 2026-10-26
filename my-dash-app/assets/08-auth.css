@@ -1122,6 +1122,13 @@ html[data-auth-ready="true"] #auth-session-loading {
     0 30px 70px #00000020;
 }
 
+.landing-page .auth-preview.landing-video-preview {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .landing-page .auth-preview::before {
   content: "";
   position: absolute;
@@ -1133,6 +1140,10 @@ html[data-auth-ready="true"] #auth-session-loading {
   opacity: 0.25;
   pointer-events: none;
   border-radius: inherit;
+}
+
+.landing-page .auth-preview.landing-video-preview::before {
+  display: none;
 }
 
 .landing-page .auth-preview figcaption {
@@ -1258,6 +1269,11 @@ html[data-auth-ready="true"] #auth-session-loading {
   box-shadow:
     0 0 0 1px var(--dashboard-accent-tertiary) inset,
     0 30px 70px #00000020;
+}
+
+.landing-page .auth-preview.landing-video-preview:hover {
+  border: 0;
+  box-shadow: none;
 }
 
 /* Feature hover: accent number */

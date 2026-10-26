@@ -109,6 +109,7 @@ class AuthTests(unittest.TestCase):
             html = page.get_data(as_text=True)
             self.assertIn('href="/login"', html)
             self.assertIn('id="auth-showcase"', html)
+            self.assertEqual(html.count("landing-video-preview"), 2)
             self.assertNotIn('id="auth-preview-caption"', html)
             self.assertNotIn('id="auth-lineage-caption"', html)
             self.assertIn(
