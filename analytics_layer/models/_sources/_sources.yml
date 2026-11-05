@@ -2,8 +2,8 @@ version: 2
 
 sources:
   - name: bronze_source
-    project: quantum-echo-data-eng-prod
-    dataset: bronze
+    database: "{{ 'quantum-echo-data-eng-prod' if target.type == 'bigquery' else target.database }}"
+    schema: bronze
     description: >
       Bronze layer raw ingest of CRM + ERP source systems. No
       ingestion-timestamp column is present, so freshness is intentionally
@@ -192,7 +192,7 @@ sources:
             data_tests:
               - dbt_utils.expression_is_true:
                   arguments:
-                    expression: "> 0 and length(cast(sls_order_dt as string)) = 8"
+                    expression: "> 0 and length(cast(sls_order_dt as {{ qe_string_type() }})) = 8"
                   config:
                     severity: warn
               - is_date_before_columns:
@@ -211,7 +211,7 @@ sources:
             data_tests:
               - dbt_utils.expression_is_true:
                   arguments:
-                    expression: "> 0 and length(cast(sls_ship_dt as string)) = 8"
+                    expression: "> 0 and length(cast(sls_ship_dt as {{ qe_string_type() }})) = 8"
                   config:
                     severity: warn
 
@@ -223,7 +223,7 @@ sources:
             data_tests:
               - dbt_utils.expression_is_true:
                   arguments:
-                    expression: "> 0 and length(cast(sls_due_dt as string)) = 8"
+                    expression: "> 0 and length(cast(sls_due_dt as {{ qe_string_type() }})) = 8"
                   config:
                     severity: warn
 
@@ -303,7 +303,7 @@ sources:
             data_tests:
               - dbt_utils.expression_is_true:
                   arguments:
-                    expression: "is null or safe_cast(bdate as date) <= current_date()"
+                    expression: "is null or {{ qe_safe_cast('bdate', 'date') }} <= {{ qe_current_date() }}"
                   config:
                     severity: warn
 

@@ -1,15 +1,3 @@
-/* @datacloud.settings
-{
-  "version": 1,
-  "service": "BIG_QUERY",
-  "connectionInfo": {
-    "billingProjectId": "INHERIT",
-    "location": "us-central1"
-  },
-  "dialect": "GOOGLE_SQL"
-}
-*/
-
 WITH source AS (
     SELECT * FROM {{ source('bronze_source', 'crm_sales_details') }}
 ),
@@ -24,22 +12,22 @@ base_cleaned AS (
         -- Parse Order Date (Fallback to '1900-01-01')
         COALESCE(
             CASE
-                WHEN sls_order_dt <= 0 OR LENGTH(CAST(sls_order_dt AS STRING)) != 8 THEN NULL
-                ELSE PARSE_DATE('%Y%m%d', CAST(sls_order_dt AS STRING))
+                WHEN sls_order_dt <= 0 OR LENGTH(CAST(sls_order_dt AS {{ qe_string_type() }})) != 8 THEN NULL
+                ELSE {{ qe_parse_date('%Y%m%d', 'sls_order_dt') }}
             END,
             DATE('1900-01-01')
         ) AS sls_order_dt,
 
         -- Parse Raw Ship Date
         CASE
-            WHEN sls_ship_dt <= 0 OR LENGTH(CAST(sls_ship_dt AS STRING)) != 8 THEN NULL
-            ELSE PARSE_DATE('%Y%m%d', CAST(sls_ship_dt AS STRING))
+            WHEN sls_ship_dt <= 0 OR LENGTH(CAST(sls_ship_dt AS {{ qe_string_type() }})) != 8 THEN NULL
+            ELSE {{ qe_parse_date('%Y%m%d', 'sls_ship_dt') }}
         END AS raw_ship_dt,
 
         -- Parse Raw Due Date
         CASE
-            WHEN sls_due_dt <= 0 OR LENGTH(CAST(sls_due_dt AS STRING)) != 8 THEN NULL
-            ELSE PARSE_DATE('%Y%m%d', CAST(sls_due_dt AS STRING))
+            WHEN sls_due_dt <= 0 OR LENGTH(CAST(sls_due_dt AS {{ qe_string_type() }})) != 8 THEN NULL
+            ELSE {{ qe_parse_date('%Y%m%d', 'sls_due_dt') }}
         END AS raw_due_dt,
 
         sls_quantity,
@@ -85,7 +73,7 @@ final_calculations AS (
             ELSE raw_sales
         END AS sls_sales,
 
-        CURRENT_TIMESTAMP() AS ingested_at
+        {{ qe_current_timestamp() }} AS ingested_at
     FROM base_cleaned
 )
 

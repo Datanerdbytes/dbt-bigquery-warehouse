@@ -14,7 +14,7 @@ transformed AS (
             WHEN trim(cntry) = '' THEN null
             ELSE trim(cntry)
         END AS cntry,
-        current_timestamp() AS ingested_at
+        {{ qe_current_timestamp() }} AS ingested_at
     FROM source
 )
 

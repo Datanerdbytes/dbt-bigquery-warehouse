@@ -11,7 +11,7 @@ transformed_erp AS (
         cat,
         subcat,
         maintenance,
-        CURRENT_TIMESTAMP() AS ingested_at
+        {{ qe_current_timestamp() }} AS ingested_at
     FROM source
 )
 

@@ -1,14 +1,17 @@
-"""Offline regression checks for CI secret-handling hardening.
+"""Offline regression checks for CI credential handling.
 
-These tests parse the workflow YAML statically and assert the safe-handling
-guardrails documented in docs/security/ci-secret-handling.md. They use only
-non-sensitive synthetic marker strings and never touch a real secret, a hosted
-runner, or any cloud resource.
+The warehouse this project used to build against is gone, so CI no longer
+holds any cloud credential: the dbt build runs against a local DuckDB file
+loaded from the versioned source CSVs. These tests pin that posture — they
+parse the workflow YAML statically and assert that no service-account secret
+can creep back in, that no credential file is materialized in the workspace,
+and that nothing uploads an artifact that could carry one.
 
 Run from the repository root:
     .venv/bin/python -B -m unittest discover -s tests -v
 """
 
+import re
 import unittest
 from pathlib import Path
 
@@ -16,10 +19,20 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci_pipeline.yml"
+DBT_PROFILES = ROOT / "analytics_layer" / "profiles.yml"
 
-# Synthetic marker used to detect accidental interpolation of the secret VALUE
-# (as opposed to the secret NAME) into workflow expressions.
-_SECRET_VALUE_MARKER = "GCP_SA_KEY_VALUE_PLACEHOLDER"  # pragma: allowlist secret
+# Any of these appearing in the workflow would reintroduce a cloud credential.
+_FORBIDDEN_CREDENTIAL_REFERENCES = (
+    "secrets.GCP",
+    "secrets.GCP_SA_KEY",
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "credentials_json",
+    "gcp_key.json",
+    "GCP_SA_KEY",
+)
+
+# Commands that would authenticate to a cloud API using ambient credentials.
+_FORBIDDEN_COMMANDS = ("gcloud ", "bq ", "gsutil ")
 
 
 def _load_workflow():
@@ -45,65 +58,42 @@ def _all_run_text(workflow):
     return "\n".join(chunks)
 
 
-class CiSecretHandlingTests(unittest.TestCase):
+class CiCredentialHandlingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.workflow = _load_workflow()
+        cls.raw = WORKFLOW.read_text()
         cls.run_text = _all_run_text(cls.workflow)
         cls.validate_job = cls.workflow["jobs"]["validate-and-test"]
-        cls.deploy_job = cls.workflow["jobs"]["deploy-cloud-run"]
 
-    # -- Secret value must never be echoed or derived in logs ----------------
+    # -- No cloud credential may exist in CI ---------------------------------
 
-    def test_no_secret_value_echo_in_run_blocks(self):
-        # The secret NAME may appear (for the presence check), but the value must
-        # never be printed, and no length/derived form of the value may be logged.
-        forbidden = (
-            'echo "Secret length',
-            "✅ GCP Service Account Key written and validated",
-            "Secret length check",
-        )
-        for snippet in forbidden:
+    def test_workflow_references_no_cloud_credential(self):
+        for reference in _FORBIDDEN_CREDENTIAL_REFERENCES:
             self.assertNotIn(
-                snippet,
-                self.run_text,
-                msg=f"Unsafe secret-derived echo found in workflow run blocks: {snippet!r}",
+                reference,
+                self.raw,
+                msg=f"Cloud credential reference found in workflow: {reference!r}",
             )
 
-    def test_secret_is_only_used_as_env_or_action_input(self):
-        raw = WORKFLOW.read_text()
-        # The secret must only appear as a registered-secret reference
-        # (`secrets.GCP`), never interpolated into a command argument or URL.
-        self.assertIn("secrets.GCP", raw)
-        # No shell interpolation of the secret into a command string.
-        self.assertNotIn("$GCP_SA_KEY", raw)
+    def test_workflow_runs_no_cloud_cli(self):
+        for command in _FORBIDDEN_COMMANDS:
+            self.assertNotIn(
+                command,
+                self.run_text,
+                msg=f"Cloud CLI invocation found in workflow: {command!r}",
+            )
 
-    def test_no_secret_in_docker_image_tag_or_arguments(self):
-        raw = WORKFLOW.read_text()
-        self.assertNotIn("secrets.GCP", raw.split("docker build")[1])
-        # The image tag must reference the commit SHA, not a secret.
-        self.assertIn("github.sha", raw)
-
-    # -- Materialization is restricted and cleaned up -------------------------
-
-    def test_temp_keyfile_is_written_with_restrictive_permissions(self):
-        setup = _step_runs(self.validate_job, "Setup GCP & dbt Profile")
-        self.assertIsNotNone(setup)
-        run = setup.get("run", "")
-        self.assertIn("umask 077", run)
-        self.assertIn("chmod 600 /tmp/gcp_key.json", run)
-        self.assertIn("chmod 600 ~/.dbt/profiles.yml", run)
-
-    def test_cleanup_runs_on_both_success_and_failure(self):
-        cleanup = _step_runs(self.validate_job, "Cleanup Service Account Key & Profile")
-        self.assertIsNotNone(cleanup)
-        self.assertEqual(cleanup.get("if"), "always()")
-        run = cleanup.get("run", "")
-        self.assertIn("rm -f /tmp/gcp_key.json", run)
-        self.assertIn("rm -rf ~/.dbt", run)
+    def test_no_credential_file_is_materialized(self):
+        # A keyfile written into the workspace would survive a failed job and
+        # could be picked up by a later step or an uploaded artifact.
+        for pattern in (r"/tmp/\S*\.json", r"\.dbt/profiles\.yml"):
+            self.assertIsNone(
+                re.search(pattern, self.run_text),
+                msg=f"Credential materialization pattern found: {pattern!r}",
+            )
 
     def test_no_artifact_upload_can_carry_credentials(self):
-        # No step may upload an artifact that could contain the materialized key.
         for job in self.workflow["jobs"].values():
             for step in job.get("steps", []):
                 uses = step.get("uses", "")
@@ -112,23 +102,32 @@ class CiSecretHandlingTests(unittest.TestCase):
                     msg=f"Artifact upload step found: {step.get('name')!r}",
                 )
 
-    # -- Deployment gate and auth action preserved ----------------------------
+    def test_no_ambient_cloud_authentication_is_configured(self):
+        for step in self.validate_job.get("steps", []):
+            self.assertNotIn(
+                "google-github-actions/auth",
+                step.get("uses", ""),
+                msg=f"Google auth action found in: {step.get('name')!r}",
+            )
 
-    def test_deployment_gate_requires_push_to_main(self):
-        self.assertEqual(
-            self.deploy_job.get("if"),
-            "(github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') "
-            "&& github.event_name == 'push'",
-        )
-        self.assertEqual(self.deploy_job.get("needs"), "validate-and-test")
+    # -- The dbt build must stay offline -------------------------------------
 
-    def test_google_auth_uses_action_credentials_input(self):
-        auth_step = _step_runs(self.deploy_job, "Google Auth")
-        self.assertIsNotNone(auth_step)
-        self.assertEqual(auth_step.get("uses"), "google-github-actions/auth@v2")
-        self.assertEqual(
-            auth_step.get("with", {}).get("credentials_json"), "${{ secrets.GCP }}"
+    def test_dbt_build_uses_the_duckdb_target(self):
+        step = _step_runs(
+            self.validate_job, "Build bronze and run the dbt pipeline offline"
         )
+        self.assertIsNotNone(step)
+        run = step.get("run", "")
+        self.assertIn("load_bronze_duckdb.py", run)
+        self.assertIn("dbt build", run)
+        self.assertIn("--profiles-dir .", run)
+
+    def test_committed_dbt_profile_holds_no_key_material(self):
+        profiles = DBT_PROFILES.read_text()
+        self.assertNotIn("-----BEGIN", profiles)
+        self.assertNotIn("private_key", profiles)
+        # Every credential path is an environment reference, never a literal.
+        self.assertNotRegex(profiles, r"keyfile:(?!\s*\"\{\{)")
 
 
 if __name__ == "__main__":

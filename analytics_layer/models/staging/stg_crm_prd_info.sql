@@ -1,22 +1,10 @@
-/* @datacloud.settings
-{
-  "version": 1,
-  "service": "BIG_QUERY",
-  "connectionInfo": {
-    "billingProjectId": "INHERIT",
-    "location": "us-central1"
-  },
-  "dialect": "GOOGLE_SQL"
-}
-*/
-
 WITH source AS (
     SELECT * FROM {{ source('bronze_source', 'crm_prd_info') }}
 ),
 
 cleaned_and_renamed AS (
     SELECT
-        SAFE_CAST(prd_id AS int64) AS prd_id,
+        {{ qe_safe_cast('prd_id', 'BIGINT') }} AS prd_id,
         REPLACE(SUBSTRING(prd_key,1, 5),'-','_') AS cat_id,
         SUBSTRING(prd_key, 7, LENGTH(prd_key)) AS prd_key,
 
@@ -29,13 +17,15 @@ cleaned_and_renamed AS (
             WHEN 'T' THEN 'Touring'
         END AS prd_line,
 
-        SAFE_CAST(prd_start_dt AS date) AS prd_start_dt,
+        {{ qe_safe_cast('prd_start_dt', 'DATE') }} AS prd_start_dt,
 
-        DATE_SUB(
-            SAFE_CAST(LEAD(prd_start_dt) OVER (PARTITION BY prd_key ORDER BY prd_start_dt) AS date),
-            INTERVAL 1 DAY
-        ) AS prd_end_dt,
-        CURRENT_TIMESTAMP() AS ingested_at
+        {{ qe_date_sub_day(
+            qe_safe_cast(
+                'LEAD(prd_start_dt) OVER (PARTITION BY prd_key ORDER BY prd_start_dt)',
+                'DATE'
+            )
+        ) }} AS prd_end_dt,
+        {{ qe_current_timestamp() }} AS ingested_at
     FROM source
 )
 

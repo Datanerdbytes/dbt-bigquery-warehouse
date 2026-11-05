@@ -62,10 +62,17 @@ repos:
       - id: check-toml
 
       - id: end-of-file-fixer
+        # The source CSVs are the only surviving copy of the raw data and must
+        # stay byte-identical to the files the transformation layer was built from.
+        exclude: ^data/raw/
 
       - id: trailing-whitespace
+        exclude: ^data/raw/
 
       - id: check-added-large-files
+        # The shipped gold database and the source CSVs are build inputs and
+        # runtime artifacts that have to be committed.
+        exclude: ^(data/raw/|my-dash-app/data/)
 
       # Prevent unresolved Git merge conflicts from being committed
       - id: check-merge-conflict
