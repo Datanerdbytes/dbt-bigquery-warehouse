@@ -1,6 +1,8 @@
 # 🚀 Enterprise Data Warehouse, Pipeline Observability & Analytics Platform
 
-> 🌐 **Live Interactive App:** [https://dash-observability-app-1022429033383.us-central1.run.app/](https://dash-observability-app-1022429033383.us-central1.run.app/)
+> ⚠️ **Architecture migration in progress.** The BigQuery project and the Supabase project behind this app were deleted, so the live Cloud Run URL and the credentials below no longer work. The dbt transformation layer has been rebuilt on **DuckDB**, the clean gold database is built and verified, and the app now **reads that database plus a shipped telemetry artifact at runtime — there is no warehouse in the request path**. The remaining work is the auth provider and the Vercel packaging; see [docs/vercel-migration-plan.md](docs/vercel-migration-plan.md) for the current state and the remaining phases.
+
+> 🌐 **Live Interactive App:** [https://dash-observability-app-1022429033383.us-central1.run.app/](https://dash-observability-app-1022429033383.us-central1.run.app/) *(retired)*
 
 **Login Credentials**
 username: ```nivero9893@moblha.com```
@@ -8,16 +10,14 @@ password: ```pofcu2-siDfes-vimryt```
 
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![dbt](https://img.shields.io/badge/dbt-Core%201.12+-FF694B?style=for-the-badge&logo=dbt&logoColor=white)](https://www.getdbt.com/)
-[![Google BigQuery](https://img.shields.io/badge/Google%20BigQuery-Cloud%20EDW-669DF6?style=for-the-badge&logo=googlecloud&logoColor=white)](https://cloud.google.com/bigquery)
+[![DuckDB](https://img.shields.io/badge/DuckDB-OLAP-FFF000?style=for-the-badge&logo=duckdb&logoColor=white)](https://duckdb.org/)
 [![Plotly Dash](https://img.shields.io/badge/Plotly%20Dash-Multi--Page%20App-008DE4?style=for-the-badge&logo=plotly&logoColor=white)](https://dash.plotly.com/)
 [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
-[![Google Cloud Run](https://img.shields.io/badge/Cloud%20Run-Serverless%20Deploy-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)](https://cloud.google.com/run)
 [![GitHub Actions](https://img.shields.io/badge/CI%2FCD-Automated%20Pipeline-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/features/actions)
 [![uv](https://img.shields.io/badge/Package%20Manager-uv-DE5FE9?style=for-the-badge&logo=astral&logoColor=white)](https://github.com/astral-sh/uv)
-[![Live App](https://img.shields.io/badge/Live%20Demo-Google%20Cloud%20Run-4285F4?style=for-the-badge&logo=googlecloud&logoColor=white)](https://dash-observability-app-1022429033383.us-central1.run.app/)
 
 
-An end-to-end, production-grade enterprise data engineering and business intelligence platform. The system ingests raw multi-source enterprise data (CRM & ERP), transforms it through a Medallion Architecture (Bronze &rarr; Silver &rarr; Gold) in **Google BigQuery** using **dbt**, captures and logs data quality test telemetry, and visualizes live metrics via an interactive, containerized **Plotly Dash** application deployed serverless on **Google Cloud Run**.
+An end-to-end, production-grade enterprise data engineering and business intelligence platform. The system ingests raw multi-source enterprise data (CRM & ERP), transforms it through a Medallion Architecture (Bronze &rarr; Silver &rarr; Gold) with **dbt** on **DuckDB**, captures and logs data quality test telemetry, and visualizes metrics via an interactive, containerized **Plotly Dash** application.
 
 ---
 
@@ -53,12 +53,12 @@ An end-to-end, production-grade enterprise data engineering and business intelli
 Modern enterprise analytics demands not only timely reporting, but also transparent data governance and pipeline observability. This repository addresses the entire lifecycle:
 
 1. **Ingests** disparate ERP (customer demographics, geographic locations, product categorization) and CRM (customer profiles, product catalogs, line-item sales orders) datasets.
-2. **Transforms** raw records into structured star-schema dimensional models (`dim_customers`, `dim_products`, `fct_sales`) using **dbt Core** and custom macros on **Google BigQuery**.
+2. **Transforms** raw records into structured star-schema dimensional models (`dim_customers`, `dim_products`, `fct_sales`) using **dbt Core** and custom macros on **DuckDB**.
 3. **Validates** every stage with automated assertions (uniqueness, referential integrity, range constraints, whitespace validation).
 4. **Captures Telemetry** from dbt artifacts (`manifest.json` and `run_results.json`) to track run durations, failures, warnings, and column-level test coverage over time.
 5. **Presents Business & Data Health Insights** through an interactive, multi-page **Plotly Dash** interface equipped with server-side caching (`Flask-Caching`), client-side session store (`dcc.Store`), asynchronous loading spinners, modal drill-downs, and executive CSV export capabilities.
 6. **Secures Dashboard Access** with Supabase email/password authentication, Google/GitHub OAuth support, verified-email access, and server-side protection of pages, data callbacks, and exports.
-7. **Continuous Delivery** automatically compiles and tests dbt models on pull requests, builds an optimized Docker container, and deploys to **Google Cloud Run** on pushes to `main`.
+7. **Continuous Delivery** automatically compiles and tests dbt models on pull requests and verifies that the artifacts the app ships still match the build.
 
 ---
 
@@ -66,86 +66,67 @@ Modern enterprise analytics demands not only timely reporting, but also transpar
 
 ```mermaid
 flowchart TD
-    subgraph Sources["Raw Source Systems"]
+    subgraph Sources["Raw Source Systems (versioned in data/raw)"]
         CRM["CRM Data (CSVs)\n- Customer Info\n- Product Info\n- Sales Details"]
         ERP["ERP Data (CSVs)\n- Customer AZ12\n- Location A101\n- Category PX_CAT"]
     end
 
-    subgraph Staging["Local / Landing Ingestion"]
-        SQLServer["Microsoft SQL Server\n(Bronze Landing Schema)"]
-        IngestBronze["Scripts/ingest_bronze.py\n(Bulk Insert & DDL Verification)"]
+    subgraph Build["Offline Build (local or CI)"]
+        IngestBronze["Scripts/load_bronze_duckdb.py\n(CSV → DuckDB bronze tables)"]
+        DBTRun["dbt build (dbt-duckdb)\n(Transformations & Quality Checks)"]
+        ExportGold["Scripts/export_gold_duckdb.py\n(gold → shipped analytics.duckdb)"]
+        ExportTelemetry["Scripts/export_pipeline_telemetry.py\n(dbt artifacts → shipped pipeline_telemetry.json)"]
+        VerifyGold["Scripts/verify_shipped_gold.py\n(drift gate)"]
+        VerifyTelemetry["Scripts/verify_shipped_telemetry.py\n(drift gate)"]
     end
 
-    subgraph BigQueryWarehouse["Google BigQuery (Cloud EDW)"]
+    subgraph Warehouse["DuckDB Warehouse (local file, offline)"]
         subgraph BronzeLayer["Bronze Layer (Raw)"]
-            BQ_Bronze["bronze.crm_*\nbronze.erp_*"]
+            DDB_Bronze["bronze.crm_*\nbronze.erp_*"]
         end
 
         subgraph SilverLayer["Silver Layer (Cleaned Views)"]
-            BQ_Silver["silver.stg_crm_*\nsilver.stg_erp_*"]
+            DDB_Silver["silver.stg_crm_*\nsilver.stg_erp_*"]
         end
 
         subgraph GoldLayer["Gold Layer (Star Schema Marts)"]
-            BQ_Gold["gold.dim_customers\ngold.dim_products\ngold.fct_sales"]
+            DDB_Gold["gold.dim_customers\ngold.dim_products\ngold.fct_sales"]
         end
-
-        subgraph AuditLayer["Audit & Observability Metadata"]
-            BQ_Audit["audit_metadata.dbt_execution_logs\naudit_metadata.dbt_test_coverage\naudit_metadata.v_latest_pipeline_health"]
-        end
-    end
-
-    subgraph Orchestration["Pipeline Execution & Telemetry"]
-        Runner["run_pipeline.sh\n(Unified Orchestrator)"]
-        IngestBQ["Scripts/ingest_bigquery.py\n(Extract to BigQuery)"]
-        DBTRun["dbt run & dbt test\n(Transformations & Quality Checks)"]
-        IngestArtifacts["Scripts/ingest_dbt_artifacts.py\n(Telemetry Streaming)"]
-        CalcCoverage["calculate_coverage.py\n(Manifest Test Coverage Parsing)"]
     end
 
     subgraph WebApplication["Plotly Dash Application (Dashdark X)"]
-        App["my-dash-app (Multi-Page App)\n- Flask-Caching Memoize\n- dcc.Store Session Sync\n- dcc.Loading Spinners"]
+        App["my-dash-app (Multi-Page App)\n- Flask-Caching SimpleCache\n- dcc.Store Session Sync\n- dcc.Loading Spinners"]
         Page1["Product Overview (/)"]
         Page2["Customer 360 (/customers)"]
         Page3["Pipeline Health (/pipeline-health)"]
     end
 
-    subgraph DevOps["CI/CD & Cloud Infrastructure"]
+    subgraph DevOps["CI/CD"]
         GHA["GitHub Actions\nci_pipeline.yml"]
-        ArtifactReg["Google Artifact Registry\nus-central1-docker.pkg.dev"]
-        CloudRun["Google Cloud Run\n(Auto-scaled Container)"]
     end
 
     %% Flow Connections
     CRM --> IngestBronze
     ERP --> IngestBronze
-    IngestBronze --> SQLServer
-    SQLServer --> IngestBQ
-    IngestBQ --> BQ_Bronze
+    IngestBronze --> DDB_Bronze
 
-    Runner --> IngestBronze
-    Runner --> IngestBQ
-    Runner --> DBTRun
-    Runner --> IngestArtifacts
+    DDB_Bronze --> DBTRun
+    DBTRun --> DDB_Silver
+    DDB_Silver --> DDB_Gold
 
-    BQ_Bronze --> DBTRun
-    DBTRun --> BQ_Silver
-    BQ_Silver --> BQ_Gold
+    DBTRun --> ExportGold
+    DBTRun --> ExportTelemetry
+    ExportGold -->|my-dash-app/data/analytics.duckdb| App
+    ExportTelemetry -->|my-dash-app/data/pipeline_telemetry.json| App
 
-    DBTRun -.-> IngestArtifacts
-    DBTRun -.-> CalcCoverage
-    IngestArtifacts --> BQ_Audit
-    CalcCoverage --> BQ_Audit
-
-    BQ_Gold --> App
-    BQ_Audit --> App
+    ExportGold --> VerifyGold
+    ExportTelemetry --> VerifyTelemetry
 
     App --> Page1
     App --> Page2
     App --> Page3
 
-    GHA -->|1. Test dbt| DBTRun
-    GHA -->|2. Build & Push Image| ArtifactReg
-    ArtifactReg -->|3. Deploy| CloudRun
+    GHA -->|1. Build & verify the shipped artifacts| DBTRun
 ```
 
 ---
@@ -154,18 +135,16 @@ flowchart TD
 
 ### 1. Multi-Source Ingestion & ETL Automation
 
-- **SQL Server Landing Ingestion (`Scripts/ingest_bronze.py`)**:
-  - Dynamically verifies table existence via pre-defined DDL scripts (`ddl_create_bronze_*.sql`).
-  - Implements fast bulk extraction from raw CSV sources using SQLAlchemy and `pyodbc`, clearing and loading target bronze tables with execution timing and row-count audits.
-- **BigQuery Extraction & Ingestion (`Scripts/ingest_bigquery.py`)**:
-  - Reads staged records from SQL Server, handles schema conversion and null sanitization, and streams them into BigQuery native `bronze` tables using `google-cloud-bigquery`.
-  - Emits real-time execution status into the audit metadata log table upon job completion.
+- **DuckDB Bronze Loading (`Scripts/load_bronze_duckdb.py`)**:
+  - Loads the versioned source CSVs from `data/raw/` into DuckDB `bronze` tables.
+  - The column types mirror the original SQL Server bronze DDL (`ddl_create_bronze_*.sql`), so the dbt models read the same values they read in the warehouse.
+  - Measures the source row count and the loaded row count independently, and writes a load manifest — the replacement for the retired `audit_metadata.table_ingestion_logs` table.
+- **Retired with the warehouse**: `Scripts/ingest_bronze.py` (SQL Server landing), `Scripts/ingest_bigquery.py` (SQL Server → BigQuery) and `Scripts/ingest_dbt_artifacts.py` (BigQuery telemetry streaming) are kept for reference only.
 - **Unified Orchestration Pipeline (`run_pipeline.sh`)**:
   - Executes the complete data engineering lifecycle in a single command:
-    1. CSV &rarr; SQL Server Bronze
-    2. SQL Server &rarr; BigQuery Bronze
-    3. `dbt run` & `dbt test`
-    4. dbt artifact parsing and BigQuery audit streaming.
+    1. CSV → DuckDB Bronze
+    2. `dbt build` (models + tests, DuckDB target)
+    3. Gold export and telemetry export.
 
 ### 2. Medallion Data Modeling & Quality Assertion Layer (dbt)
 
@@ -187,19 +166,16 @@ flowchart TD
 
 ### 3. Pipeline Observability, Test Coverage & Telemetry Logging
 
-- **dbt Artifact Telemetry Parser (`Scripts/ingest_dbt_artifacts.py` & `calculate_coverage.py`)**:
-  - Ingests `target/manifest.json` and `target/run_results.json` after execution runs.
+- **dbt Artifact Telemetry Export (`Scripts/export_pipeline_telemetry.py` & `calculate_coverage.py`)**:
+  - Reads `target/manifest.json` and `target/run_results.json` after execution runs.
   - Automatically calculates column-level test coverage across all models (tested columns vs. total columns, test count per column, test types applied).
-  - Flattens complex dbt graph nodes into structured rows and streams them directly into Google BigQuery.
+  - Folds the run results, the coverage and the bronze load manifest into one JSON artifact the app ships (`my-dash-app/data/pipeline_telemetry.json`).
+- **Telemetry Reader (`my-dash-app/pipeline_telemetry.py`)**:
+  - Returns the frames the dashboard callbacks expect and degrades to empty frames when the artifact is missing, so a page load never fails because telemetry is unavailable.
+- **Drift Gates (`Scripts/verify_shipped_gold.py` & `Scripts/verify_shipped_telemetry.py`)**:
+  - Fail CI when a committed artifact no longer matches the build, so the app can never serve stale numbers silently.
 - **Audit Logging Utility (`utils/audit_logger.py`)**:
-  - Centralized logger streaming ingestion records, durations, target tables, and error messages into BigQuery table `audit_metadata.dbt_execution_logs`.
-- **Automated Health Evaluation View (`v_latest_pipeline_health.sql`)**:
-  - SQL view that calculates real-time operational metrics from the most recent run:
-    - Overall system status: `HEALTHY`, `WARNING`, or `CRITICAL`.
-    - Passed, failed, and warning test counts.
-    - Column test coverage percentage across the warehouse.
-    - Identification of models with 100%, $\ge$80%, and $<$50% coverage.
-    - Source table freshness (hours/minutes elapsed since last bronze ingestion).
+  - Retired with the warehouse. The BigQuery telemetry table it wrote to is replaced by the dbt artifacts and the bronze load manifest.
 
 ### 4. Interactive Multi-Page Dash Application ("Dashdark X")
 
@@ -230,7 +206,7 @@ Built using Plotly Dash's native `dash.register_page` architecture, styled with 
   - Clicking any customer opens a Customer Profile Modal displaying lifetime metrics, favorite category, and detailed order history.
 
 #### 🩺 Page 3: Pipeline Health & Observability (`/pipeline-health`)
-- **System Health Monitor**: Live operational dashboard fed directly from BigQuery `audit_metadata` tables.
+- **System Health Monitor**: Operational dashboard fed from the shipped telemetry artifact (the dbt run results, the manifest coverage and the bronze load manifest).
 - **3-Tier KPI Bar (12 Health Indicators)**:
   - *Row 1 - Ingestion & Freshness*: Source Freshness (hours elapsed), Latest Load timestamp, Passed Tests, Failed/Error count.
   - *Row 2 - Test Coverage*: Overall Column Coverage %, Columns Tested ratio, Total Tests defined, Average Test Duration.
@@ -248,11 +224,14 @@ Built using Plotly Dash's native `dash.register_page` architecture, styled with 
   - Generates executive CSV reports (`product_overview_summary_*.csv` or `customer_360_summary_*.csv`) ready for stakeholder distribution.
 - **Asynchronous Feedback**: Every visual, card, and modal is wrapped in standardized `dcc.Loading` spinners (emerald green `#10b981`).
 
-### 5. CI/CD Pipeline & Google Cloud Run Deployment
+### 5. CI/CD Pipeline & Deployment
 
-- **Automated CI/CD Workflow (`.github/workflows/ci_pipeline.yml`)**:
-  - **Validate & Test Job**: Triggers on pull requests and pushes to `main`. Automatically provisions Python 3.12 with Astral `uv` and Node 22, builds the authentication bundle and runs offline Python/browser-state tests, then injects GCP credentials, and executes `dbt compile` and `dbt test` to prevent regressions.
-  - **Deploy Cloud Run Job**: On merge to `main`, configures Docker authentication to Google Artifact Registry, builds an optimized production container, and deploys to **Google Cloud Run** (`dash-observability-app`) in `us-central1` with CPU/memory limits and automatic scaling (0 to 2 instances).
+> The Cloud Run deployment below is **retired**. CI now builds the dbt models offline against DuckDB and holds no cloud credential; the app is being repackaged for Vercel. See [docs/vercel-migration-plan.md](docs/vercel-migration-plan.md).
+
+- **Automated CI Workflow (`.github/workflows/ci_pipeline.yml`)**:
+  - **Validate & Test Job**: Triggers on pull requests and pushes to `main`. Automatically provisions Python 3.12 with Astral `uv` and Node 22, builds the authentication bundle and runs offline Python/browser-state tests, then loads the versioned source CSVs into DuckDB bronze tables and runs the full `dbt build` (models + data tests) against the DuckDB target. No warehouse credentials are involved.
+  - **Shipped-Artifact Drift Gates**: Compare the committed gold database and the committed telemetry artifact with a fresh build, and fail if they diverge.
+  - **Deploy Job**: removed along with the deleted GCP project; the Vercel deployment path is added in the packaging phase.
 - **Production Containerization (`Dockerfile`)**:
   - Node 22 build stage runs `npm ci` and `npm run build:auth`.
   - Python 3.12-slim runtime receives the compiled authentication bundle; Node is not required at runtime.
@@ -365,22 +344,21 @@ See [the detailed authentication guide](docs/supabase-auth.md) for session behav
 
 | Domain | Technology / Library | Purpose |
 | :--- | :--- | :--- |
-| **Cloud EDW & Storage** | **Google BigQuery** | Cloud data warehousing, bronze-silver-gold datasets, audit logs |
-| **On-Premise / Staging**| **Microsoft SQL Server** | Initial bronze landing schema, relational table staging |
-| **Cloud Computing** | **Google Cloud Run** | Serverless container execution with auto-scaling (0–2 instances) |
+| **Warehouse & Storage** | **DuckDB** | Offline bronze-silver-gold warehouse and the gold database the app ships |
+| **Deployment** | **Vercel** (pending) | Serverless hosting of the Dash WSGI app; the Cloud Run deployment is retired |
 | **Containerization** | **Docker** & **Gunicorn** | Container image packaging and production WSGI HTTP server |
-| **Data Transformation** | **dbt Core (1.12+)** & **dbt-bigquery** | Medallion ELT, star-schema data modeling, incremental execution |
-| **Data Quality & Linting**| **dbt-utils**, **dbt-expectations**, **SQLFluff** | Data assertion testing, referential integrity, SQL styling |
-| **Telemetry & Observability** | **Custom dbt Artifact Parsers** | Ingesting `manifest.json` and `run_results.json` into BigQuery audit logs |
-| **Authentication** | **Supabase Auth** & **@supabase/supabase-js** | Email/password, OAuth PKCE, session refresh, and Flask access checks |
+| **Data Transformation** | **dbt Core (1.12+)** & **dbt-duckdb** | Medallion ELT, star-schema data modeling, incremental execution |
+| **Data Quality & Linting**| **dbt-utils**, **SQLFluff** | Data assertion testing, referential integrity, SQL styling |
+| **Telemetry & Observability** | **Custom dbt Artifact Parsers** | Turning `manifest.json` and `run_results.json` into the shipped telemetry artifact |
+| **Authentication** | **Supabase Auth** & **@supabase/supabase-js** | Email/password, OAuth PKCE, session refresh, and Flask access checks — provider is dead, see the migration plan |
 | **Authentication Build** | **Node.js 22**, **npm**, **esbuild** | Reproducible browser bundle; runtime public configuration |
 | **Dashboard Framework** | **Plotly Dash (4.4+)** | Interactive multi-page web application (`dash.register_page`) |
 | **UI Components & Themes**| **Dash Bootstrap Components (DBC)** | Darkly theme layout, responsive grids, navbars, modals, tooltips |
 | **High-Performance Grids**| **Dash AG Grid (35.3+)** | Enterprise tables with sorting, filtering, and cell styling conditions |
-| **Caching Engine** | **Flask-Caching** | Server-side memoization (`@cache.memoize`) for BigQuery queries |
-| **Data Manipulation** | **Pandas (3.0+)**, **PyArrow**, **SQLAlchemy** | High-speed data manipulation, serialization, and database connections |
+| **Caching Engine** | **Flask-Caching** (`SimpleCache`) | In-process memoization (`@cache.memoize`) of the dataset and the telemetry frames |
+| **Data Manipulation** | **Pandas (3.0+)**, **PyArrow** | High-speed data manipulation and serialization |
 | **Package Management** | **uv (Astral)** | Extremely fast Python dependency resolution and virtual environments |
-| **Continuous Delivery** | **GitHub Actions** | Automated CI testing on pull requests & Cloud Run CD deployment |
+| **Continuous Delivery** | **GitHub Actions** | Automated CI testing on pull requests, including the artifact drift gates |
 
 ---
 
@@ -441,23 +419,34 @@ demo-database/
 │   │   ├── overview.py              # Product Overview page (KPIs, charts, drill-down modal)
 │   │   ├── customer_360.py          # Customer 360 page (RFM, CLV, top champions table)
 │   │   └── pipeline_health.py       # Pipeline Health & Observability page
-│   ├── utils/                       # Shared dashboard utilities
-│   │   ├── cache.py                 # Flask-Caching instance definition
-│   │   └── helpers.py               # DataFrame filtering, PoP badge math, compact numbers
+│   ├── data/                        # Artifacts the app reads at runtime
+│   │   ├── analytics.duckdb         # Shipped gold database (fct_sales, dim_products, dim_customers)
+│   │   └── pipeline_telemetry.json  # Shipped pipeline health, coverage and ingestion facts
 │   ├── app.py                       # Main application entry point & export callbacks
 │   ├── app_observability.py         # Standalone pipeline observability & lineage viewer
-│   └── data_loader.py               # BigQuery data fetchers with @cache.memoize
+│   ├── data_loader.py               # DuckDB data fetchers with @cache.memoize
+│   └── pipeline_telemetry.py        # Reads the shipped telemetry artifact
+├── data/raw/                        # Versioned source CSVs (the rebuild input)
+│   ├── source_crm/
+│   └── source_erp/
 ├── Scripts/                         # Data ingestion and DDL scripts
 │   ├── build-auth.mjs              # esbuild authentication bundle build
-│   ├── create_init_database.sql     # SQL Server database initialization
+│   ├── load_bronze_duckdb.py       # CSV → DuckDB bronze tables + load manifest
+│   ├── export_gold_duckdb.py       # dbt build → the gold-only DuckDB file the app ships
+│   ├── verify_shipped_gold.py      # Fails when the shipped gold artifact drifts from the build
+│   ├── export_pipeline_telemetry.py # dbt artifacts → the telemetry JSON the app ships
+│   ├── verify_shipped_telemetry.py # Fails when the shipped telemetry artifact drifts
+│   ├── create_init_database.sql     # SQL Server database initialization (retired)
 │   ├── ddl_create_bronze_*.sql      # DDL definitions for bronze tables
-│   ├── ingest_bronze.py             # CSV to SQL Server bronze ingestion
-│   ├── ingest_bigquery.py           # SQL Server to BigQuery extraction & load
-│   └── ingest_dbt_artifacts.py      # Streams dbt run results into BigQuery audit logs
+│   ├── ingest_bronze.py             # CSV to SQL Server bronze ingestion (retired)
+│   ├── ingest_bigquery.py           # SQL Server to BigQuery extraction & load (retired)
+│   └── ingest_dbt_artifacts.py      # Streams dbt run results into BigQuery audit logs (retired)
 ├── utils/
-│   ├── audit_logger.py              # Centralized BigQuery audit logging helper
+│   ├── audit_logger.py              # Centralized BigQuery audit logging helper (retired)
+│   ├── cache.py                     # Flask-Caching SimpleCache instance definition
 │   └── helpers.py                   # Filtering and statistical helper functions
 ├── docs/supabase-auth.md            # Authentication configuration and operations
+├── docs/vercel-migration-plan.md    # Current migration state and the remaining phases
 ├── tests/                           # Python regression and JS auth state tests
 ├── package.json                     # Auth dependencies and build/test commands
 ├── package-lock.json                # Locked npm dependency versions
@@ -476,12 +465,9 @@ demo-database/
 
 - **Python**: Version `3.12+`
 - **Node.js**: Version `22+` with npm for the authentication build (Docker supplies its own build stage).
-- **Supabase project**: Email confirmation configured and any desired OAuth providers enabled.
+- **Supabase project**: Email confirmation configured and any desired OAuth providers enabled. The current project is dead — see the migration plan before signing in.
 - **Package Manager**: [`uv`](https://github.com/astral-sh/uv) recommended (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- **Google Cloud Platform**:
-  - BigQuery API enabled on project `quantum-echo-data-eng-prod` (or your custom project).
-  - Service Account Key JSON file with BigQuery Data Editor and Job User permissions.
-- **Microsoft SQL Server**: Local instance or Docker container (`mcr.microsoft.com/mssql/server`).
+- **No warehouse required**: the transformation runs against a local DuckDB file, and the source CSVs are in `data/raw/`. The Google Cloud project and the SQL Server instance are no longer needed.
 
 ---
 
@@ -500,7 +486,7 @@ DB_DRIVER=ODBC Driver 18 for SQL Server
 # Raw CSV Data Source Directory
 SOURCE_FOLDER=/path/to/your/raw/csv/files
 
-# Google Cloud Platform Credentials
+# Google Cloud Platform Credentials — retired, kept for reference only
 GCP_PROJECT_ID=quantum-echo-data-eng-prod
 GCP_KEY_PATH=/path/to/your/gcp-key.json
 TARGET_DATASET=bronze
@@ -511,22 +497,16 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<public-anon-key>
 AUTH_APP_ORIGIN=http://localhost:8050
 ```
 
-Ensure your `~/.dbt/profiles.yml` is configured for BigQuery:
+Ensure the dbt profile is configured for the local DuckDB target. `analytics_layer/profiles.yml` ships with it and needs no credentials:
 
 ```yaml
 analytics_layer:
   target: dev
   outputs:
     dev:
-      type: bigquery
-      method: service-account
-      project: "quantum-echo-data-eng-prod" # Replace with your project ID
-      dataset: silver
-      keyfile: "/path/to/your/gcp-key.json"
-      location: us-central1
+      type: duckdb
+      path: "../analytics_layer/build/analytics.duckdb"
       threads: 4
-      job_execution_timeout_seconds: 300
-      priority: interactive
 ```
 
 ---
@@ -539,32 +519,27 @@ Install dependencies using `uv`:
 uv sync
 ```
 
-To run the full end-to-end ingestion, transformation, and audit telemetry pipeline:
+The pipeline is a one-time build: the source CSVs are a fixed historical extract, so there is nothing to refresh. Run the stages individually:
 
 ```bash
-chmod +x run_pipeline.sh
-./run_pipeline.sh
-```
+# Step 1: Load the versioned source CSVs into the DuckDB bronze schema
+uv run python -B Scripts/load_bronze_duckdb.py --fresh
 
-Or execute stages individually:
-
-```bash
-# Step 1: Ingest raw CSVs into SQL Server Bronze schema
-uv run Scripts/ingest_bronze.py /path/to/source/csvs
-
-# Step 2: Extract from SQL Server to BigQuery Bronze
-uv run Scripts/ingest_bigquery.py
-
-# Step 3: Run dbt models and quality assertions
+# Step 2: Run the dbt models and their quality assertions
 cd analytics_layer
-dbt run
-dbt test
+../.venv/bin/dbt build --profiles-dir .
 cd ..
 
-# Step 4: Stream dbt telemetry into BigQuery audit tables
-uv run Scripts/ingest_dbt_artifacts.py
-uv run analytics_layer/scripts/calculate_coverage.py
+# Step 3: Export the artifacts the app ships
+uv run python -B Scripts/export_gold_duckdb.py
+uv run python -B Scripts/export_pipeline_telemetry.py
+
+# Step 4: Confirm the shipped artifacts match the build (this is also the CI gate)
+uv run python -B Scripts/verify_shipped_gold.py
+uv run python -B Scripts/verify_shipped_telemetry.py --built /tmp/pipeline_telemetry.json
 ```
+
+Step 4 is the one that matters: if a model changes and an artifact is not re-exported, the gate fails instead of letting the app serve stale numbers.
 
 ---
 
@@ -661,7 +636,7 @@ Navigate to `http://localhost:8080/login`. The Node build stage compiles authent
 
 ## 📊 Data Models & Schema Reference
 
-### 🥉 Bronze Layer (Landing - BigQuery Dataset: `bronze`)
+### 🥉 Bronze Layer (Landing - DuckDB schema: `bronze`)
 - `crm_cust_info`: Raw customer profile extraction.
 - `crm_prd_info`: Raw product catalog with effective date intervals.
 - `crm_sales_details`: Raw transaction line items with order dates and quantities.
@@ -669,7 +644,7 @@ Navigate to `http://localhost:8080/login`. The Node build stage compiles authent
 - `erp_loc_a101`: Raw geographic country mappings.
 - `erp_px_cat_g1v2`: Raw product categorization codes.
 
-### 🥈 Silver Layer (Staging - BigQuery Dataset: `silver`)
+### 🥈 Silver Layer (Staging - DuckDB schema: `silver`)
 - `stg_crm_cust_info`: Deduplicated customer master with standard string trimming and gender harmonization.
 - `stg_crm_prd_info`: Type-casted product catalog with derived category business keys.
 - `stg_crm_sales_details`: Cleaned sales transactions with sanitized pricing and quantities.
@@ -677,27 +652,28 @@ Navigate to `http://localhost:8080/login`. The Node build stage compiles authent
 - `stg_erp_loc_a101`: Standardized country/region dimension mapping.
 - `stg_erp_px_cat_g1v2`: Normalized category descriptions and maintenance codes.
 
-### 🥇 Gold Layer (Marts - BigQuery Dataset: `gold`)
+### 🥇 Gold Layer (Marts - DuckDB schema: `gold`)
 - `dim_customers`: Unified customer dimension joined across CRM and ERP on customer ID.
 - `dim_products`: Dimensional product catalog joined with category descriptions.
 - `fct_sales`: Granular transaction fact table linking `customer_key` and `product_key` to monetary metrics (`gross_sales_amount`, `quantity`, `unit_price`).
 - `product_360`: Analytical rollup of product performance across channels and demographics.
 
-### 🔍 Audit & Observability (BigQuery Dataset: `audit_metadata`)
-- `dbt_execution_logs`: Historical append-only log of every pipeline execution, node name, duration, affected rows, status (`pass`/`fail`), and error tracebacks.
-- `dbt_test_coverage`: Snapshot of column-level test assertions extracted from `manifest.json`.
-- `v_latest_pipeline_health`: Aggregated monitoring view reporting current operational status, overall coverage %, and pass/failure totals.
+### 🔍 Audit & Observability (shipped artifact: `my-dash-app/data/pipeline_telemetry.json`)
+- `execution_logs`: Historical log of every pipeline execution, node name, duration, affected rows, status (`pass`/`fail`/`warn`), and error detail.
+- `model_coverage` / `column_coverage`: Snapshot of column-level test assertions extracted from `manifest.json`.
+- `summary`: Aggregated monitoring view reporting current operational status, overall coverage %, and pass/failure totals.
+- `ingestion_logs` / `source_freshness`: The bronze load history and the age of the newest load of every source table.
 
 ---
 
 ## ⚡ Performance & Best Practices
 
 1. **Server-Side Memoization (`Flask-Caching`)**:
-   - All BigQuery data loaders in `my-dash-app/data_loader.py` are decorated with `@cache.memoize()`.
-   - Subsequent page navigations or filter updates fetch pre-aggregated data from the cache without incurring redundant BigQuery scan costs.
-2. **Optimized BigQuery Scanning**:
-   - SQL queries in `data_loader.py` select only required projection columns rather than `SELECT *`.
-   - Date range boundaries filter transactions before passing DataFrames to visualization routines.
+   - All data loaders in `my-dash-app/data_loader.py` are decorated with `@cache.memoize()`. The cache is `SimpleCache`, so it lives in the worker process and needs no writable path.
+   - The merged dataset is additionally held in one process-local frame per cache TTL, so a single filter change does not fan out into repeated reads across several independent Dash callbacks.
+2. **Optimized Reads**:
+   - The query in `data_loader.py` selects only the required projection columns rather than `SELECT *`.
+   - Date range boundaries filter transactions in SQL before passing DataFrames to visualization routines.
 3. **Thread Safety & Session Stores**:
    - Mutable user state (active date windows, selected categories, selected regions) resides strictly in the browser using `dcc.Store(storage_type="session")`. No global state variables are modified during request handling.
 4. **Resilient Callbacks**:

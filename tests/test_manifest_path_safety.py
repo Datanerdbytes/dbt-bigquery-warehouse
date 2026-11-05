@@ -135,7 +135,6 @@ google.cloud = ModuleType("google.cloud")
 google.cloud.bigquery = bigquery
 
 data_loader = ModuleType("data_loader")
-data_loader.get_bigquery_client = lambda: None
 data_loader.load_pipeline_health_summary = lambda *a, **k: None
 data_loader.load_dbt_execution_logs = lambda *a, **k: None
 
@@ -233,7 +232,6 @@ google.cloud = ModuleType("google.cloud")
 google.cloud.bigquery = bigquery
 
 data_loader = ModuleType("data_loader")
-data_loader.get_bigquery_client = lambda: None
 data_loader.load_pipeline_health_summary = lambda *a, **k: None
 data_loader.load_dbt_execution_logs = lambda *a, **k: None
 

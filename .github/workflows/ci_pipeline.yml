@@ -68,3 +68,14 @@ jobs:
 
       - name: Verify the shipped gold artifact matches the build
         run: uv run --locked python -B Scripts/verify_shipped_gold.py
+
+      - name: Verify the shipped pipeline telemetry matches the build
+        # The pipeline health views read a committed JSON artifact instead of
+        # the retired warehouse. It must be re-exported whenever the models,
+        # the tests or the bronze sources change.
+        run: |
+          set -euo pipefail
+          uv run --locked python -B Scripts/export_pipeline_telemetry.py \
+            --out "$RUNNER_TEMP/pipeline_telemetry.json"
+          uv run --locked python -B Scripts/verify_shipped_telemetry.py \
+            --built "$RUNNER_TEMP/pipeline_telemetry.json"

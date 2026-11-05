@@ -39,13 +39,13 @@ COPY --from=auth-build /build/my-dash-app/assets/showcase.bundle.js /app/my-dash
 WORKDIR /app/my-dash-app
 
 # 7. Drop container privileges: create a non-root system user and switch to it
-#    so the Gunicorn process never runs as root. The cache-directory is the only
-#    data-cache write path (Flask-Caching FileSystemCache). Give the app user
+#    so the Gunicorn process never runs as root. The cache lives in process
+#    memory, so the app needs no writable data directory. Give the app user
 #    a writable home for Gunicorn runtime files; application source stays root-owned.
 RUN addgroup --system app \
     && adduser --system --ingroup app --home /home/app app \
-    && mkdir -p /home/app /app/my-dash-app/cache-directory \
-    && chown -R app:app /home/app /app/my-dash-app/cache-directory
+    && mkdir -p /home/app \
+    && chown -R app:app /home/app
 
 ENV HOME=/home/app
 USER app

@@ -2,7 +2,7 @@
 
 ## 1. Project Overview
 - **Project Name:** Data Analytics Dashboard
-- **Core Purpose:** An interactive multi-page dashboard to visualize live data tables from Google BigQuery and provide an analytics layer pipeline monitoring console.
+- **Core Purpose:** An interactive multi-page dashboard that visualizes the analytics warehouse and provides an analytics layer pipeline monitoring console.
 - **Target Audience:** Internal business analysts, data engineers, and stakeholders.
 
 ## 2. Tech Stack & Environment
@@ -12,17 +12,17 @@
 - **Underlying Engine:** Flask, including Flask-Caching
 - **Authentication:** Supabase Auth with `@supabase/supabase-js`, OAuth PKCE, and Flask server-side authorization
 - **Frontend Build:** Node.js 22+, npm, and esbuild for the authentication bundle
-- **Data Engine:** Google BigQuery via Application Default Credentials (ADC), plus dbt artifact telemetry
-- **Data Libraries:** `google-cloud-bigquery`, `pandas`, `pandas-gbq`, `pyarrow`, `json`
-- **Caching Framework:** Flask-Caching with FileSystemCache or Redis
+- **Data Engine:** DuckDB over local files, built by dbt-duckdb; the warehouse that used to hold the models is gone
+- **Data Libraries:** `duckdb`, `pandas`, `pyarrow`, `json`. `google-cloud-bigquery` survives only in the retired warehouse scripts.
+- **Caching Framework:** Flask-Caching with `SimpleCache` (in-process)
 - **Styling:** Dash component libraries and modular CSS
 - **Code Formatters:** `black` for Python and Prettier for CSS
 
 ## 3. Architecture & File Structure
 - Use Dash Pages with `dash.page_registry` and `dash.register_page(__name__)`, unless the Snapshot Engine is used. With Snapshot Engine, use callback routing instead of Dash Pages.
 - Keep Dash page modules in a `pages/` directory.
-- `my-dash-app/data_loader.py` owns dashboard data access and initializes BigQuery with ADC or the server-side `GCP_KEY_PATH` override. Shared caching lives in root `utils/cache.py`. Cache expensive data-fetching operations server-side.
-- Pipeline Health reads cached BigQuery telemetry through `my-dash-app/data_loader.py`. `Scripts/ingest_dbt_artifacts.py` ingests `analytics_layer/target/run_results.json`; `analytics_layer/scripts/` calculates manifest coverage and uploads it to BigQuery. `my-dash-app/app_observability.py` also contains manifest parsing helpers. Transform raw artifacts into a memory-efficient flat schema.
+- `my-dash-app/data_loader.py` owns dashboard data access. It reads the shipped gold database at `my-dash-app/data/analytics.duckdb` (override with `GOLD_DATABASE_PATH`) and returns the merged dataset, its date bounds and the filter options. Shared caching lives in root `utils/cache.py`. Cache expensive data-fetching operations server-side.
+- Pipeline Health reads the committed telemetry artifact at `my-dash-app/data/pipeline_telemetry.json` (override with `PIPELINE_TELEMETRY_PATH`) through `my-dash-app/pipeline_telemetry.py`. `Scripts/export_pipeline_telemetry.py` builds that artifact from `analytics_layer/target/run_results.json`, `analytics_layer/target/manifest.json` and `analytics_layer/build/bronze_manifest.json`. `my-dash-app/app_observability.py` also contains manifest parsing helpers.
 - The app entry point must expose the Flask server: `server = app.server`.
 
 Current project structure (key source files; generated and local-only files are noted):
@@ -30,12 +30,17 @@ Current project structure (key source files; generated and local-only files are 
 ```text
 demo-database/
 ├── .agents/skills/                  # Project task capsules and design skills
-├── .github/workflows/ci_pipeline.yml # Offline checks, dbt validation, Cloud Run deployment
+├── .github/workflows/ci_pipeline.yml # Offline checks, offline dbt build on DuckDB
 ├── Scripts/
 │   ├── build-auth.mjs               # Builds auth.bundle.js and showcase.bundle.js
-│   ├── ingest_bronze.py             # Local CSVs → SQL Server bronze
-│   ├── ingest_bigquery.py           # SQL Server bronze → BigQuery
-│   ├── ingest_dbt_artifacts.py      # dbt run results → BigQuery audit telemetry
+│   ├── ingest_bronze.py             # Local CSVs → SQL Server bronze (retired)
+│   ├── ingest_bigquery.py           # SQL Server bronze → BigQuery (retired)
+│   ├── ingest_dbt_artifacts.py      # dbt run results → BigQuery audit telemetry (retired)
+│   ├── load_bronze_duckdb.py        # data/raw CSVs → DuckDB bronze tables
+│   ├── export_gold_duckdb.py        # dbt build → gold-only DuckDB file the app ships
+│   ├── verify_shipped_gold.py       # Fails when the shipped gold artifact drifts
+│   ├── export_pipeline_telemetry.py # dbt artifacts → the telemetry JSON the app ships
+│   ├── verify_shipped_telemetry.py  # Fails when the shipped telemetry artifact drifts
 │   ├── create_init_database.sql
 │   ├── ddl_table_ingestion_logs.sql
 │   └── ddl_create_bronze_*.sql
@@ -43,21 +48,28 @@ demo-database/
 │   ├── dbt_project.yml
 │   ├── packages.yml
 │   ├── package-lock.yml
+│   ├── profiles.yml                  # duckdb target (default) + retained bigquery target
 │   ├── models/
 │   │   ├── _sources/
 │   │   ├── staging/
 │   │   └── marts/
 │   ├── analyses/                    # Analytics and audit SQL
 │   ├── macros/                      # Custom schema and data tests
+│   │   └── portable.sql              # qe_* adapter-dispatch macros (bigquery/duckdb)
 │   ├── scripts/
 │   │   ├── calculate_coverage.py
 │   │   └── load_coverage_to_bq.py
 │   ├── src/analytics_layer/
 │   └── target/                      # Generated dbt artifacts
+├── data/raw/                        # Versioned source CSVs (the rebuild input)
+│   ├── source_crm/
+│   └── source_erp/
+├── sqlfluff_macros/                # Lint-time expansions of the qe_* macros
 ├── my-dash-app/
 │   ├── app.py                       # Dash/Flask entry point; exposes server
 │   ├── auth.py                      # Request guard, public config, session bridge
 │   ├── data_loader.py               # Cached dashboard queries and data preparation
+│   ├── pipeline_telemetry.py        # Reads the shipped telemetry artifact
 │   ├── app_observability.py         # Observability module outside Dash Pages directory
 │   ├── theme.py                     # Shared Python chart and color helpers
 │   ├── assets/                      # Modular CSS, browser JS, generated bundles
@@ -71,6 +83,9 @@ demo-database/
 │   │   ├── landing.html
 │   │   └── showcase.html
 │   ├── components/                  # Sidebar, header, filters, KPIs, panels, revenue chart
+│   ├── data/                        # Shipped artifacts the app reads
+│   │   ├── analytics.duckdb         # Gold database (fct_sales, dim_products, dim_customers)
+│   │   └── pipeline_telemetry.json  # Pipeline health, coverage and ingestion facts
 │   └── pages/
 │       ├── overview.py              # /dashboard
 │       ├── customer_360.py          # /customers
@@ -83,10 +98,13 @@ demo-database/
 ├── src/demo_database/__init__.py    # Package/CLI scaffold
 ├── docs/
 │   ├── supabase-auth.md
+│   ├── vercel-migration-plan.md
 │   └── images/                      # Dashboard screenshots
 ├── tests/                          # Offline Python regressions and auth browser tests
 │   ├── test_auth.py
 │   ├── test_dashboard_regressions.py
+│   ├── test_gold_dataset.py
+│   ├── test_pipeline_telemetry.py
 │   ├── test_revenue_chart.py
 │   ├── test_sidebar.py
 │   └── auth-browser.test.mjs
@@ -111,7 +129,7 @@ demo-database/
 - Run the dashboard with `uv run python my-dash-app/app.py` from the repository root. Docker runs `app:server` from `/app/my-dash-app`.
 - Python dependencies belong in root `pyproject.toml`, with resolved versions in `uv.lock`; there is no `my-dash-app/requirements.txt`.
 - `utils/` is the shared root Python package. The local `my-dash-app/utils/` and `api_service/` directories contain only cache remnants, not maintained source modules.
-- `.venv/`, `node_modules/`, `cache-directory/`, `__pycache__/`, and generated dbt outputs are local/runtime artifacts, not source locations. Keep credentials and `.env` values out of documentation and version control.
+- `.venv/`, `node_modules/`, `__pycache__/`, `analytics_layer/target/`, `analytics_layer/build/`, and the generated dbt outputs are local/runtime artifacts, not source locations. `my-dash-app/data/` is the opposite: it holds committed artifacts the app reads at runtime. Keep credentials and `.env` values out of documentation and version control.
 
 ## 4. General Architecture
 - Never use global variables to store user-specific state. Keep mutable client state in `dcc.Store` or URL parameters.
@@ -120,7 +138,7 @@ demo-database/
 - Use a layout function such as `def serve_layout(): ...` when the layout must be rebuilt on each page load.
 - Filter, aggregate, and paginate data in Python or SQL before sending it to graphs or `AgGrid`. Send only the rows or points needed for the current view.
 - Pin minimum or exact versions of Dash, Plotly, and component libraries in root `pyproject.toml` and update `uv.lock` when dependencies change.
-- Use explicit BigQuery column names, logical filters, and date/time boundaries where applicable. Include a `LIMIT` during structural testing to control scan costs.
+- Use explicit column names, logical filters, and date/time boundaries where applicable. Include a `LIMIT` during structural testing to control scan costs.
 
 ## 5. Callbacks, Data, and Performance
 - Do not pass massive datasets through `dcc.Store`. Use it only for lightweight state such as IDs, UI toggles, or query filters, with a maximum of 5 MB.
@@ -166,6 +184,7 @@ defaultColDef = {"filter": True, "sortable": True}
 
 ## 8. Observability and New Pages
 - Do not read `analytics_layer/target/manifest.json` from dynamic layout updates or loop callbacks. Reuse cached manifest dictionaries through a `dcc.Store` where appropriate.
+- Read pipeline telemetry from the shipped artifact through `my-dash-app/pipeline_telemetry.py`. Do not read the dbt `target/` directory at runtime; it is not deployed with the app.
 - Page layout functions must return quickly with placeholders or empty grids. Do not run database queries or intensive data loaders inside them.
 - Fetch data in callbacks triggered by page or tab selection.
 - For multi-tab pages, fetch data only for the active tab and return `dash.no_update` for unselected tab outputs.
@@ -181,16 +200,19 @@ defaultColDef = {"filter": True, "sortable": True}
 - For specialized UI additions, check `.agents/skills/` for a relevant task capsule before implementing.
 
 ## 10. Production Safety
-- The workspace is connected to the production Google Cloud environment `quantum-echo-data-eng-prod`.
+- The Google Cloud project `quantum-echo-data-eng-prod` was deleted, and the Supabase project with it. The dbt build now runs offline against DuckDB, and CI holds no cloud credential. Treat any production resource introduced later (Vercel, a new Supabase project, a hosted database) as production: confirm the target before writing to it.
 - Never run destructive commands such as `bq rm`, `dbt clean`, or commands that drop production datasets without explicit, multi-turn user confirmation.
 - `gcp-key.json` and `.env` are gitignored local credential files. Never commit them, paste their contents into docs, logs, or chat, or reference them from layout code or `dcc.Store`.
 
 ## 11. Tests
-- Python tests are offline `unittest` suites under `tests/`, discovered from the repository root. They must never construct a production BigQuery client; `tests/test_dashboard_regressions.py` patches `google.cloud.bigquery.Client` to raise on access and stubs `cache.init_app`.
+- Python tests are offline `unittest` suites under `tests/`, discovered from the repository root. They must never reach the network: `tests/test_dashboard_regressions.py` patches `socket.socket.connect` and `socket.create_connection` to raise, and stubs `cache.init_app`.
 - Run the full Python suite with `.venv/bin/python -B -m unittest discover -s tests -v` from the repository root.
 - Run the browser authentication tests with `npm run test:auth` after rebuilding the bundle with `npm run build:auth`.
 - When a test needs the dashboard dataset, patch `get_prepared_dataset` with a DataFrame, not the lower-level `load_and_prep_data` tuple. The exception is a test of the cache wrapper itself, which patches `load_and_prep_data` to assert load counts, TTL expiry, and identity reuse.
 - Add regression coverage for behavior you change. New caching, dtype, and filter-safety behavior needs a test that fails without the change.
+- The dbt models build offline against DuckDB. Rebuild the shipped gold database with `uv run python -B Scripts/load_bronze_duckdb.py --fresh`, then `cd analytics_layer && ../.venv/bin/dbt build --profiles-dir .`, then `uv run python -B Scripts/export_gold_duckdb.py`. `uv run python -B Scripts/verify_shipped_gold.py` fails when the committed artifact drifts from the build; it is also the CI gate. `tests/test_gold_dataset.py` locks the shipped figures.
+- Rebuild the shipped telemetry artifact with `uv run python -B Scripts/export_pipeline_telemetry.py` after every dbt build. `uv run python -B Scripts/verify_shipped_telemetry.py --built <fresh export>` fails when the committed artifact drifts from the build; it is also the CI gate. `tests/test_pipeline_telemetry.py` locks the export rules and the artifact contract.
+- `analytics_layer/macros/portable.sql` holds the adapter-dispatch macros used by the models; `sqlfluff_macros/portable.sql` renders the BigQuery branch of each macro for SQLFluff's offline Jinja templater. Keep the two in sync when a macro is added.
 
 ## 12. Authentication & Access Control
 - Keep authentication in the existing Dash/Flask application; do not introduce Next.js routing or SSR middleware. See [Supabase authentication setup](docs/supabase-auth.md).
@@ -209,7 +231,7 @@ defaultColDef = {"filter": True, "sortable": True}
 - Distinguish Google Cloud's authorized redirect URI (`https://<project-ref>.supabase.co/auth/v1/callback`) from Supabase's allowed app redirect URLs (`<app-origin>/auth/callback`). Do not substitute one for the other.
 - Edit `auth_frontend/` sources, then run `npm ci` and `npm run build:auth`. Never fix authentication by editing only the generated bundle or disabling the server guard. Exclude the bundle from Dash auto-injection and load it exactly once through the index template.
 - Commit the backend, templates, CSS, frontend sources, generated tracked bundle, package manifests, build script, and Docker integration together. Docker builds the bundle in a Node stage and runs only Python/Gunicorn in the final image.
-- After auth changes, run `.venv/bin/python -B -m unittest discover -s tests -v` and `npm run test:auth`. Verify unauthenticated page/data access, email confirmation checks, expiry/refresh, logout, OAuth errors, and loading states without querying production BigQuery or creating real accounts.
+- After auth changes, run `.venv/bin/python -B -m unittest discover -s tests -v` and `npm run test:auth`. Verify unauthenticated page/data access, email confirmation checks, expiry/refresh, logout, OAuth errors, and loading states without querying the shipped database or creating real accounts.
 
 ## 13. Parallel Development & Integration Policy
 
@@ -275,7 +297,7 @@ Status / handoff commit / blockers:
 3. Use one unique task branch and managed worktree per worker, for example `agent/<batch-id>/<task-id>`. Record the actual path; do not assume the directory name equals the branch name. Never check out a branch already in use by another worktree or make direct worker commits on `main` or `integration`.
 4. Establish a known current base without destructive resets. If the local base and its upstream diverge, resolve the intended source before launching work. Prefer the same recorded baseline for independent tasks; launch dependent tasks from the verified integration result that contains their prerequisite.
 5. Prepare each worktree using existing project setup conventions and Python 3.12/uv and Node 22+/npm requirements. Keep credentials local and server-side; never copy secret files into tracked paths or print their contents. A setup script may prepare dependencies, but must not run ingestion, deployment, database writes, or `run_pipeline.sh` by default.
-6. Allocate unique local ports, writable cache directories, test outputs, container names, and temporary resources where supported. FileSystemCache paths must not collide across concurrent runs. Redis caches need a supported per-worktree namespace or isolated test instance. Do not modify production cache state or shared cloud resources to simulate isolation.
+6. Allocate unique local ports, writable cache directories, test outputs, container names, and temporary resources where supported. The Flask cache is `SimpleCache`, so it lives inside each process and needs no shared path; a Redis cache would need a supported per-worktree namespace or an isolated test instance. Do not modify production cache state or shared cloud resources to simulate isolation.
 7. Commit only reviewed task files; inspect staged changes and exclude secrets, runtime artifacts, and unrelated edits. Preserve the project's explicit requirements for tracked generated auth bundles. No force pushes, destructive resets, or Git stash in worktrees: stashes are shared across the repository. Prefer clean task commits; if a temporary recovery commit/copy is necessary, record and verify it and keep unfinished work out of accepted integration commits.
 8. When the base advances, coordinate an update at a safe checkpoint. `/update-from-base` uses a managed worktree's saved base; verify it is the intended `integration` source. Changing the default setting or diff comparison base does not change an existing worktree's saved base. For local-only/unpublished integration commits, explicitly establish the correct source rather than assuming a fetched remote contains them. Preserve and verify staged, unstaged, and untracked edits before updating; stop if preservation cannot be verified.
 9. After any update or worker revision, rerun affected checks and issue a new handoff commit. Previous validation does not certify the new commit. Check Kilo's push-related settings before invoking updates; do not allow automatic push behavior beyond the recorded authorization.
@@ -337,8 +359,8 @@ npm run build:auth
 npm run test:auth
 ```
 
-- The full offline Python suite is required for every accepted batch. Keep the production BigQuery client guard and cache stubs intact. Build the auth bundle before running browser authentication tests; verify whether rebuilding leaves tracked bundle changes, and include required changes before certifying the final SHA.
-- For auth work, also follow all section 12 checks: unauthenticated page/data access, email confirmation, expiry/refresh, logout, OAuth errors, and loading states without production BigQuery queries or real-account creation.
+- The full offline Python suite is required for every accepted batch. Keep the network guard and cache stubs intact. Build the auth bundle before running browser authentication tests; verify whether rebuilding leaves tracked bundle changes, and include required changes before certifying the final SHA.
+- For auth work, also follow all section 12 checks: unauthenticated page/data access, email confirmation, expiry/refresh, logout, OAuth errors, and loading states without production data queries or real-account creation.
 - Run applicable existing CI, formatting, and dbt validation checks using the repository's actual configured commands. Inspect `.github/workflows/ci_pipeline.yml` first; do not invent commands or blindly run deployment steps locally. dbt checks must use a verified safe target. Do not execute `dbt clean`, ingestion, artifact upload, `run_pipeline.sh`, or production-connected dashboard queries as routine verification.
 - Check the combined Dash component IDs, callback inputs/outputs, page routes, prepared-data contracts, read-only shared frames, dtypes, cache behavior, auth ordering, and any dbt producer/consumer contracts affected by the batch. Use offline fixtures/mocks; visually verify UI changes when relevant.
 - Inspect final status and diff for conflict markers, unrelated changes, credentials, generated/runtime artifacts, and unintended dependency churn. Confirm acceptance criteria and record the exact tested head SHA, command outcomes, and remaining limitations.
