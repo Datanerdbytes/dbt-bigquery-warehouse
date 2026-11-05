@@ -535,18 +535,18 @@ frontend keeps the Supabase PKCE client. Two additions shipped with this phase:
 | Keep-wake endpoint | `my-dash-app/keepawake.py` | One daily read-only PostgREST query with the service-role key; refuses to run without `CRON_SECRET` and never redirects |
 | Vercel cron | `vercel.json` → `crons` | `/keepawake` at 06:00 UTC daily — the Hobby plan allows one run per day, which is enough to stay inside the seven-day idle window |
 | Project verifier | `Scripts/verify_supabase_setup.py` | Reports the accepted keys, the enabled OAuth providers and the installed migrations |
-| Guard readiness RPC | `supabase/migrations/202610190003_administrator_access_guard.sql` | `qe_administrator_access_guard_ready`, so all three migrations can be verified the same way |
-| Contract tests | `tests/test_supabase_setup.py` | 14 offline checks: the cron path, the secret, the query, and the migration/RPC pairing |
+| Guard readiness RPCs | `supabase/migrations/*.sql` | `qe_password_lockout_ready`, `qe_account_deletion_guard_ready` and `qe_administrator_access_guard_ready`, so all three migrations are verified the same way |
+| Contract tests | `tests/test_supabase_setup.py` | Offline checks: the cron path, the secret, the query, the migration/RPC pairing and that every migration can be applied again |
 
 **The console steps need your account and a browser.** The full runbook is
 [docs/supabase-auth.md](file:///Users/roelsomido/demo-database/docs/supabase-auth.md):
 
 1. Create the free project and collect the URL, the `anon` key and the `service_role` key.
-2. Apply the three migrations in the SQL editor, in order.
+2. Apply the three migrations in the SQL editor, in order. Each file is re-appliable, so a second run does not fail.
 3. Enable Google and GitHub, and add `<origin>` and `<origin>/auth/callback` to the redirect URLs. The Google and GitHub consoles want the Supabase callback `https://<project-ref>.supabase.co/auth/v1/callback`, not the app's own callback.
 4. Set the deployment variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `AUTH_APP_ORIGIN`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_PASSWORD_LOCKOUT_ENABLED`, `CRON_SECRET`.
 5. Run `python Scripts/verify_supabase_setup.py` against the new project.
-6. Promote the first account with `Scripts/bootstrap_admin.py`, then confirm `/admin/users` lists, suspends and deletes correctly.
+6. Promote the first account with `Scripts/bootstrap_admin.py`, then confirm `/admin/users` lists, suspends and deletes correctly. Granting or revoking an administrator role is refused until the administrator-access guard is installed.
 
 **Two items of the original draft belong to option B and were deliberately not
 done:** rewriting `user_admin.py` to query a local users table instead of the

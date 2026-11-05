@@ -25,6 +25,8 @@ MESSAGES = {
     "admin_deletion_protected": "Revoke administrator access before deleting this account.",
     "confirmation_mismatch": "Type the selected account’s full email address to confirm deletion.",
     "delete_guard_required": "Account deletion is unavailable until the database safety migration is installed. Contact your administrator.",
+    "delete_guard_blocked": "The database refused this deletion because the account is no longer eligible for it. Refresh the directory before retrying.",
+    "admin_guard_required": "Administrator access changes are unavailable until the database safety migration is installed. Contact your administrator.",
     "delete_blocked": "Supabase blocked deletion. Review linked records and Storage ownership before retrying.",
     "delete_unconfirmed": "Deletion could not be confirmed. Refresh the directory before retrying: access may have changed, or linked records and Storage ownership may block removal.",
     "user_not_found": "This account no longer exists. Refresh the directory.",
@@ -66,6 +68,16 @@ def require_owner():
 class _NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
+
+
+# The deletion guard raises 23514 with a fixed message. Supabase returns that
+# rejection as a 400, which is otherwise indistinguishable from a bad request.
+_DELETE_GUARD_MARKERS = ("23514", "may be deleted")
+
+
+def _guard_rejected(detail: bytes) -> bool:
+    text = detail.decode("utf-8", "replace").lower()
+    return any(marker in text for marker in _DELETE_GUARD_MARKERS)
 
 
 def _service_request(method, path, body=None):
@@ -112,6 +124,13 @@ def _service_request(method, path, body=None):
         if method == "DELETE":
             if error.code in (409, 422):
                 raise AdminError("delete_blocked", 409) from None
+            if error.code == 400:
+                try:
+                    detail = error.read(4096)
+                except (OSError, AttributeError, ValueError):
+                    detail = b""
+                if _guard_rejected(detail):
+                    raise AdminError("delete_guard_blocked", 409) from None
             raise AdminError("delete_unconfirmed", 503) from None
         raise AdminError("admin_unavailable", 503) from None
     except (URLError, TimeoutError, OSError, ValueError):
@@ -202,6 +221,9 @@ def update_access(user_id, action):
     ):
         raise AdminError("verification_required", 403)
     if action in ("grant_admin", "revoke_admin"):
+        # The database guard is what stops a suspended administrator from
+        # existing, so a role change must not run without it.
+        require_administrator_guard()
         body = {
             "app_metadata": {
                 "qe_role": "admin" if action == "grant_admin" else "member"
@@ -250,6 +272,20 @@ def deletion_target(user_id):
     if not isinstance(target.get("email"), str) or not target["email"].strip():
         raise AdminError("invalid_request", 400)
     return target
+
+
+def require_administrator_guard():
+    require_admin()
+    from password_auth import PasswordAuthError, _request
+
+    try:
+        status = _request(
+            "/rest/v1/rpc/qe_administrator_access_guard_ready", {}, privileged=True
+        )
+    except PasswordAuthError:
+        raise AdminError("admin_guard_required", 503) from None
+    if status.get("ready") is not True:
+        raise AdminError("admin_guard_required", 503)
 
 
 def require_deletion_guard():

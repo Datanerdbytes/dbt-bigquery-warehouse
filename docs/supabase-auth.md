@@ -32,15 +32,19 @@ template, a log, or version control.
 ### 3. Apply the SQL migrations
 
 Open **SQL Editor** and run these three files in order. Each one is a complete
-transaction and can be applied once:
+transaction and can be applied again without failing:
 
 1. `supabase/migrations/202610190001_password_lockout.sql` — the private
-   attempt table, the service-role-only `qe_password_attempt` RPC, and the
-   trigger that clears a lock when the password hash changes.
+   attempt table, the service-role-only `qe_password_attempt` RPC, the trigger
+   that clears a lock when the password hash changes, and the readiness RPC.
 2. `supabase/migrations/202610190002_account_deletion_guard.sql` — the
    `auth.users` delete trigger and its readiness RPC.
 3. `supabase/migrations/202610190003_administrator_access_guard.sql` — the
    trigger that refuses a suspended administrator, and its readiness RPC.
+
+Every function is created with `create or replace` and every trigger is dropped
+before it is recreated, so re-running a file is safe. Re-running does not
+reshape an existing table; a schema change needs its own migration.
 
 The app never applies them. Each migration ends with `notify pgrst, 'reload
 schema'` so PostgREST picks up the new functions immediately.
@@ -274,7 +278,9 @@ remains. Changing the protected owner requires a separate operator procedure.
 Administrators can view paginated accounts, suspend/restore members, and grant
 or revoke other administrator roles. Grants require a verified, active account.
 Self-changes and owner changes are rejected on the server. An administrator must
-be demoted to member before suspension. Password viewing, manual email verification, and confirmation-email sending are not exposed.
+be demoted to member before suspension. Granting or revoking a role additionally
+requires the administrator-access migration, and the server refuses the change
+with a setup message when it is missing. Password viewing, manual email verification, and confirmation-email sending are not exposed.
 
 Suspension sets both the Supabase ban and a server-managed `qe_suspended` flag.
 Every protected app request revalidates this flag with Supabase, so existing
@@ -334,15 +340,24 @@ Attempt counts live in `public.qe_password_attempts`. A service-role-only databa
 
 To activate:
 
-1. Apply `supabase/migrations/202610190001_password_lockout.sql` in the matching project's Supabase SQL Editor. It creates one private-to-clients table, one service-role-only RPC, and a trigger on password-hash changes in `auth.users`. Review and apply it once. The app does not automatically apply migrations.
+1. Apply `supabase/migrations/202610190001_password_lockout.sql` in the matching project's Supabase SQL Editor. It creates one private-to-clients table, one service-role-only RPC, a trigger on password-hash changes in `auth.users`, and the `qe_password_lockout_ready` RPC that reports whether the table and that trigger are installed. Review and apply it. The file can be applied again without failing. The app does not automatically apply migrations.
 2. Keep `SUPABASE_SERVICE_ROLE_KEY` configured only on the server. Add `AUTH_PASSWORD_LOCKOUT_ENABLED=true` to the worktree's ignored `.env` or the deployed server environment, and restart the server. Refresh existing browser tabs to load the new runtime configuration. Browser configuration exposes only the enablement boolean, public URL, and anon key.
 3. With a disposable test account, verify four incorrect passwords give the generic credential error, the fifth gives a temporary-lock message, and another browser cannot sign into the workspace until expiry or a completed password reset. No real users are modified by the offline tests.
 
 The flag defaults to `false` so an unapplied migration cannot unexpectedly break existing sign-in. A deployment is **not protected by this feature until the migration is applied and the flag enabled**. Once enabled, a missing key, missing RPC, or unavailable database fails closed. Turning the flag off is an explicit rollback of lockout enforcement, not an automatic outage fallback. Old browser clients may still call Supabase directly, subject to the Free-plan scope above.
 
-Counters contain normalized email addresses, including invalid sign-in targets, and are inaccessible to `anon`/`authenticated` through RLS and revoked function/table grants. An operator can periodically remove inactive rows older than 30 days (`updated_at`) after ensuring any lock and lease have expired; no scheduled hosted cleanup is installed. The existing IP request limiter is an additional per-process brake, not the source of shared account-lockout enforcement.
+Counters contain normalized email addresses, including invalid sign-in targets, and are inaccessible to `anon`/`authenticated` through RLS and revoked function/table grants. The `service_role` grant on the table is explicit, so the keep-wake cron does not depend on the platform's default privileges. No scheduled hosted cleanup is installed; an operator can periodically remove rows whose lock and lease have expired and whose `updated_at` is older than 30 days:
 
-Verification: Python gateway/route tests and browser tests mock provider/storage I/O. `tests/password-lockout-sql.test.mjs` executes the actual migration against isolated in-memory PostgreSQL using PGlite, including permission checks, fifth-failure lockout, expiry, successful-password reset, lease races, and the password-change trigger. Run it with `QE_PGLITE_MODULE=/path/to/pglite/dist/index.js node --test tests/password-lockout-sql.test.mjs`; The pinned PGlite development dependency runs in the standard `npm run test:auth` suite and is not a production runtime dependency. The fixture creates only synthetic local roles and accounts and never connects to Supabase.
+```sql
+delete from public.qe_password_attempts
+    where updated_at < now() - interval '30 days'
+      and (locked_until is null or locked_until < now())
+      and (attempt_expires_at is null or attempt_expires_at < now());
+```
+
+A project that can run `pg_cron` may schedule the same statement instead of removing it by hand. The existing IP request limiter is an additional per-process brake, not the source of shared account-lockout enforcement.
+
+Verification: Python gateway/route tests and browser tests mock provider/storage I/O. `tests/password-lockout-sql.test.mjs` executes the actual migrations against isolated in-memory PostgreSQL using PGlite, including permission checks, fifth-failure lockout, expiry, successful-password reset, lease races, the password-change trigger, the service-role table read, the readiness RPCs, re-applying the migrations, and the string-encoded owner and suspension flags. Run it with `QE_PGLITE_MODULE=/path/to/pglite/dist/index.js node --test tests/password-lockout-sql.test.mjs`; The pinned PGlite development dependency runs in the standard `npm run test:auth` suite and is not a production runtime dependency. The fixture creates only synthetic local roles and accounts and never connects to Supabase.
 
 
 ### Review fixes and deletion safety
@@ -353,7 +368,11 @@ The landing slideshow pauses when keyboard focus enters its controls, including 
 
 Before account deletion is available, apply `supabase/migrations/202610190002_account_deletion_guard.sql` to the matching project. The app checks the installed trigger's readiness before calling Supabase's Admin delete API and refuses deletion if the guard is missing or disabled. The trigger checks the current `auth.users` row inside the delete transaction and rejects active members, administrators, and the protected owner. Therefore a restoration or promotion committed after the confirmation snapshot cannot turn into an unsafe deletion. A concurrent change that starts after deletion has acquired the row lock waits and cannot update the deleted row. No process-local lock or expiring network lease is used to protect deletion.
 
+The owner and role flags are compared as text, so an owner recorded as the string `"true"` stays protected as well. The suspension flag is compared as a JSON boolean, so a value the app cannot read is not proof of suspension and the account is not deletable. Supabase reports the trigger's rejection as a bad request; the app distinguishes it from an unrelated failure and asks the operator to refresh the directory instead of retrying blindly.
+
 This migration adds a deletion restriction to `auth.users`, so it also applies to direct hard deletions from Supabase tools; other SQL integrity constraints and Storage ownership checks still apply. It does not delete any existing accounts when installed. Readiness does not depend on the optional password-lockout enablement flag. The app does not automatically apply either migration. SQL regression tests execute both migrations only against synthetic in-memory PostgreSQL.
 
 
-Apply `supabase/migrations/202610190003_administrator_access_guard.sql` before deploying administrator access management. It rejects a combined administrator role and active suspension inside the database transaction, including concurrent promotion/suspension requests. Existing inconsistent records are not modified by installation; they can be repaired by revoking the role or restoring access. Install all numbered migrations in order when provisioning a new project. Its `qe_administrator_access_guard_ready` RPC reports whether the trigger is installed and enabled, which is what `Scripts/verify_supabase_setup.py` checks.
+Apply `supabase/migrations/202610190003_administrator_access_guard.sql` before deploying administrator access management. It rejects a combined administrator role and active suspension inside the database transaction, including concurrent promotion/suspension requests. The suspension flag is compared as text, so a string `"true"` cannot slip past the guard, and the protected owner can never be suspended either. Existing inconsistent records are not modified by installation; they can be repaired by revoking the role or restoring access. Install all numbered migrations in order when provisioning a new project. Its `qe_administrator_access_guard_ready` RPC reports whether the trigger is installed and enabled, which is what `Scripts/verify_supabase_setup.py` checks.
+
+Granting or revoking administrator access requires that guard: the app calls the readiness RPC before it changes a role and refuses the change with a setup message when the migration is missing, because the guard is what stops a suspended administrator from existing. Suspension and restoration do not depend on it.

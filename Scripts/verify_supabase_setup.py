@@ -27,6 +27,7 @@ import urllib.error
 import urllib.request
 
 READY_RPCS = {
+    "qe_password_lockout_ready": "password lockout",  # pragma: allowlist secret (RPC name)
     "qe_account_deletion_guard_ready": "account deletion guard",
     "qe_administrator_access_guard_ready": "administrator access guard",
 }
@@ -125,7 +126,7 @@ def _check_service_role(report: Report, url: str, service_role: str) -> None:
     )
     if status == 200:
         report.check(True, "service-role key reads the database")
-        report.check(True, "password lockout migration applied")
+        report.check(True, "password lockout table exists")
         return
     if status == 404:
         report.check(

@@ -1,11 +1,17 @@
 -- Prevent parallel promotion and suspension requests from creating a suspended
 -- administrator. Revoking the admin role and restoring access remain possible.
+--
+-- Every object is created or replaced and the trigger is dropped before it is
+-- recreated, so this file can be applied again without failing.
 begin;
-create function public.qe_guard_administrator_access() returns trigger
+create or replace function public.qe_guard_administrator_access() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin
-    if new.raw_app_meta_data->>'qe_role' = 'admin'
-       and (coalesce(new.raw_app_meta_data->'qe_suspended' = 'true'::jsonb, false)
+    -- A suspended account is compared as text, so a string "true" cannot slip
+    -- past this guard, and the protected owner can never be suspended either.
+    if (new.raw_app_meta_data->>'qe_role' = 'admin'
+       or new.raw_app_meta_data->>'qe_owner' = 'true')
+       and (coalesce(new.raw_app_meta_data->>'qe_suspended' = 'true', false)
            or coalesce(new.banned_until > clock_timestamp(), false)) then
         raise exception using errcode = '23514',
             message = 'Revoke administrator access before suspending this account';
@@ -14,13 +20,14 @@ begin
 end;
 $$;
 revoke all on function public.qe_guard_administrator_access() from public, anon, authenticated;
+drop trigger if exists qe_guard_administrator_access on auth.users;
 create trigger qe_guard_administrator_access
     before insert or update of raw_app_meta_data, banned_until on auth.users
     for each row execute function public.qe_guard_administrator_access();
 
 -- Readiness is checked before the app grants or revokes administrator access.
 -- Do not expose this RPC or grant table access to browser roles.
-create function public.qe_administrator_access_guard_ready() returns jsonb
+create or replace function public.qe_administrator_access_guard_ready() returns jsonb
 language sql security definer set search_path = '' as $$
     select jsonb_build_object('ready', exists (
         select 1 from pg_catalog.pg_trigger t

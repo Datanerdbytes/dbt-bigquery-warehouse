@@ -151,7 +151,10 @@ password_state_lock = Lock()
 
 
 def fake_password_request(path, body, privileged=False):
-    if path == "/rest/v1/rpc/qe_account_deletion_guard_ready":
+    if path in (
+        "/rest/v1/rpc/qe_account_deletion_guard_ready",
+        "/rest/v1/rpc/qe_administrator_access_guard_ready",
+    ):
         assert privileged
         return {"ready": True}
     if path == "/auth/v1/token?grant_type=password":

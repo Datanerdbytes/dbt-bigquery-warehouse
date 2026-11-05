@@ -184,7 +184,11 @@ class MigrationTests(unittest.TestCase):
         for migration in self.migrations:
             text = migration.read_text(encoding="utf-8")
             names.update(
-                re.findall(r"create function public\.(\w+)\s*\(", text, re.IGNORECASE)
+                re.findall(
+                    r"create (?:or replace )?function public\.(\w+)\s*\(",
+                    text,
+                    re.IGNORECASE,
+                )
             )
         return names
 
@@ -222,8 +226,46 @@ class MigrationTests(unittest.TestCase):
 
     def test_the_lockout_table_backs_the_keep_wake_query(self):
         text = (self.migrations[0]).read_text(encoding="utf-8")
-        self.assertIn("create table public.qe_password_attempts", text)
+        self.assertIn("create table if not exists public.qe_password_attempts", text)
         self.assertIn(keepawake.LOCKOUT_TABLE, text)
+
+    def test_the_migrations_can_be_applied_again(self):
+        # Re-running a migration must not fail on an existing object, so every
+        # function is replaced and every trigger is dropped before it is
+        # recreated.
+        for migration in self.migrations:
+            text = migration.read_text(encoding="utf-8")
+            self.assertNotRegex(
+                text,
+                r"(?m)^[ \t]*create function public\.\w+",
+                f"{migration.name} creates a function without or replace",
+            )
+            if re.search(r"^\s*create trigger", text, re.IGNORECASE | re.MULTILINE):
+                self.assertIn(
+                    "drop trigger if exists",
+                    text,
+                    f"{migration.name} recreates a trigger without dropping it",
+                )
+
+    def test_the_readiness_rpcs_report_the_guard_state(self):
+        # The app calls these before it lets an operator change an account, so
+        # a project without the migration must be reported as not ready.
+        for name in (
+            "qe_password_lockout_ready",
+            "qe_account_deletion_guard_ready",
+            "qe_administrator_access_guard_ready",
+        ):
+            migration = next(
+                (
+                    m
+                    for m in self.migrations
+                    if f"function public.{name}(" in m.read_text(encoding="utf-8")
+                ),
+                None,
+            )
+            self.assertIsNotNone(migration, f"{name} is not defined")
+            text = migration.read_text(encoding="utf-8")
+            self.assertIn("'ready'", text)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,15 @@
 -- Apply to the app's Supabase project before enabling AUTH_PASSWORD_LOCKOUT_ENABLED.
 -- Only the Flask server can call this RPC. Browser roles cannot read counters.
+--
+-- Every object is created or replaced and the triggers are dropped before they
+-- are recreated, so this file can be applied again without failing. Re-running
+-- it does not reshape an existing table; a shape change needs its own migration.
+--
+-- The counter table keeps one row per attempted email and is pruned by an
+-- operator. See docs/supabase-auth.md for the cleanup query.
 begin;
 
-create table public.qe_password_attempts (
+create table if not exists public.qe_password_attempts (
     email text primary key,
     failures integer not null default 0 check (failures between 0 and 5),
     window_started_at timestamptz,
@@ -13,8 +20,17 @@ create table public.qe_password_attempts (
 );
 alter table public.qe_password_attempts enable row level security;
 revoke all on public.qe_password_attempts from public, anon, authenticated;
+-- The keep-wake cron reads this table through PostgREST with the service-role
+-- key. The grant is explicit so the read does not depend on the platform's
+-- default privileges, and the policy keeps it working without BYPASSRLS.
+grant select on public.qe_password_attempts to service_role;
+drop policy if exists qe_password_attempts_service_role on public.qe_password_attempts;
+create policy qe_password_attempts_service_role on public.qe_password_attempts
+    for select to service_role using (true);
+create index if not exists qe_password_attempts_updated_at_idx
+    on public.qe_password_attempts (updated_at);
 
-create function public.qe_password_attempt(
+create or replace function public.qe_password_attempt(
     p_email text,
     p_action text,
     p_attempt uuid default null,
@@ -84,7 +100,7 @@ begin
             state.failures := 0;
             state.window_started_at := current_time_at;
         end if;
-        state.failures := state.failures + 1;
+        state.failures := least(state.failures + 1, 5);
         if state.failures >= 5 then
             state.locked_until := current_time_at + interval '15 minutes';
         end if;
@@ -105,7 +121,7 @@ $$;
 revoke all on function public.qe_password_attempt(text, text, uuid, boolean) from public, anon, authenticated;
 grant execute on function public.qe_password_attempt(text, text, uuid, boolean) to service_role;
 -- Only a real password-hash change clears a lock; requesting an email never does.
-create function public.qe_clear_password_lockout() returns trigger
+create or replace function public.qe_clear_password_lockout() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin
     if old.encrypted_password is distinct from new.encrypted_password then
@@ -116,8 +132,27 @@ begin
 end;
 $$;
 revoke all on function public.qe_clear_password_lockout() from public, anon, authenticated;
+drop trigger if exists qe_password_changed on auth.users;
 create trigger qe_password_changed
     after update of encrypted_password on auth.users
     for each row execute function public.qe_clear_password_lockout();
+
+-- Readiness is checked before the deployment enables the lockout. The trigger
+-- is what clears a lock after a password change, so a project without it would
+-- keep users locked after a successful recovery without reporting anything.
+create or replace function public.qe_password_lockout_ready() returns jsonb
+language sql security definer set search_path = '' as $$
+    select jsonb_build_object('ready',
+        to_regclass('public.qe_password_attempts') is not null
+        and exists (
+            select 1 from pg_catalog.pg_trigger t
+            where t.tgrelid = 'auth.users'::regclass
+              and t.tgname = 'qe_password_changed'
+              and t.tgfoid = 'public.qe_clear_password_lockout()'::regprocedure
+              and t.tgenabled in ('O', 'A') and not t.tgisinternal
+        ));
+$$;
+revoke all on function public.qe_password_lockout_ready() from public, anon, authenticated;
+grant execute on function public.qe_password_lockout_ready() to service_role;
 notify pgrst, 'reload schema';
 commit;
