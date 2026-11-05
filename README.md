@@ -239,6 +239,41 @@ Built using Plotly Dash's native `dash.register_page` architecture, styled with 
   - Uses `uv` for deterministic dependency resolution.
   - Executes via **Gunicorn** WSGI production server (`--workers 1 --threads 8 app:server`).
 
+### 5b. Vercel Deployment
+
+The application is packaged for Vercel serverless functions.
+
+| Piece | Purpose |
+| --- | --- |
+| `wsgi.py` | Root WSGI entrypoint. It puts `my-dash-app/` on `sys.path` and re-exports the Flask server as `app`, which is the name Vercel loads. |
+| `vercel.json` | Function configuration keyed by `wsgi.py`: `maxDuration` and `excludeFiles`, so the bundle only carries the app, its shared `utils` package and the shipped data artifacts. |
+| `.vercelignore` | Files that are never uploaded. `.gitignore` is not consulted, so the virtualenv, the dbt project and the local credentials are excluded explicitly. |
+| `requirements.txt` | Runtime-only export of the locked dependencies (`uv export --frozen --no-dev --no-emit-project`). |
+
+**Runtime dependencies are separated from the build tooling.** `[project.dependencies]` holds only what the app imports at request time; dbt, the warehouse drivers, notebooks and linters live in the `dev` group, which Vercel does not install. The installed footprint drops from 1.2 GB to roughly 250 MB, inside the 500 MB function limit.
+
+Because the runtime ships only those packages, a module the app imports must not require a build-only one. The retired BigQuery audit helper imports the warehouse client behind a `try`/`except ImportError`, and `tests/test_vercel_deployment.py` boots the app with every build-only package blocked to keep it that way.
+
+**Deploy:**
+
+```bash
+npm ci
+npm run build:auth      # the bundle is committed, but rebuild it if you changed auth_frontend/
+npx vercel deploy       # preview
+npx vercel deploy --prod
+```
+
+**Environment variables** (Vercel project settings):
+
+| Variable | Scope | Notes |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Public | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public | Supabase anon key |
+| `AUTH_APP_ORIGIN` | Server | Must equal the deployment origin exactly; the guard compares it to the `Origin` header |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server only | Required for `/admin/users`; never exposed to the browser |
+
+The deployment is read-only: the cache is in-process, DuckDB opens the shipped database read-only, and both artifact paths resolve relative to the package rather than the working directory.
+
 ### 6. Supabase Authentication & Access Control
 
 The dashboard uses Supabase Auth with `@supabase/supabase-js` and a Flask authorization layer. Login and signup share the dashboard's dark theme and accessible form controls.
@@ -452,6 +487,11 @@ demo-database/
 ├── package-lock.json                # Locked npm dependency versions
 ├── .env.example                     # Authentication variable template, no credentials
 ├── Dockerfile                       # Production multi-stage Docker build file
+├── wsgi.py                          # Vercel WSGI entrypoint (exposes `app`)
+├── vercel.json                      # Vercel function config and bundle exclusions
+├── .vercelignore                    # Files excluded from the Vercel upload
+├── requirements.txt                 # Runtime-only export of the locked dependencies
+├── deploy_trigger.py                # Deployment trigger placeholder, not the entry point
 ├── pyproject.toml                   # Pinned project dependencies managed with uv
 ├── run_pipeline.sh                  # End-to-end execution bash script
 └── README.md                        # Project documentation (this file)

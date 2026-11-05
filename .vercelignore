@@ -1,0 +1,46 @@
+# Files and directories that are not uploaded to Vercel. The deployment only
+# needs the Dash application, its shared utils package and the shipped data
+# artifacts. Credentials are excluded explicitly so a local deploy can never
+# ship them.
+.git
+.github
+.agents
+.claude
+.kilocode
+.kilo
+.vscode
+.jupyter
+.venv
+node_modules
+**/__pycache__
+**/*.pyc
+/.cache
+/.pytest_cache
+/.ruff_cache
+/cache-directory
+/my-dash-app/cache-directory
+/my-dash-app/auth_frontend
+/analytics_layer
+/Notebooks
+/docs
+/logs
+/data
+/landing-animations
+/Scripts
+/sqlfluff_libs
+/sqlfluff_macros
+/api_service
+/agent
+/supabase
+/tests
+/package.json
+/package-lock.json
+/skills-lock.json
+/run_pipeline.sh
+/Dockerfile
+/.pre-commit-config.yaml
+/.secrets.baseline
+/.env
+/.env.*
+!/.env.example
+/gcp-key.json

@@ -1,7 +1,7 @@
 # Redeploy Plan: Cloud Run + BigQuery → Vercel
 
-**Status:** Phases 1–2 complete — the dbt transformation layer is rebuilt on DuckDB, the shippable gold database is built and verified, and the app now reads that database plus a shipped telemetry artifact instead of BigQuery. Phases 3–6 not started.
-**Date:** 2026-11-05 (Phase 1 delivered 2026-11-06, Phase 2 delivered 2026-11-06)
+**Status:** Phases 1–2 and 5 complete — the dbt transformation layer is rebuilt on DuckDB, the shippable gold database is built and verified, the app reads that database plus a shipped telemetry artifact instead of BigQuery, and the application is packaged for Vercel. Phases 3, 4 and 6 not started.
+**Date:** 2026-11-05 (Phase 1 delivered 2026-11-06, Phase 2 delivered 2026-11-06, Phase 5 delivered 2026-11-06)
 **Scope:** Rebuild the data transformation layer without BigQuery, replace the dead auth provider, and package the Dash app for Vercel.
 
 ---
@@ -539,35 +539,85 @@ Measured installed sizes of the app's dependencies: `dash` 35.7 MB, `plotly` 36.
 4. Delete or repoint `app_observability.py`.
 
 ### Phase 5 — Vercel packaging
-1. Add `vercel.json`:
+**Status: ✅ Done (2026-11-06).** The changes below are the ones that shipped; the original draft is kept in the notes at the end of the section.
+
+1. `wsgi.py` at the repository root is the WSGI entrypoint. It puts `my-dash-app/` on `sys.path` and re-exports the Flask server as `app`, the name Vercel loads:
+   ```python
+   APP_DIR = Path(__file__).resolve().parent / "my-dash-app"
+   if str(APP_DIR) not in sys.path:
+       sys.path.insert(0, str(APP_DIR))
+
+   from app import server  # noqa: E402
+
+   app = server
+   ```
+   Importing the module as `app` (rather than `__main__`) keeps Dash's `get_root_path()` resolution on `my-dash-app/`, so `assets/`, `pages/` and `templates/` are found — verified by `tests/test_vercel_deployment.py`.
+2. `vercel.json` configures the function. The key is the resolved entrypoint file:
    ```json
    {
      "$schema": "https://openapi.vercel.sh/vercel.json",
      "functions": {
-       "api/index.py": { "maxDuration": 300, "excludeFiles": "{tests/**,Notebooks/**,analytics_layer/**,node_modules/**,.venv/**}" }
+       "wsgi.py": {
+         "maxDuration": 300,
+         "excludeFiles": "{...}"
+       }
      }
    }
    ```
-2. Create `api/index.py` exposing `app = server` (Vercel requires the WSGI callable to be named `app`).
-3. Add to `pyproject.toml`:
-   ```toml
-   [tool.vercel]
-   entrypoint = "api:app"
-   ```
-4. Resolve the `my-dash-app` hyphen problem — either rename the directory to `my_dash_app` (touches ~20 imports) or add a thin importable shim module at the root. **Recommend the shim** to keep the diff small.
-5. Replace the Dockerfile `CMD` (gunicorn `app:server`) — Vercel ignores it, but keep the Dockerfile for the Cloud Run path if you want to retain that option.
-6. Environment variables: `NEXT_PUBLIC_SUPABASE_*` → the new auth config; plus whatever the new data store needs.
-7. Confirm the entrypoint doesn't collide with the root `app.py` placeholder — rename or relocate it.
+   `excludeFiles` is a project-root glob. It drops `analytics_layer/`, `node_modules/`, `.venv/`, `data/`, `tests/`, `Notebooks/` and `my-dash-app/auth_frontend/`, and keeps `my-dash-app/assets/`, `my-dash-app/data/`, `my-dash-app/templates/`, `my-dash-app/pages/`, `my-dash-app/components/`, `utils/` and `wsgi.py`.
+3. `.vercelignore` controls the upload. `.gitignore` is not consulted, so without it a local `vercel deploy` would upload the 1.2 GB virtualenv, the dbt project and the local credentials. `.env`, `.env.*` and `gcp-key.json` are excluded explicitly.
+4. **Runtime dependencies separated from the build tooling.** `[project.dependencies]` now holds only what the app imports at request time (dash, dash-ag-grid, dash-bootstrap-components, duckdb, flask, flask-caching, flask-limiter, numpy, pandas, plotly, python-dotenv, pycountry, werkzeug). dbt, dbt-bigquery, dbt-duckdb, the warehouse drivers, jupyterlab, sqlfluff, ruff, pyrefly and pre-commit moved to the `dev` group. Vercel exports the project without the default groups, so the dev group never reaches the function. Installed footprint: **1.2 GB → 255 MB** across 46 packages, inside the 500 MB limit.
+   - `python-dotenv` and `flask` were previously only transitive; they are imported directly, so they are now declared.
+   - `requirements.txt` was regenerated as the runtime-only export (`uv export --frozen --no-dev --no-emit-project --no-header`). `tests/test_vercel_deployment.py` fails when it drifts from the lock.
+5. The root `app.py` placeholder was relocated to `deploy_trigger.py`. It was a reserved entrypoint name, and it would have shadowed `import app` for the entrypoint's own import. The Dockerfile keeps `gunicorn app:server` from `/app/my-dash-app`, so the container path is unaffected.
+6. Environment variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `AUTH_APP_ORIGIN` (must equal the deployment origin exactly), plus the server-only `SUPABASE_SERVICE_ROLE_KEY` for `/admin/users`. The data artifacts need no configuration: both paths resolve relative to the package.
+7. `utils/audit_logger.py` no longer imports the warehouse client at module scope. It is wrapped in `try`/`except ImportError` and the function skips the write when the client is absent. The deployed runtime does not ship `google-cloud-bigquery`, and the retired BigQuery telemetry path is the only reason that package was ever imported. `tests/test_vercel_deployment.py` now boots the app with every build-only package blocked, so this class of bug fails the suite instead of the deployment.
+
+**Why the entrypoint is `wsgi.py` and not `api/index.py`:**
+- Vercel's documented entrypoint names are `app.py`, `index.py`, `server.py`, `main.py`, `wsgi.py` and `asgi.py`, at the root or inside `src/`/`app/`. `wsgi.py` at the root is discovered with no configuration at all.
+- A file inside `/api` is only a *file-based function*. With a Flask framework preset the framework handles every request and `/api/*.py` do not become routes, so the file would either be dead weight or conflict with the preset.
+- `tool.vercel.entrypoint` takes a `module:variable` value that maps to a file path. The documented examples are all package-qualified (`my_package.api:app` → `./my_package/api.py`). A root-level module would need the undocumented single-segment form, so relying on the default detection is the lower-risk choice.
+- `wsgi.py` cannot be confused with a directory convention, and no other root file matches an entrypoint name.
 
 **Vercel constraints confirmed against current docs (2026-08):**
-- Entry: `app.py`/`server.py`/`wsgi.py`/`wsgi.py` at root, `src/`, or `app/`; or `tool.vercel.entrypoint` in `pyproject.toml` ✅
+- Entry: `app.py`/`index.py`/`server.py`/`main.py`/`wsgi.py`/`asgi.py` at root, `src/`, or `app/`; or `tool.vercel.entrypoint` in `pyproject.toml` ✅
 - WSGI variable must be named `app` ✅
-- `pyproject.toml` + `uv.lock` supported (uv support shipped) ✅
+- `pyproject.toml` + `uv.lock` supported; Vercel prefers `pyproject.toml` over `requirements.txt` and exports without the default groups ✅
 - Python 3.12 / 3.13 / 3.14 — project requires ≥3.12 ✅
 - Duration: Hobby max 300s, Pro max 800s (default 300s) — **ample** for Dash callbacks ✅
 - Bundle limit: 500 MB uncompressed (Python) — use `excludeFiles` ✅
-- **Cold start:** Dash + Plotly + pandas import is the dominant cost (~2–4s). Mitigate by keeping the bundle lean and pre-loading the Parquet at module scope rather than per request.
+- **Cold start:** Dash + Plotly + pandas import is the dominant cost (~2–4s). Mitigate by keeping the bundle lean. Data loading stays inside the cached loader — AGENTS.md §4 forbids module-scope preloading — and the shipped DuckDB file is opened read-only on first use, then reused from the in-process cache.
 - No WebSocket needed — Dash callbacks are ordinary HTTP POSTs ✅
+
+**Sandbox verification (read-only filesystem and read-only `HOME`):**
+The deployment tree was reproduced the way Vercel would build it: `rsync` with `.vercelignore` as the exclude list, a fresh virtualenv holding only `requirements.txt`, and `chmod -R a-w` on the tree with `HOME` pointing at a read-only directory.
+
+| Check | Result |
+|---|---|
+| Upload tree size | 7.5 MB (no `analytics_layer/`, `data/`, `Scripts/`, `tests/`, `node_modules/`) |
+| Credentials in the upload tree | none — `.env*` and `gcp-key.json` absent |
+| Runtime virtualenv | 255 MB across 46 packages, inside the 500 MB limit |
+| Boot | entrypoint imported, Flask app served |
+| `GET /` | 200 landing page |
+| `GET /login` | 200 |
+| `GET /auth/config` | 200, public URL and anon key only |
+| `GET /dashboard`, `/customers`, `/pipeline-health` | 302 to `/login` without a session |
+| `GET /assets/auth.bundle.js` | 200 |
+| Without Supabase configuration | 503 on `/auth/config` and `/dashboard` — the guard fails closed before any data loader runs |
+| Shipped gold database | 60,379 rows, 29,350,874.0 revenue, `float64` money column |
+| Shipped telemetry artifact | 132 execution-log rows, all sections present |
+| Disk writes | none — DuckDB opens the gold file `read_only=True`, the Flask cache is in-process |
+
+The first run of this sandbox failed on `ModuleNotFoundError: No module named 'google'`: `utils/__init__.py` imports the retired BigQuery audit helper, which imported the warehouse client at module scope. The static import check in the test suite had missed it because it resolved `utils.audit_logger` to the `utils` package instead of the module inside it. Both are fixed, and the suite now boots the app with every build-only package blocked.
+
+#### Original draft (superseded)
+1. Add `vercel.json` with `functions` keyed by `api/index.py`.
+2. Create `api/index.py` exposing `app = server`.
+3. Add `[tool.vercel] entrypoint = "api:app"` to `pyproject.toml`.
+4. Resolve the `my-dash-app` hyphen problem with a thin importable shim module at the root.
+5. Replace the Dockerfile `CMD` (gunicorn `app:server`) — Vercel ignores it, but keep the Dockerfile for the Cloud Run path if you want to retain that option.
+6. Environment variables: `NEXT_PUBLIC_SUPABASE_*` plus whatever the new data store needs.
+7. Confirm the entrypoint doesn't collide with the root `app.py` placeholder — rename or relocate it.
 
 ### Phase 6 — Verification gate
 Per [AGENTS.md §13.9](file:///Users/roelsomido/demo-database/AGENTS.md), from the repository root:
@@ -580,6 +630,7 @@ Plus new coverage required by §11:
 - ✅ A test asserting the shipped gold database matches the expected figures — `tests/test_gold_dataset.py` (done in Phase 1).
 - ✅ A test asserting the merged frame honours the dtype contract (naive datetime, float64 money) — `tests/test_gold_dataset.py` (done in Phase 1).
 - ✅ A test asserting the shipped telemetry artifact matches the export rules and the reader contract — `tests/test_pipeline_telemetry.py` (done in Phase 2).
+- ✅ A test asserting the deployment contract: the entrypoint exposes the WSGI callable, the auth guard runs before any data is served, every reachable third-party import is a runtime dependency, the app still boots when every build-only package is blocked, the bundle exclusions keep the runtime files, and `requirements.txt` matches the locked export — `tests/test_vercel_deployment.py` (done in Phase 5).
 - ❗ A test asserting the KPI values on a known fixture (locks the numbers from §1.5) — still to write.
 - ❗ Auth tests for the new provider (unauthenticated access, lockout, admin guard, self-deletion block) — Phase 3.
 
@@ -594,8 +645,8 @@ Plus new coverage required by §11:
 | 3 | `Decimal`/object dtype breaks `np.isfinite` in the margin chart | Force `float64` at load, exactly as the current code does |
 | 4 | Exact-string category/country filters silently return zero rows | Do **not** title-case stored values; keep display-only title-casing where it already is (`overview.py:490`, `:616`) |
 | 5 | The 102 superseded products' sales vanish from category/country charts | Preserve `prd_end_dt IS NULL` deliberately, or make the choice explicit in Phase 0 |
-| 6 | Root `app.py` placeholder gets auto-detected by Vercel | Set `tool.vercel.entrypoint` explicitly and relocate the placeholder |
-| 7 | `my-dash-app` hyphen breaks module imports for the entrypoint | Add a root-level importable shim |
+| 6 | Root `app.py` placeholder gets auto-detected by Vercel | ✅ Resolved in Phase 5 — the placeholder moved to `deploy_trigger.py` and the entrypoint is `wsgi.py` |
+| 7 | `my-dash-app` hyphen breaks module imports for the entrypoint | ✅ Resolved in Phase 5 — `wsgi.py` puts the directory on `sys.path` and imports the app module from there |
 | 8 | FileSystemCache write fails on Vercel's read-only FS | ✅ Resolved in Phase 2 — the cache is `SimpleCache` (in-process) |
 | 9 | Cold starts make the first interaction feel slow | Lean bundle, module-scope data preload, `excludeFiles` |
 | 10 | KPI formulas are duplicated in 4 places (`overview.py`, `app.py` modal, `app.py` CSV, `kpi_sparklines.py`) | Extract into one shared module during Phase 2 — the migration is the right moment to fix the drift risk |
@@ -622,7 +673,7 @@ Plus new coverage required by §11:
 | 3. Auth (option A) | 2–3 h | New project + re-apply 3 migrations |
 | 3. Auth (option C) | 1 h | Delete the guard |
 | 4. `pipeline_health` repurpose | 2–3 h | Reduced — the telemetry source already exists; ~1 h to remove instead |
-| 5. Vercel packaging | 3–4 h | Includes cold-start tuning |
+| 5. Vercel packaging | 3–4 h | ✅ Done (2026-11-06) — entrypoint, bundle config, dependency split, tests |
 | 6. Verification | 2–3 h | New + existing tests |
 
 **With option A/C auth: ~2–3 days. With option B auth: ~3–4 days.**

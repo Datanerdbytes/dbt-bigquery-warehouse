@@ -6,14 +6,16 @@
 - **Target Audience:** Internal business analysts, data engineers, and stakeholders.
 
 ## 2. Tech Stack & Environment
-- **Language:** Python 3.12 locally and in Docker; `pyproject.toml` requires Python >=3.12
+- **Language:** Python 3.12 locally, in Docker and on Vercel; `pyproject.toml` requires Python >=3.12
 - **Python Dependencies:** Root `pyproject.toml` and `uv.lock`, managed with uv. There is no `my-dash-app/requirements.txt`.
+- **Runtime vs build dependencies:** `[project.dependencies]` holds only what the deployed app imports. dbt, the warehouse drivers, notebooks and linters live in the `dev` dependency group. Vercel exports the project without the default groups, so a tool that lands in `[project.dependencies]` inflates the function bundle for nothing.
 - **Core Framework:** Plotly Dash
 - **Underlying Engine:** Flask, including Flask-Caching
 - **Authentication:** Supabase Auth with `@supabase/supabase-js`, OAuth PKCE, and Flask server-side authorization
 - **Frontend Build:** Node.js 22+, npm, and esbuild for the authentication bundle
+- **Hosting:** Vercel serverless functions; the WSGI entrypoint is `wsgi.py` at the repository root
 - **Data Engine:** DuckDB over local files, built by dbt-duckdb; the warehouse that used to hold the models is gone
-- **Data Libraries:** `duckdb`, `pandas`, `pyarrow`, `json`. `google-cloud-bigquery` survives only in the retired warehouse scripts.
+- **Data Libraries:** `duckdb`, `pandas`, `numpy`, `json`. `pyarrow` is a build-time dependency; `google-cloud-bigquery` survives only in the retired warehouse scripts.
 - **Caching Framework:** Flask-Caching with `SimpleCache` (in-process)
 - **Styling:** Dash component libraries and modular CSS
 - **Code Formatters:** `black` for Python and Prettier for CSS
@@ -107,6 +109,7 @@ demo-database/
 │   ├── test_pipeline_telemetry.py
 │   ├── test_revenue_chart.py
 │   ├── test_sidebar.py
+│   ├── test_vercel_deployment.py
 │   └── auth-browser.test.mjs
 ├── Notebooks/                      # Exploratory analytics and exported figures
 ├── logs/query_log.sql
@@ -120,16 +123,28 @@ demo-database/
 ├── .env.example
 ├── .sqlfluff
 ├── .sqlfluffignore
-├── app.py                          # Deployment trigger placeholder, not the Dash entry point
+├── wsgi.py                         # Vercel WSGI entrypoint; exposes `app` for the runtime
+├── vercel.json                     # Function config: duration and bundle exclusions
+├── .vercelignore                   # Files that are not uploaded to Vercel
+├── requirements.txt                # Runtime-only export of the locked dependencies
+├── deploy_trigger.py               # Deployment trigger placeholder, not the Dash entry point
 ├── README.md
 ├── AGENTS.md
 └── CLAUDE.md
 ```
 
-- Run the dashboard with `uv run python my-dash-app/app.py` from the repository root. Docker runs `app:server` from `/app/my-dash-app`.
+- Run the dashboard with `uv run python my-dash-app/app.py` from the repository root. Docker runs `app:server` from `/app/my-dash-app`. Vercel loads the WSGI callable `app` from the root `wsgi.py`.
 - Python dependencies belong in root `pyproject.toml`, with resolved versions in `uv.lock`; there is no `my-dash-app/requirements.txt`.
 - `utils/` is the shared root Python package. The local `my-dash-app/utils/` and `api_service/` directories contain only cache remnants, not maintained source modules.
 - `.venv/`, `node_modules/`, `__pycache__/`, `analytics_layer/target/`, `analytics_layer/build/`, and the generated dbt outputs are local/runtime artifacts, not source locations. `my-dash-app/data/` is the opposite: it holds committed artifacts the app reads at runtime. Keep credentials and `.env` values out of documentation and version control.
+
+### Deployment targets
+- **Vercel (current):** the function entrypoint is `wsgi.py` at the repository root. It puts `my-dash-app/` on `sys.path` and re-exports the Flask server as `app`. Vercel discovers that file by name; do not add another root-level `app.py`, `index.py`, `server.py`, `main.py` or `asgi.py`, and do not move the entrypoint into an `api/` directory, which would turn it into a file-based route instead of the whole application.
+- `vercel.json` configures the function keyed by `wsgi.py`: `maxDuration` and `excludeFiles`. The exclusion list must keep `my-dash-app/assets/`, `my-dash-app/data/`, `my-dash-app/templates/`, `my-dash-app/pages/`, `my-dash-app/components/`, `utils/` and `wsgi.py`, and must drop `node_modules/`, `.venv/`, `analytics_layer/`, `data/`, `tests/` and `Notebooks/`.
+- `.vercelignore` governs what is uploaded. It is not `.gitignore`: a local deploy would otherwise upload the virtualenv, the dbt project and the credentials. Keep `.env` and `gcp-key.json` excluded there.
+- The deployed app must not write to disk. The cache is in-process, DuckDB opens the shipped database `read_only=True`, and both artifact paths are resolved relative to the package, never to the working directory.
+- A module that the app imports at runtime may not require a build-only package. `utils/audit_logger.py` imports the BigQuery client inside a `try`/`except ImportError` for exactly this reason; the deployed runtime does not ship `google-cloud-bigquery`. Keep new build-only imports behind the same guard, or move them into the function that needs them.
+- **Docker (retained option):** the image installs the same runtime dependency set with `uv export --locked --no-dev --no-emit-project` and runs `gunicorn app:server` from `/app/my-dash-app`. Vercel ignores the Dockerfile; keep the two paths in sync when the runtime dependencies change.
 
 ## 4. General Architecture
 - Never use global variables to store user-specific state. Keep mutable client state in `dcc.Store` or URL parameters.
@@ -213,6 +228,7 @@ defaultColDef = {"filter": True, "sortable": True}
 - The dbt models build offline against DuckDB. Rebuild the shipped gold database with `uv run python -B Scripts/load_bronze_duckdb.py --fresh`, then `cd analytics_layer && ../.venv/bin/dbt build --profiles-dir .`, then `uv run python -B Scripts/export_gold_duckdb.py`. `uv run python -B Scripts/verify_shipped_gold.py` fails when the committed artifact drifts from the build; it is also the CI gate. `tests/test_gold_dataset.py` locks the shipped figures.
 - Rebuild the shipped telemetry artifact with `uv run python -B Scripts/export_pipeline_telemetry.py` after every dbt build. `uv run python -B Scripts/verify_shipped_telemetry.py --built <fresh export>` fails when the committed artifact drifts from the build; it is also the CI gate. `tests/test_pipeline_telemetry.py` locks the export rules and the artifact contract.
 - `analytics_layer/macros/portable.sql` holds the adapter-dispatch macros used by the models; `sqlfluff_macros/portable.sql` renders the BigQuery branch of each macro for SQLFluff's offline Jinja templater. Keep the two in sync when a macro is added.
+- `tests/test_vercel_deployment.py` guards the deployment contract: the entrypoint exposes the WSGI callable, the auth guard still runs before any data is served, every third-party import reachable from the entrypoint is a runtime dependency, neither `vercel.json` nor `.vercelignore` drops a file from the app tree, and the app still starts when every package that only the build uses is blocked. It also fails when `requirements.txt` drifts from the locked runtime export. The runtime file set is derived from the tree rather than hand-listed, so a new page, template or asset is covered as soon as it is added.
 
 ## 12. Authentication & Access Control
 - Keep authentication in the existing Dash/Flask application; do not introduce Next.js routing or SSR middleware. See [Supabase authentication setup](docs/supabase-auth.md).
@@ -232,6 +248,7 @@ defaultColDef = {"filter": True, "sortable": True}
 - Edit `auth_frontend/` sources, then run `npm ci` and `npm run build:auth`. Never fix authentication by editing only the generated bundle or disabling the server guard. Exclude the bundle from Dash auto-injection and load it exactly once through the index template.
 - Commit the backend, templates, CSS, frontend sources, generated tracked bundle, package manifests, build script, and Docker integration together. Docker builds the bundle in a Node stage and runs only Python/Gunicorn in the final image.
 - After auth changes, run `.venv/bin/python -B -m unittest discover -s tests -v` and `npm run test:auth`. Verify unauthenticated page/data access, email confirmation checks, expiry/refresh, logout, OAuth errors, and loading states without querying the shipped database or creating real accounts.
+- On Vercel, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `AUTH_APP_ORIGIN` are project environment variables, and `AUTH_APP_ORIGIN` must equal the deployment origin exactly because the guard compares it to the `Origin` header. `SUPABASE_SERVICE_ROLE_KEY` is a server-only variable; Vercel environment variables are not exposed to the browser, but the value still must never reach `/auth/config`, a template or a log.
 
 ## 13. Parallel Development & Integration Policy
 
