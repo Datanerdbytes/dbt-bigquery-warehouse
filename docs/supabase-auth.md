@@ -1,17 +1,146 @@
 # Supabase authentication
 
-Existing Supabase accounts are preserved. If you already confirmed your email,
-open `/login` and sign in with that account; do not create a replacement account.
+The Supabase project that hosted the Cloud Run deployment was deleted together
+with its Google Cloud project. Nothing in this repository hardcodes a project
+reference: the app reads the project URL and the keys from the environment, and
+the database guards live in [`supabase/migrations/`](../supabase/migrations).
+This document provisions the replacement project and then describes how the
+deployed app uses it.
+
+## Provision the replacement project
+
+### 1. Create the project
+
+Create a free project at [supabase.com/dashboard](https://supabase.com/dashboard).
+Two free projects may exist at the same time. Record the project reference; it
+appears in the project URL (`https://<project-ref>.supabase.co`).
+
+### 2. Collect the keys
+
+Open **Project Settings → API** and collect three values:
+
+| Key | Where it lives | Where it may go |
+|---|---|---|
+| Project URL | Project Settings → API | `NEXT_PUBLIC_SUPABASE_URL` |
+| `anon` public key | Project Settings → API → Project API keys | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
+| `service_role` key | Project Settings → API → Project API keys | `SUPABASE_SERVICE_ROLE_KEY`, server only |
+
+The service-role key bypasses row-level security. It belongs in the deployment
+environment and in the ignored local `.env`, never in a browser bundle, a
+template, a log, or version control.
+
+### 3. Apply the SQL migrations
+
+Open **SQL Editor** and run these three files in order. Each one is a complete
+transaction and can be applied once:
+
+1. `supabase/migrations/202610190001_password_lockout.sql` — the private
+   attempt table, the service-role-only `qe_password_attempt` RPC, and the
+   trigger that clears a lock when the password hash changes.
+2. `supabase/migrations/202610190002_account_deletion_guard.sql` — the
+   `auth.users` delete trigger and its readiness RPC.
+3. `supabase/migrations/202610190003_administrator_access_guard.sql` — the
+   trigger that refuses a suspended administrator, and its readiness RPC.
+
+The app never applies them. Each migration ends with `notify pgrst, 'reload
+schema'` so PostgREST picks up the new functions immediately.
+
+### 4. Configure authentication
+
+In **Authentication → Providers**:
+
+- Leave **Email** enabled and keep email confirmation on.
+- Enable **Google** and **GitHub** and add the provider credentials. The
+  redirect URI to register with Google and GitHub is the Supabase callback
+  `https://<project-ref>.supabase.co/auth/v1/callback`, not the app's own
+  callback. A rendered provider button only proves the button exists; the
+  provider must be configured separately.
+
+In **Authentication → URL Configuration → Redirect URLs**, add the deployed
+origin and its callbacks:
+
+```text
+https://<app-origin>
+https://<app-origin>/auth/callback
+https://<app-origin>/reset-password
+```
+
+`AUTH_APP_ORIGIN` must equal the deployment origin exactly, because the guard
+compares it to the `Origin` header of every mutating request.
+
+**Email volume.** The built-in SMTP service of a free project sends at most
+**two messages per hour**. That is enough to confirm a test account but not
+enough for a public demo with email sign-ups. Either attach a custom SMTP
+provider (for example a transactional-email provider with a free tier) or
+rely on the OAuth providers, whose accounts Supabase confirms automatically.
+OAuth is therefore the better path for a portfolio demo.
+
+### 5. Set the deployment environment
+
+Set these variables in the Vercel project under **Settings → Environment
+Variables**, for the Production environment:
+
+| Variable | Value |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | The project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | The `anon` public key |
+| `AUTH_APP_ORIGIN` | The deployment origin, exactly |
+| `SUPABASE_SERVICE_ROLE_KEY` | The `service_role` key, server only |
+| `AUTH_PASSWORD_LOCKOUT_ENABLED` | `true` once migration 1 is applied |
+| `CRON_SECRET` | A random string of at least 16 characters |
+
+`CRON_SECRET` is what Vercel sends as `Authorization: Bearer <secret>` when it
+invokes the keep-wake cron. Without it the cron cannot reach the project, and
+the free project pauses after seven idle days.
+
+### 6. Verify the project
+
+```sh
+python Scripts/verify_supabase_setup.py
+```
+
+The script reads the four variables from the environment, checks that both keys
+are accepted, reports which OAuth providers the project has enabled, and calls
+the readiness RPC of all three migrations. It prints the steps that cannot be
+checked through the API. It is a manual operator command and is never part of
+the offline test suite.
+
+### 7. Promote the first account
+
+Create the first account through `/signup`, confirm its email, then promote it
+to the protected owner from the repository root:
+
+```sh
+uv run python Scripts/bootstrap_admin.py --email <owner-email>
+uv run python Scripts/bootstrap_admin.py --email <owner-email> --apply
+```
+
+The first command checks the account without changing it. The second assigns
+`qe_role: admin` and `qe_owner: true` through the server-only Supabase Admin
+API. It is never run automatically at startup.
+
+### 8. Keep the free project awake
+
+Supabase pauses a Free project after seven days without database traffic. The
+deployment runs a scheduled job that prevents this: `vercel.json` declares a
+daily cron on `/keepawake`, and that route runs one read-only PostgREST query
+against the lockout table with the service-role key. The same query proves that
+the key works and that migration 1 is applied.
+
+The route refuses to run without `CRON_SECRET`, and it never redirects: Vercel
+cron requests do not follow a redirect, so the route answers with a status code
+of its own. The Hobby plan accepts one invocation per day, which is enough to
+stay inside the seven-day window.
 
 ## Configuration
 
-Set these variables in the root `.env` locally, and in Cloud Run's runtime
-configuration for production:
+Set these variables in the root `.env` locally, and in the Vercel project's
+environment for production:
 
-- `NEXT_PUBLIC_SUPABASE_URL`: your existing Supabase project URL.
+- `NEXT_PUBLIC_SUPABASE_URL`: the Supabase project URL.
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: the public anon key, never a service-role key.
 - `AUTH_APP_ORIGIN`: exact browser origin. Use `http://localhost:8050` locally
-  and `https://dash-observability-app-1022429033383.us-central1.run.app` online.
+  and the deployment origin online.
 
 The app loads root `.env` without overriding runtime environment variables.
 Any account in the configured Supabase project with a verified email can sign in
@@ -26,8 +155,7 @@ With Node 22+ and the existing Python environment:
 ```sh
 npm ci
 npm run build:auth
-cd my-dash-app
-../.venv/bin/python app.py
+uv run python my-dash-app/app.py
 ```
 
 Use **localhost**, not `127.0.0.1`, when the configured origin is localhost.
@@ -36,14 +164,20 @@ The frontend reads only the public project URL and anon key from `/auth/config`;
 Optional build-time public variables are
 supported, but leave them unset for runtime configuration in Docker and CI.
 
-The Dockerfile builds the JS from source in a Node stage, then copies the bundle
-into the Python image. No Supabase build secrets or Node runtime are needed in
-production. `.dockerignore` excludes `.env`, virtual environments, and node_modules.
+The Vercel deployment builds the bundle in its own build step and serves the
+Python function through `wsgi.py`. The Dockerfile is a retained alternative:
+it builds the JS from source in a Node stage, then copies the bundle into the
+Python image, so no Supabase build secrets or Node runtime are needed in
+production. `.dockerignore` excludes `.env`, virtual environments, and
+node_modules.
 Commit the Python auth module, templates, CSS, frontend sources, package manifests,
 build script, and Dockerfile together; deploying only the bundle breaks startup.
 The existing tracked bundle is kept regenerated for local compatibility.
 
 ## Supabase settings
+
+The provider, redirect-URL and email settings for a new project are described
+under **Provision the replacement project** above.
 
 Keep Email confirmation enabled, and enable Google and GitHub with provider
 credentials stored in Supabase. Add each app origin's `/auth/callback` URL to
@@ -61,7 +195,10 @@ HTTP localhost origins. Refresh tokens remain managed by Supabase JS; no token
 is stored in `dcc.Store`. Mutations require the exact configured Origin.
 
 `/login`, `/signup`, `/auth/callback`, `/auth/config`, the required auth assets,
-and minimal `/healthz` are public. Data endpoints return 401/403 for rejected
+and minimal `/healthz` are public. `/keepawake` is reachable without a session
+as well, because the scheduler has none, but it refuses to query the project
+unless the request carries the deployment's `CRON_SECRET`. Data endpoints return
+401/403 for rejected
 sessions and 503 for configuration/service failures. Responses are private and
 not cacheable. `/` redirects verified users to `/dashboard`.
 
@@ -219,4 +356,4 @@ Before account deletion is available, apply `supabase/migrations/202610190002_ac
 This migration adds a deletion restriction to `auth.users`, so it also applies to direct hard deletions from Supabase tools; other SQL integrity constraints and Storage ownership checks still apply. It does not delete any existing accounts when installed. Readiness does not depend on the optional password-lockout enablement flag. The app does not automatically apply either migration. SQL regression tests execute both migrations only against synthetic in-memory PostgreSQL.
 
 
-Apply `supabase/migrations/202610190003_administrator_access_guard.sql` before deploying administrator access management. It rejects a combined administrator role and active suspension inside the database transaction, including concurrent promotion/suspension requests. Existing inconsistent records are not modified by installation; they can be repaired by revoking the role or restoring access. Install all numbered migrations in order when provisioning a new project.
+Apply `supabase/migrations/202610190003_administrator_access_guard.sql` before deploying administrator access management. It rejects a combined administrator role and active suspension inside the database transaction, including concurrent promotion/suspension requests. Existing inconsistent records are not modified by installation; they can be repaired by revoking the role or restoring access. Install all numbered migrations in order when provisioning a new project. Its `qe_administrator_access_guard_ready` RPC reports whether the trigger is installed and enabled, which is what `Scripts/verify_supabase_setup.py` checks.

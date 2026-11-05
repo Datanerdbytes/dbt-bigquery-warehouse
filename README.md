@@ -271,8 +271,14 @@ npx vercel deploy --prod
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public | Supabase anon key |
 | `AUTH_APP_ORIGIN` | Server | Must equal the deployment origin exactly; the guard compares it to the `Origin` header |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server only | Required for `/admin/users`; never exposed to the browser |
+| `AUTH_PASSWORD_LOCKOUT_ENABLED` | Server | `true` once the password-lockout migration is applied |
+| `CRON_SECRET` | Server | Authorizes the daily keep-wake cron that stops the free Supabase project from pausing |
 
 The deployment is read-only: the cache is in-process, DuckDB opens the shipped database read-only, and both artifact paths resolve relative to the package rather than the working directory.
+
+A free Supabase project pauses after seven days without database traffic, so `vercel.json` declares a daily cron on `/keepawake`. That route runs one read-only query with the service-role key and refuses to run without the deployment's `CRON_SECRET`.
+
+Provisioning a new Supabase project is a console task: create it, apply the three migrations in `supabase/migrations/` in order, enable the OAuth providers, set the variables above, then run `python Scripts/verify_supabase_setup.py` to confirm the keys, the providers and the migrations. The full runbook is in [docs/supabase-auth.md](docs/supabase-auth.md).
 
 ### 6. Supabase Authentication & Access Control
 
@@ -287,6 +293,7 @@ The dashboard uses Supabase Auth with `@supabase/supabase-js` and a Flask author
 | `/dashboard` | Protected Product Overview and successful-login destination |
 | `/customers`, `/pipeline-health` | Protected analytics pages |
 | `/` | Redirects verified users to `/dashboard`; otherwise shows the public landing page |
+| `/keepawake` | Daily scheduled query that keeps the free Supabase project awake; requires the deployment's `CRON_SECRET` |
 
 Flask verifies tokens with Supabase and requires a confirmed email before executing Dash callbacks or exports. Browser checks alone do not grant access. The access-token cookie is HttpOnly and SameSite=Lax, with Secure enabled for HTTPS deployments. Authentication and dashboard responses use `private, no-store`.
 
@@ -460,6 +467,7 @@ demo-database/
 │   ├── app.py                       # Main application entry point & export callbacks
 │   ├── app_observability.py         # Standalone pipeline observability & lineage viewer
 │   ├── data_loader.py               # DuckDB data fetchers with @cache.memoize
+│   ├── keepawake.py                 # Scheduled query that keeps the Supabase project awake
 │   └── pipeline_telemetry.py        # Reads the shipped telemetry artifact
 ├── data/raw/                        # Versioned source CSVs (the rebuild input)
 │   ├── source_crm/
@@ -471,6 +479,8 @@ demo-database/
 │   ├── verify_shipped_gold.py      # Fails when the shipped gold artifact drifts from the build
 │   ├── export_pipeline_telemetry.py # dbt artifacts → the telemetry JSON the app ships
 │   ├── verify_shipped_telemetry.py # Fails when the shipped telemetry artifact drifts
+│   ├── verify_supabase_setup.py    # Checks a live Supabase project's configuration
+│   ├── bootstrap_admin.py          # Promotes the first account to the protected owner
 │   ├── create_init_database.sql     # SQL Server database initialization (retired)
 │   ├── ddl_create_bronze_*.sql      # DDL definitions for bronze tables
 │   ├── ingest_bronze.py             # CSV to SQL Server bronze ingestion (retired)
@@ -585,25 +595,30 @@ Step 4 is the one that matters: if a model changes and an artifact is not re-exp
 
 ### Supabase & OAuth Configuration
 
-The Flask app loads root `.env` without overriding existing environment values. Configure the same three auth variables in Cloud Run for production, with `AUTH_APP_ORIGIN=https://dash-observability-app-1022429033383.us-central1.run.app`. Keep provider secrets server-side. The anon key is intentionally public; never substitute a service-role key.
+The Flask app loads root `.env` without overriding existing environment values. Configure the same auth variables in the Vercel project settings for production, with `AUTH_APP_ORIGIN` equal to the deployment origin. Keep provider secrets server-side. The anon key is intentionally public; never substitute a service-role key.
 
-1. In Supabase **Authentication → Sign In / Providers**, keep **Confirm email** enabled. For Google, open the provider, enter your Google OAuth client ID and secret, turn **Enable Sign in with Google** on, and **Save**. Configure and enable GitHub separately if needed.
-2. In **Google Cloud → Google Auth Platform → Clients → your Web application client**, add the following under **Authorized redirect URIs** and save:
+The project that hosted the previous Cloud Run deployment was deleted with its Google Cloud project. The replacement is provisioned from scratch; the full runbook is in [docs/supabase-auth.md](docs/supabase-auth.md). In short:
+
+1. Create the free project, then apply the three migrations in `supabase/migrations/` in the SQL editor, in order.
+2. In Supabase **Authentication → Sign In / Providers**, keep **Confirm email** enabled. For Google, open the provider, enter your Google OAuth client ID and secret, turn **Enable Sign in with Google** on, and **Save**. Configure and enable GitHub separately if needed.
+3. In **Google Cloud → Google Auth Platform → Clients → your Web application client**, add the Supabase callback of the new project under **Authorized redirect URIs** and save:
 
    ```text
-   https://gqzxjsjxdezucscxvinr.supabase.co/auth/v1/callback
+   https://<project-ref>.supabase.co/auth/v1/callback
    ```
 
-   This is the current project's Supabase callback. Use your own project ref if deploying another project. Adding `https://supabase.co` under JavaScript origins does not register this redirect URI.
-3. In Supabase **Authentication → URL Configuration**, set the Site URL to the production app origin and allow these app redirect URLs:
+   Adding `https://supabase.co` under JavaScript origins does not register this redirect URI.
+4. In Supabase **Authentication → URL Configuration**, set the Site URL to the production app origin and allow these app redirect URLs:
 
    ```text
    http://localhost:8050/auth/callback
-   https://dash-observability-app-1022429033383.us-central1.run.app/auth/callback
+   https://<app-origin>/auth/callback
+   https://<app-origin>/reset-password
    ```
 
    Also add `http://localhost:8080/auth/callback` if testing with the Docker command below.
-4. Keep email confirmation enabled. Once a user verifies their email, they can sign in immediately without an environment email list or administrator approval.
+5. Keep email confirmation enabled. Once a user verifies their email, they can sign in immediately without an environment email list or administrator approval. The built-in SMTP service of a free project sends at most two messages per hour, so a public demo should attach a custom SMTP provider or rely on the OAuth providers, whose accounts Supabase confirms automatically.
+6. Run `python Scripts/verify_supabase_setup.py` to confirm the keys, the enabled providers and the installed migrations.
 
 Google redirects to **Supabase's `/auth/v1/callback`**, and Supabase redirects to **the app's `/auth/callback`**. These are two distinct configuration steps.
 

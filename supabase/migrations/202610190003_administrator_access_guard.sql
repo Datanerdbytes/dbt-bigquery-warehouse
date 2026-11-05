@@ -17,4 +17,20 @@ revoke all on function public.qe_guard_administrator_access() from public, anon,
 create trigger qe_guard_administrator_access
     before insert or update of raw_app_meta_data, banned_until on auth.users
     for each row execute function public.qe_guard_administrator_access();
+
+-- Readiness is checked before the app grants or revokes administrator access.
+-- Do not expose this RPC or grant table access to browser roles.
+create function public.qe_administrator_access_guard_ready() returns jsonb
+language sql security definer set search_path = '' as $$
+    select jsonb_build_object('ready', exists (
+        select 1 from pg_catalog.pg_trigger t
+        where t.tgrelid = 'auth.users'::regclass
+          and t.tgname = 'qe_guard_administrator_access'
+          and t.tgfoid = 'public.qe_guard_administrator_access()'::regprocedure
+          and t.tgenabled in ('O', 'A') and not t.tgisinternal
+    ));
+$$;
+revoke all on function public.qe_administrator_access_guard_ready() from public, anon, authenticated;
+grant execute on function public.qe_administrator_access_guard_ready() to service_role;
+notify pgrst, 'reload schema';
 commit;

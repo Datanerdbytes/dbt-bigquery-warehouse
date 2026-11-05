@@ -1,7 +1,7 @@
 # Redeploy Plan: Cloud Run + BigQuery → Vercel
 
-**Status:** Phases 1–2 and 5 complete — the dbt transformation layer is rebuilt on DuckDB, the shippable gold database is built and verified, the app reads that database plus a shipped telemetry artifact instead of BigQuery, and the application is packaged for Vercel. Phases 3, 4 and 6 not started.
-**Date:** 2026-11-05 (Phase 1 delivered 2026-11-06, Phase 2 delivered 2026-11-06, Phase 5 delivered 2026-11-06)
+**Status:** Phases 1–2 and 5 complete, and the repository side of Phase 3 — the dbt transformation layer is rebuilt on DuckDB, the shippable gold database is built and verified, the app reads that database plus a shipped telemetry artifact instead of BigQuery, the application is packaged for Vercel, and the Supabase auth contract is in place. The Supabase console steps, Phase 4 and Phase 6 remain.
+**Date:** 2026-11-05 (Phase 1 delivered 2026-11-06, Phase 2 delivered 2026-11-06, Phase 5 delivered 2026-11-06, Phase 3 repository side delivered 2026-11-06)
 **Scope:** Rebuild the data transformation layer without BigQuery, replace the dead auth provider, and package the Dash app for Vercel.
 
 ---
@@ -524,13 +524,34 @@ Measured installed sizes of the app's dependencies: `dash` 35.7 MB, `plotly` 36.
 6. ✅ `Scripts/export_pipeline_telemetry.py` + `Scripts/verify_shipped_telemetry.py` build and gate the shipped telemetry artifact; the gate runs in CI after the dbt build.
 
 ### Phase 3 — Auth (option A: new Supabase project)
-1. Create a free Supabase project; set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_APP_ORIGIN` in the Vercel env. **No code change** — nothing in the repo hardcodes a project ref.
-2. Replay the 3 SQL migrations from [supabase/migrations/](file:///Users/roelsomido/demo-database/supabase/migrations) (`qe_password_attempt`, `qe_account_deletion_guard_ready`, and the administrator-access guard).
-3. Re-enable the Google and GitHub OAuth providers in the Supabase console, and set the app redirect URL to `https://<app-origin>/auth/callback`.
-4. Promote the first account to `qe_owner` in `app_metadata`, then confirm `/admin/users` lists, suspends, and deletes correctly.
-5. Add a keep-wake scheduled job (Vercel cron) so the free-tier project does not sit idle past 7 days.
-5. Rewrite `user_admin.py` to query the local users table instead of the Admin API.
-6. Rewrite `auth_frontend/main.js` to drop `@supabase/supabase-js` (keep the same DOM contract so the CSS and templates still work); rebuild the bundle with `npm run build:auth`.
+**Status: the repository side shipped 2026-11-06; the console steps are yours.**
+
+The code needed no rewrite. The app reads the project URL and the keys from the
+environment, the guards live in three replayable SQL migrations, and the
+frontend keeps the Supabase PKCE client. Two additions shipped with this phase:
+
+| Deliverable | Location | Purpose |
+|---|---|---|
+| Keep-wake endpoint | `my-dash-app/keepawake.py` | One daily read-only PostgREST query with the service-role key; refuses to run without `CRON_SECRET` and never redirects |
+| Vercel cron | `vercel.json` → `crons` | `/keepawake` at 06:00 UTC daily — the Hobby plan allows one run per day, which is enough to stay inside the seven-day idle window |
+| Project verifier | `Scripts/verify_supabase_setup.py` | Reports the accepted keys, the enabled OAuth providers and the installed migrations |
+| Guard readiness RPC | `supabase/migrations/202610190003_administrator_access_guard.sql` | `qe_administrator_access_guard_ready`, so all three migrations can be verified the same way |
+| Contract tests | `tests/test_supabase_setup.py` | 14 offline checks: the cron path, the secret, the query, and the migration/RPC pairing |
+
+**The console steps need your account and a browser.** The full runbook is
+[docs/supabase-auth.md](file:///Users/roelsomido/demo-database/docs/supabase-auth.md):
+
+1. Create the free project and collect the URL, the `anon` key and the `service_role` key.
+2. Apply the three migrations in the SQL editor, in order.
+3. Enable Google and GitHub, and add `<origin>` and `<origin>/auth/callback` to the redirect URLs. The Google and GitHub consoles want the Supabase callback `https://<project-ref>.supabase.co/auth/v1/callback`, not the app's own callback.
+4. Set the deployment variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `AUTH_APP_ORIGIN`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_PASSWORD_LOCKOUT_ENABLED`, `CRON_SECRET`.
+5. Run `python Scripts/verify_supabase_setup.py` against the new project.
+6. Promote the first account with `Scripts/bootstrap_admin.py`, then confirm `/admin/users` lists, suspends and deletes correctly.
+
+**Two items of the original draft belong to option B and were deliberately not
+done:** rewriting `user_admin.py` to query a local users table instead of the
+Supabase Admin API, and dropping `@supabase/supabase-js` from the frontend.
+Option A keeps the Admin API and the PKCE client.
 
 ### Phase 4 — `pipeline_health` (repurpose)
 1. ✅ **Done in Phase 2:** the telemetry source is now the build's `run_results.json` + `manifest.json` + the bronze load manifest, baked into the shipped artifact by `Scripts/export_pipeline_telemetry.py`. The build manifest already records source row counts and destination row counts; freshness is derived from the load timestamp.
@@ -632,7 +653,8 @@ Plus new coverage required by §11:
 - ✅ A test asserting the shipped telemetry artifact matches the export rules and the reader contract — `tests/test_pipeline_telemetry.py` (done in Phase 2).
 - ✅ A test asserting the deployment contract: the entrypoint exposes the WSGI callable, the auth guard runs before any data is served, every reachable third-party import is a runtime dependency, the app still boots when every build-only package is blocked, the bundle exclusions keep the runtime files, and `requirements.txt` matches the locked export — `tests/test_vercel_deployment.py` (done in Phase 5).
 - ❗ A test asserting the KPI values on a known fixture (locks the numbers from §1.5) — still to write.
-- ❗ Auth tests for the new provider (unauthenticated access, lockout, admin guard, self-deletion block) — Phase 3.
+- ✅ A test asserting the Supabase deployment contract: the keep-wake route rejects a missing or wrong secret, queries the database with the service-role key, never redirects, matches the Vercel cron path, and every RPC the app calls is defined and granted by a migration — `tests/test_supabase_setup.py` (done in Phase 3).
+- ❗ Auth tests against the newly created provider (unauthenticated access, lockout, admin guard, self-deletion block) — the offline suites cover these against mocks, but they must be re-run against the real project once it exists (Phase 3 console steps).
 
 ---
 
@@ -651,7 +673,7 @@ Plus new coverage required by §11:
 | 9 | Cold starts make the first interaction feel slow | Lean bundle, module-scope data preload, `excludeFiles` |
 | 10 | KPI formulas are duplicated in 4 places (`overview.py`, `app.py` modal, `app.py` CSV, `kpi_sparklines.py`) | Extract into one shared module during Phase 2 — the migration is the right moment to fix the drift risk |
 | 11 | `dbt-core 1.12.4` vs `dbt-duckdb 1.11.1` version mismatch | Pin `dbt-core` to the adapter's supported range |
-| 12 | Free Supabase tier pauses → dead demo link | If option A is chosen, add a keep-wake cron; option B/C avoids this entirely |
+| 12 | Free Supabase tier pauses → dead demo link | ✅ Mitigated in Phase 3 — a daily Vercel cron on `/keepawake` runs a real database query; option B/C avoided this entirely |
 | 13 | `analytics_layer/target/` is gitignored — `manifest.json` won't exist in the deployment | ✅ Resolved in Phase 2 — the telemetry facts are baked into the shipped `my-dash-app/data/pipeline_telemetry.json`, and CI keeps it in sync with the build |
 | 14 | CI workflow (`ci_pipeline.yml`) is hard-wired to BigQuery (`GCP_SA_KEY`, `dbt-bigquery` profile) | ✅ Resolved in Phase 1 — the dbt job now builds against DuckDB from the versioned CSVs, and the Cloud Run deploy job (targeting the deleted project) is removed |
 | 15 | Vercel Hobby allows **non-commercial use only** | Fine for a portfolio demo; Pro is mandatory if it is ever monetized or used in a business |
@@ -670,7 +692,7 @@ Plus new coverage required by §11:
 | 1. dbt → DuckDB port | 2–3 h | ✅ Done (2026-11-06) |
 | 2. Data access swap | 3–4 h | ✅ Done (2026-11-06) — loader, telemetry, cache, tests |
 | 3. Auth rebuild (option B) | 10–14 h | Largest single item; drops OAuth PKCE |
-| 3. Auth (option A) | 2–3 h | New project + re-apply 3 migrations |
+| 3. Auth (option A) | 2–3 h | 🔶 Repository side done (2026-11-06) — keep-wake cron, project verifier, migration/RPC tests. The console steps remain |
 | 3. Auth (option C) | 1 h | Delete the guard |
 | 4. `pipeline_health` repurpose | 2–3 h | Reduced — the telemetry source already exists; ~1 h to remove instead |
 | 5. Vercel packaging | 3–4 h | ✅ Done (2026-11-06) — entrypoint, bundle config, dependency split, tests |

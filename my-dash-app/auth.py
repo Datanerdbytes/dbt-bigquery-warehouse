@@ -35,6 +35,7 @@ PUBLIC = {
     "/auth/password",
     "/auth/config",
     "/healthz",
+    "/keepawake",
 }
 PUBLIC_ASSETS = {
     "/assets/00-theme.css",

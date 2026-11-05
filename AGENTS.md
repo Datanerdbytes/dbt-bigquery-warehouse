@@ -43,6 +43,7 @@ demo-database/
 │   ├── verify_shipped_gold.py       # Fails when the shipped gold artifact drifts
 │   ├── export_pipeline_telemetry.py # dbt artifacts → the telemetry JSON the app ships
 │   ├── verify_shipped_telemetry.py  # Fails when the shipped telemetry artifact drifts
+│   ├── verify_supabase_setup.py      # Checks a live Supabase project's configuration
 │   ├── create_init_database.sql
 │   ├── ddl_table_ingestion_logs.sql
 │   └── ddl_create_bronze_*.sql
@@ -71,6 +72,7 @@ demo-database/
 │   ├── app.py                       # Dash/Flask entry point; exposes server
 │   ├── auth.py                      # Request guard, public config, session bridge
 │   ├── data_loader.py               # Cached dashboard queries and data preparation
+│   ├── keepawake.py                 # Scheduled query that keeps the Supabase project awake
 │   ├── pipeline_telemetry.py        # Reads the shipped telemetry artifact
 │   ├── app_observability.py         # Observability module outside Dash Pages directory
 │   ├── theme.py                     # Shared Python chart and color helpers
@@ -144,6 +146,7 @@ demo-database/
 - `.vercelignore` governs what is uploaded. It is not `.gitignore`: a local deploy would otherwise upload the virtualenv, the dbt project and the credentials. Keep `.env` and `gcp-key.json` excluded there.
 - The deployed app must not write to disk. The cache is in-process, DuckDB opens the shipped database `read_only=True`, and both artifact paths are resolved relative to the package, never to the working directory.
 - A module that the app imports at runtime may not require a build-only package. `utils/audit_logger.py` imports the BigQuery client inside a `try`/`except ImportError` for exactly this reason; the deployed runtime does not ship `google-cloud-bigquery`. Keep new build-only imports behind the same guard, or move them into the function that needs them.
+- `vercel.json` also declares a daily `crons` entry for `/keepawake`. Supabase pauses a free project after seven days without database traffic, so the route runs one read-only PostgREST query with the service-role key. Vercel sends `Authorization: Bearer $CRON_SECRET`; the route must refuse to run without a matching secret, and it must never redirect, because a cron request does not follow a 3xx response. The Hobby plan allows one invocation per day, which is enough.
 - **Docker (retained option):** the image installs the same runtime dependency set with `uv export --locked --no-dev --no-emit-project` and runs `gunicorn app:server` from `/app/my-dash-app`. Vercel ignores the Dockerfile; keep the two paths in sync when the runtime dependencies change.
 
 ## 4. General Architecture
@@ -229,6 +232,7 @@ defaultColDef = {"filter": True, "sortable": True}
 - Rebuild the shipped telemetry artifact with `uv run python -B Scripts/export_pipeline_telemetry.py` after every dbt build. `uv run python -B Scripts/verify_shipped_telemetry.py --built <fresh export>` fails when the committed artifact drifts from the build; it is also the CI gate. `tests/test_pipeline_telemetry.py` locks the export rules and the artifact contract.
 - `analytics_layer/macros/portable.sql` holds the adapter-dispatch macros used by the models; `sqlfluff_macros/portable.sql` renders the BigQuery branch of each macro for SQLFluff's offline Jinja templater. Keep the two in sync when a macro is added.
 - `tests/test_vercel_deployment.py` guards the deployment contract: the entrypoint exposes the WSGI callable, the auth guard still runs before any data is served, every third-party import reachable from the entrypoint is a runtime dependency, neither `vercel.json` nor `.vercelignore` drops a file from the app tree, and the app still starts when every package that only the build uses is blocked. It also fails when `requirements.txt` drifts from the locked runtime export. The runtime file set is derived from the tree rather than hand-listed, so a new page, template or asset is covered as soon as it is added.
+- `tests/test_supabase_setup.py` guards the Supabase contract: the keep-wake route rejects a missing or wrong `CRON_SECRET`, queries the database with the service-role key, never redirects, matches the path in `vercel.json`, and every RPC the app calls is defined and granted to the service role by a migration in `supabase/migrations/`. `Scripts/verify_supabase_setup.py` checks the same contract against a live project; it is an operator command and is never part of the offline suite.
 
 ## 12. Authentication & Access Control
 - Keep authentication in the existing Dash/Flask application; do not introduce Next.js routing or SSR middleware. See [Supabase authentication setup](docs/supabase-auth.md).
@@ -248,7 +252,7 @@ defaultColDef = {"filter": True, "sortable": True}
 - Edit `auth_frontend/` sources, then run `npm ci` and `npm run build:auth`. Never fix authentication by editing only the generated bundle or disabling the server guard. Exclude the bundle from Dash auto-injection and load it exactly once through the index template.
 - Commit the backend, templates, CSS, frontend sources, generated tracked bundle, package manifests, build script, and Docker integration together. Docker builds the bundle in a Node stage and runs only Python/Gunicorn in the final image.
 - After auth changes, run `.venv/bin/python -B -m unittest discover -s tests -v` and `npm run test:auth`. Verify unauthenticated page/data access, email confirmation checks, expiry/refresh, logout, OAuth errors, and loading states without querying the shipped database or creating real accounts.
-- On Vercel, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `AUTH_APP_ORIGIN` are project environment variables, and `AUTH_APP_ORIGIN` must equal the deployment origin exactly because the guard compares it to the `Origin` header. `SUPABASE_SERVICE_ROLE_KEY` is a server-only variable; Vercel environment variables are not exposed to the browser, but the value still must never reach `/auth/config`, a template or a log.
+- On Vercel, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `AUTH_APP_ORIGIN` are project environment variables, and `AUTH_APP_ORIGIN` must equal the deployment origin exactly because the guard compares it to the `Origin` header. `SUPABASE_SERVICE_ROLE_KEY` is a server-only variable; Vercel environment variables are not exposed to the browser, but the value still must never reach `/auth/config`, a template or a log. `CRON_SECRET` authorizes the keep-wake cron and `AUTH_PASSWORD_LOCKOUT_ENABLED` activates the lockout once its migration is applied.
 
 ## 13. Parallel Development & Integration Policy
 
