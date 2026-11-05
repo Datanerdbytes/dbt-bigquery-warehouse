@@ -13,14 +13,21 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from dotenv import find_dotenv, load_dotenv
-from google.cloud import bigquery
-from google.oauth2 import service_account
 
 from utils.helpers import (
     resolve_bq_table,
     validate_bq_write_target,
 )
 from utils.logging_config import sanitize_exception
+
+try:
+    from google.cloud import bigquery
+    from google.oauth2 import service_account
+except ImportError:
+    # The warehouse client is a build-time dependency. The deployed runtime
+    # imports this module without it.
+    bigquery = None
+    service_account = None
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +48,10 @@ def log_execution_to_bigquery(
 
     if not project_id:
         logger.warning("Skipped audit logging: GCP_PROJECT_ID is not set.")
+        return
+
+    if bigquery is None:
+        logger.warning("Skipped audit logging: the BigQuery client is not installed.")
         return
 
     try:

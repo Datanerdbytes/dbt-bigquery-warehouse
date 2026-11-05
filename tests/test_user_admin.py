@@ -46,6 +46,9 @@ class UserAdminTests(unittest.TestCase):
         self.deletion_guard = patch.object(user_admin, "require_deletion_guard")
         self.deletion_guard_mock = self.deletion_guard.start()
         self.addCleanup(self.deletion_guard.stop)
+        self.admin_guard = patch.object(user_admin, "require_administrator_guard")
+        self.admin_guard_mock = self.admin_guard.start()
+        self.addCleanup(self.admin_guard.stop)
 
     def test_member_cannot_view_page_api_or_forge_metadata(self):
         member = dict(MEMBER, user_metadata={"qe_role": "admin", "qe_owner": True})
@@ -187,6 +190,46 @@ class UserAdminTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 403)
                 self.assertEqual(service.call_count, 1)
                 self.assertEqual(service.call_args.args[0], "GET")
+
+    def test_role_change_requires_the_administrator_guard(self):
+        for action in ("grant_admin", "revoke_admin"):
+            with (
+                self.subTest(action=action),
+                self.remote(ADMIN),
+                patch.object(
+                    user_admin,
+                    "require_administrator_guard",
+                    side_effect=user_admin.AdminError("admin_guard_required", 503),
+                ) as guard,
+                patch.object(
+                    user_admin, "_service_request", return_value=MEMBER
+                ) as service,
+            ):
+                response = self.client.patch(
+                    f"/api/admin/users/{MEMBER_ID}",
+                    json={"action": action},
+                    headers={"Origin": ENV["AUTH_APP_ORIGIN"]},
+                )
+                self.assertEqual(response.status_code, 503)
+                guard.assert_called_once()
+                self.assertEqual(service.call_args.args[0], "GET")
+
+    def test_suspension_does_not_need_the_administrator_guard(self):
+        with (
+            self.remote(ADMIN),
+            patch.object(user_admin, "require_administrator_guard") as guard,
+            patch.object(
+                user_admin, "_service_request", return_value=MEMBER
+            ) as service,
+        ):
+            response = self.client.patch(
+                f"/api/admin/users/{MEMBER_ID}",
+                json={"action": "suspend"},
+                headers={"Origin": ENV["AUTH_APP_ORIGIN"]},
+            )
+            self.assertEqual(response.status_code, 200)
+            guard.assert_not_called()
+            self.assertEqual(service.call_args.args[0], "PUT")
 
     def test_invalid_action_id_and_extra_fields_cannot_reach_provider(self):
         for user_id, body in [
@@ -607,6 +650,65 @@ class DeleteAccountTests(UserAdminTests):
                 self.assertNotIn("foreign key details", str(error.exception))
                 transport.open.assert_called_once()
 
+    def test_the_database_guard_rejection_is_reported_as_a_block(self):
+        from urllib.error import HTTPError
+
+        body = json.dumps(
+            {
+                "code": 400,
+                "msg": "Only suspended non-administrator accounts may be deleted",
+                "error_code": "23514",
+            }
+        ).encode()
+        with (
+            self.server.test_request_context(),
+            patch.dict(
+                os.environ, {"SUPABASE_SERVICE_ROLE_KEY": "synthetic-private-key"}
+            ),
+        ):
+            g.auth_user = ADMIN
+            transport = Mock()
+            transport.open.side_effect = HTTPError(
+                "synthetic", 400, "guard rejection", {}, io.BytesIO(body)
+            )
+            with (
+                patch.object(user_admin, "build_opener", return_value=transport),
+                self.assertRaises(user_admin.AdminError) as error,
+            ):
+                user_admin._admin_request(
+                    "DELETE", f"/{MEMBER_ID}", {"should_soft_delete": False}
+                )
+            self.assertEqual(error.exception.code, "delete_guard_blocked")
+            self.assertEqual(error.exception.status, 409)
+            self.assertNotIn("suspended non-administrator", str(error.exception))
+
+    def test_an_unrelated_bad_request_is_not_reported_as_a_guard_block(self):
+        from urllib.error import HTTPError
+
+        with (
+            self.server.test_request_context(),
+            patch.dict(
+                os.environ, {"SUPABASE_SERVICE_ROLE_KEY": "synthetic-private-key"}
+            ),
+        ):
+            g.auth_user = ADMIN
+            transport = Mock()
+            transport.open.side_effect = HTTPError(
+                "synthetic",
+                400,
+                "bad request",
+                {},
+                io.BytesIO(b'{"code":400,"msg":"invalid payload"}'),
+            )
+            with (
+                patch.object(user_admin, "build_opener", return_value=transport),
+                self.assertRaises(user_admin.AdminError) as error,
+            ):
+                user_admin._admin_request(
+                    "DELETE", f"/{MEMBER_ID}", {"should_soft_delete": False}
+                )
+            self.assertEqual(error.exception.code, "delete_unconfirmed")
+
 
 class DeleteAccountCallbackTests(UserAdminCallbackTests):
     def test_forged_delete_callback_cannot_promote_owner(self):
@@ -697,3 +799,47 @@ class DeletionGuardTests(unittest.TestCase):
             with self.assertRaises(user_admin.AdminError):
                 user_admin.delete_account(MEMBER_ID, MEMBER["email"])
             service.assert_not_called()
+
+
+class AdministratorGuardTests(unittest.TestCase):
+    def test_missing_disabled_or_unavailable_guard_fails_closed(self):
+        from password_auth import PasswordAuthError
+
+        for status in [{"ready": False}, {}, PasswordAuthError("auth_unavailable")]:
+            with (
+                patch.object(user_admin, "require_admin"),
+                patch(
+                    "password_auth._request",
+                    side_effect=status if isinstance(status, Exception) else None,
+                    return_value=status,
+                ),
+            ):
+                with self.assertRaises(user_admin.AdminError) as caught:
+                    user_admin.require_administrator_guard()
+                self.assertEqual(caught.exception.code, "admin_guard_required")
+                self.assertEqual(caught.exception.status, 503)
+
+    def test_guard_readiness_requires_an_admin_and_exact_true(self):
+        with (
+            patch.object(user_admin, "require_admin") as admin,
+            patch("password_auth._request", return_value={"ready": True}) as service,
+        ):
+            user_admin.require_administrator_guard()
+            admin.assert_called_once()
+            service.assert_called_once_with(
+                "/rest/v1/rpc/qe_administrator_access_guard_ready", {}, privileged=True
+            )
+
+    def test_a_role_change_never_reaches_the_provider_when_the_guard_is_missing(self):
+        with (
+            patch.object(user_admin, "require_admin", return_value=ADMIN),
+            patch.object(
+                user_admin,
+                "require_administrator_guard",
+                side_effect=user_admin.AdminError("admin_guard_required", 503),
+            ),
+            patch.object(user_admin, "_admin_request", return_value=MEMBER) as service,
+        ):
+            with self.assertRaises(user_admin.AdminError):
+                user_admin.update_access(MEMBER_ID, "grant_admin")
+            self.assertEqual(service.call_args.args[0], "GET")

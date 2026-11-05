@@ -1,15 +1,3 @@
-/* @datacloud.settings
-{
-  "version": 1,
-  "service": "BIG_QUERY",
-  "connectionInfo": {
-    "billingProjectId": "INHERIT",
-    "location": "us-central1"
-  },
-  "dialect": "GOOGLE_SQL"
-}
-*/
-
 WITH sales_details AS (
     SELECT * FROM {{ ref('stg_crm_sales_details') }}
 ),
@@ -45,8 +33,8 @@ final AS (
 
         -- Measures (Metrics)
         s.sls_quantity AS quantity,
-        CAST(s.sls_price AS decimal) AS unit_price,
-        CAST(s.sls_sales AS decimal) AS gross_sales_amount
+        CAST(s.sls_price AS DECIMAL(38, 9)) AS unit_price,
+        CAST(s.sls_sales AS DECIMAL(38, 9)) AS gross_sales_amount
     FROM sales_details s
     LEFT JOIN customers c
         ON s.sls_cust_id = c.customer_id

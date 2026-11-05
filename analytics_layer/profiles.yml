@@ -1,0 +1,25 @@
+analytics_layer:
+  target: duckdb
+  outputs:
+    # Offline build used by the local pipeline and by CI. The DuckDB file is
+    # the build artifact; `Scripts/load_bronze_duckdb.py` creates the bronze
+    # schema inside it before `dbt build` runs.
+    duckdb:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', 'build/analytics.duckdb') }}"
+      schema: main
+      threads: 4
+
+    # Kept for a future rebuild of the original warehouse. The GCP project was
+    # deleted, so this target needs credentials that no longer exist.
+    bigquery:
+      type: bigquery
+      method: service-account
+      project: "{{ env_var('GCP_PROJECT_ID', 'quantum-echo-data-eng-prod') }}"
+      dataset: silver
+      keyfile: "{{ env_var('GCP_KEY_PATH', 'gcp-key.json') }}"
+      location: us-central1
+      threads: 4
+      job_execution_timeout_seconds: 300
+      job_retries: 1
+      priority: interactive

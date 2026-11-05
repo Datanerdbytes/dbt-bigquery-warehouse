@@ -10,16 +10,13 @@ from dash import Input, Output, callback, dcc, html
 
 # pyrefly: ignore [missing-import]
 from data_loader import (
-    load_bigquery_cost_metrics,
     load_column_coverage_details,
     load_dbt_execution_logs,
-    load_expensive_queries,
     load_model_coverage_details,
     load_pipeline_health_summary,
     load_source_freshness,
     load_table_ingestion_logs,
 )
-from plotly.subplots import make_subplots
 
 # pyrefly: ignore [missing-import]
 from theme import COLORS, style_figure
@@ -37,7 +34,7 @@ KPI_TOOLTIPS = {
     "failed-tests": "Number of dbt tests that failed (errors) in the latest execution run.",
     "column-coverage": "Percentage of model columns that have at least one test defined in the dbt manifest.",
     "columns-tested": "Number of columns with tests / total columns across all dbt models.",
-    "total-tests": "Total count of all column-level tests defined across all models.",
+    "total-tests": "Total count of all column-level tests defined across all models. Source-level tests on the bronze tables are not included here; they are counted under Passed, Failed and Warnings.",
     "avg-duration": "Average execution time per model/test in the latest dbt run.",
     "models-100": "Models where every column has at least one test (100% column coverage).",
     "models-80": "Models with 80% or higher column test coverage.",
@@ -244,35 +241,6 @@ def layout():
         },
     ]
 
-    bq_cost_column_defs = [
-        {
-            "field": "creation_time",
-            "headerName": "Timestamp",
-            "sort": "desc",
-            "width": 180,
-        },
-        {
-            "field": "user_email",
-            "headerName": "User / Service Account",
-            "width": 220,
-            "filter": True,
-        },
-        {
-            "field": "gb_processed",
-            "headerName": "GB Processed",
-            "width": 140,
-            "type": "numericColumn",
-        },
-        {
-            "field": "slot_seconds",
-            "headerName": "Slot Seconds",
-            "width": 130,
-            "type": "numericColumn",
-        },
-        {"field": "duration_seconds", "headerName": "Duration (s)", "width": 120},
-        {"field": "query", "headerName": "Query Text", "flex": 2, "filter": True},
-    ]
-
     return html.Div(
         [
             loading(
@@ -477,38 +445,10 @@ def layout():
                                     "table-ingestion-grid-loading",
                                 ),
                             ],
-                            description="Latest table snapshots; audit history shows the latest 200 records from the past 30 days.",
+                            description="Latest table snapshots; the history lists every recorded load of the past 30 days.",
                         ),
                         label="Ingestion",
                         tab_id="tab-table-ingestion",
-                    ),
-                    dbc.Tab(
-                        panel(
-                            "BigQuery Costs",
-                            [
-                                loading(
-                                    dcc.Graph(
-                                        id="bq-daily-cost-graph",
-                                        config={
-                                            "displayModeBar": False,
-                                            "responsive": True,
-                                        },
-                                    ),
-                                    "bq-daily-cost-graph-loading",
-                                ),
-                                loading(
-                                    create_grid(
-                                        bq_cost_column_defs,
-                                        grid_id="bq-expensive-queries-grid",
-                                        class_name="pipeline-grid",
-                                    ),
-                                    "bq-expensive-queries-grid-loading",
-                                ),
-                            ],
-                            description="Query activity over 30 days and the 25 most expensive queries from the past 7 days.",
-                        ),
-                        label="BigQuery Costs",
-                        tab_id="tab-bq-costs",
                     ),
                 ],
                 id="pipeline-tabs",
@@ -789,8 +729,8 @@ def update_pipeline_data(active_tab):
             )
             df_melted["metric_type"] = df_melted["metric_type"].replace(
                 {
-                    "source_rows": "SQL Server (Source)",
-                    "destination_rows": "BigQuery (Destination)",
+                    "source_rows": "CSV (Source)",
+                    "destination_rows": "DuckDB Bronze (Destination)",
                 }
             )
 
@@ -808,8 +748,8 @@ def update_pipeline_data(active_tab):
                     "metric_type": "System Layer",
                 },
                 color_discrete_map={
-                    "SQL Server (Source)": COLORS["accent"],
-                    "BigQuery (Destination)": COLORS["success"],
+                    "CSV (Source)": COLORS["accent"],
+                    "DuckDB Bronze (Destination)": COLORS["success"],
                 },
             )
             fig_ingestion.update_traces(
@@ -879,99 +819,3 @@ def update_pipeline_data(active_tab):
         fig_ingestion,
         ingestion_grid,
     )
-
-
-# Existing BQ Cost callback remains independent and lazy-loaded
-@callback(
-    [
-        Output("bq-daily-cost-graph", "figure"),
-        Output("bq-expensive-queries-grid", "rowData"),
-    ],
-    [Input("pipeline-tabs", "active_tab")],
-)
-def update_bq_cost_monitoring(active_tab):
-    if active_tab != "tab-bq-costs":
-        return dash.no_update, dash.no_update
-
-    df_costs = load_bigquery_cost_metrics(days_back=30)
-    df_expensive = load_expensive_queries(limit=25)
-
-    if df_costs.empty:
-        fig = go.Figure()
-        fig.update_layout(
-            template="plotly_dark",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            xaxis={"visible": False},
-            yaxis={"visible": False},
-            annotations=[
-                {
-                    "text": "No BigQuery job history found in region-us-central1.",
-                    "xref": "paper",
-                    "yref": "paper",
-                    "showarrow": False,
-                    "font": {"size": 14, "color": COLORS["muted"]},
-                }
-            ],
-        )
-    else:
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
-        for job_type in df_costs["job_type"].unique():
-            df_subset = df_costs[df_costs["job_type"] == job_type]
-            fig.add_trace(
-                go.Bar(
-                    x=df_subset["execution_date"],
-                    y=df_subset["total_queries"],
-                    name=f"Queries ({job_type})",
-                    marker_color=(
-                        COLORS["accent"] if job_type == "QUERY" else COLORS["purple"]
-                    ),
-                ),
-                secondary_y=False,
-            )
-
-        df_trend = df_costs.groupby("execution_date", as_index=False).agg(
-            {"avg_duration_seconds": "mean", "total_slot_minutes": "sum"}
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=df_trend["execution_date"],
-                y=df_trend["avg_duration_seconds"],
-                name="Avg Duration (s)",
-                mode="lines+markers",
-                line=dict(color=COLORS["success"], width=3),
-            ),
-            secondary_y=True,
-        )
-
-        fig.update_layout(
-            template="plotly_dark",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            barmode="stack",
-            margin=dict(t=30, b=30, l=40, r=40),
-            legend=dict(
-                orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1
-            ),
-            hovermode="x unified",
-            hoverlabel=dict(
-                bgcolor=COLORS["border"],
-                font_color=COLORS["text"],
-                bordercolor=COLORS["border"],
-            ),
-        )
-
-        fig.update_yaxes(
-            title_text="Total Queries",
-            secondary_y=False,
-            showgrid=True,
-            gridcolor=COLORS["border"],
-        )
-        fig.update_yaxes(
-            title_text="Avg Duration (s)", secondary_y=True, showgrid=False
-        )
-        fig.update_xaxes(showgrid=False)
-
-    grid_data = df_expensive.to_dict("records") if not df_expensive.empty else []
-    return style_figure(fig, height=320), grid_data

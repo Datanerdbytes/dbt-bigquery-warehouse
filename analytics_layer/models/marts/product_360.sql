@@ -1,15 +1,3 @@
-/* @datacloud.settings
-{
-  "version": 1,
-  "service": "BIG_QUERY",
-  "connectionInfo": {
-    "billingProjectId": "INHERIT",
-    "location": "us-central1"
-  },
-  "dialect": "GOOGLE_SQL"
-}
-*/
-
 WITH dataset_anchor AS (
     SELECT
         customer_key,
@@ -27,17 +15,17 @@ product_sales_aggregated AS (
         product_key,
         max(max_dataset_date) AS anchor_date,
         count(DISTINCT order_number) AS total_orders,
-        cast(sum(gross_sales_amount) AS int64) AS total_sales,
+        cast(sum(gross_sales_amount) AS BIGINT) AS total_sales,
         sum(quantity) AS total_quantity,
         count(DISTINCT customer_key) AS total_unique_customers,
         max(order_date) AS last_order_date,
         min(order_date) AS first_order_date,
 
         -- Exact days active
-        date_diff(max(order_date), min(order_date), DAY) AS lifespan_days,
+        {{ qe_date_diff('max(order_date)', 'min(order_date)', 'DAY') }} AS lifespan_days,
 
         -- Normalized months (enforces minimum 1.0 to prevent zero-division)
-        greatest(round(date_diff(max(order_date), min(order_date), DAY) / 30.4375, 1), 1.0) AS lifespan_months
+        greatest(round({{ qe_date_diff('max(order_date)', 'min(order_date)', 'DAY') }} / 30.4375, 1), 1.0) AS lifespan_months
     FROM dataset_anchor
     GROUP BY product_key
 ),
@@ -69,7 +57,7 @@ SELECT
     subcategory,
     cost,
     last_order_date AS last_sale_date,
-    date_diff(anchor_date, last_order_date, MONTH) AS recency_months,
+    {{ qe_date_diff('anchor_date', 'last_order_date', 'MONTH') }} AS recency_months,
 
     -- Performance Tiering
     CASE
@@ -86,10 +74,10 @@ SELECT
     total_unique_customers,
 
     -- Key Financial Ratios
-    round(safe_divide(total_sales, total_quantity), 2) AS avg_selling_price,
-    round(safe_divide(total_sales, total_orders), 2) AS avg_order_revenue,
+    round({{ qe_safe_divide('total_sales', 'total_quantity') }}, 2) AS avg_selling_price,
+    round({{ qe_safe_divide('total_sales', 'total_orders') }}, 2) AS avg_order_revenue,
 
     -- Consistent Monthly Revenue Divisor
-    round(safe_divide(total_sales, coalesce(nullif(lifespan_months, 0), 1)), 2) AS avg_monthly_revenue
+    round({{ qe_safe_divide('total_sales', "coalesce(nullif(lifespan_months, 0), 1)") }}, 2) AS avg_monthly_revenue
 
 FROM joined

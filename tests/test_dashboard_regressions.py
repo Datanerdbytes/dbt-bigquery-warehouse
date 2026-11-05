@@ -2,17 +2,21 @@
 
 import importlib
 import json
+import shutil
+import socket
 import sys
+import tempfile
 import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import duckdb
 import pandas as pd
-from google.cloud import bigquery
 from plotly.utils import PlotlyJSONEncoder
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,22 +25,30 @@ sys.path.insert(0, str(ROOT / "my-dash-app"))
 
 import auth
 import data_loader
+import pipeline_telemetry
 from components import header
 
 from utils.cache import cache
 from utils.helpers import dataframe_value, filter_dataframe
 
+GOLD_DB = ROOT / "my-dash-app" / "data" / "analytics.duckdb"
+
+
+class NetworkAccessForbidden(AssertionError):
+    """Raised when a test tries to reach the network."""
+
+
+def _forbid_network(*args, **kwargs):
+    raise NetworkAccessForbidden("Network access is forbidden in offline tests")
+
 
 class DashboardRegressionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Importing the real app must never construct a production client.
+        # Importing the real app must never reach the network.
         with (
-            patch.object(
-                bigquery,
-                "Client",
-                side_effect=AssertionError("Production access forbidden"),
-            ),
+            patch.object(socket.socket, "connect", _forbid_network),
+            patch.object(socket, "create_connection", _forbid_network),
             patch.object(cache, "init_app"),
         ):
             cls.dashboard = importlib.import_module("app")
@@ -44,28 +56,70 @@ class DashboardRegressionTests(unittest.TestCase):
         cls.pipeline = sys.modules["pages.pipeline_health"]
 
     def setUp(self):
-        self.no_production = patch.object(
-            bigquery,
-            "Client",
-            side_effect=AssertionError("Production access forbidden"),
-        )
-        self.no_production.start()
-        self.addCleanup(self.no_production.stop)
+        for target, attribute in (
+            (socket.socket, "connect"),
+            (socket, "create_connection"),
+        ):
+            patcher = patch.object(target, attribute, _forbid_network)
+            patcher.start()
+            self.addCleanup(patcher.stop)
         cache.clear()
 
-    def load_sales(self, frames):
-        client = Mock()
-        client.query.side_effect = [
-            Mock(to_dataframe=Mock(return_value=frame)) for frame in frames
-        ]
-        with patch.object(data_loader, "get_bigquery_client", return_value=client):
+    def build_gold_database(self, sales, products, customers):
+        """Write a temporary gold database shaped like the shipped artifact."""
+        tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmpdir, True)
+        path = Path(tmpdir) / "analytics.duckdb"
+
+        connection = duckdb.connect(str(path))
+        connection.execute("CREATE SCHEMA gold")
+        for name, frame in (
+            ("fct_sales", sales),
+            ("dim_products", products),
+            ("dim_customers", customers),
+        ):
+            if frame is None:
+                frame = self.empty_frames()[
+                    {
+                        "fct_sales": 0,
+                        "dim_products": 1,
+                        "dim_customers": 2,
+                    }[name]
+                ]
+            connection.register(f"{name}_frame", frame)
+            connection.execute(
+                f"CREATE TABLE gold.{name} AS SELECT * FROM {name}_frame"
+            )
+        connection.close()
+        return path
+
+    def load_sales(self, *frames):
+        """Load the merged dataset from a temporary gold database."""
+        if len(frames) == 1:
+            sales, products, customers = frames[0]
+        else:
+            sales, products, customers = frames
+        path = self.build_gold_database(sales, products, customers)
+        with patch.object(data_loader, "gold_database_path", return_value=path):
             result = data_loader.load_and_prep_data.uncached()
-        return result, client
+        return result, path
+
+    def write_telemetry(self, payload):
+        """Write a temporary telemetry artifact and point the reader at it."""
+        tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmpdir, True)
+        path = Path(tmpdir) / "pipeline_telemetry.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        patcher = patch.object(pipeline_telemetry, "telemetry_path", return_value=path)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return path
 
     @staticmethod
     def frames(dates):
         sales = pd.DataFrame(
             {
+                "sales_item_key": [f"s{index}" for index in range(len(dates))],
                 "product_key": ["p1"] * len(dates),
                 "customer_key": ["c1"] * len(dates),
                 "order_date": dates,
@@ -76,7 +130,14 @@ class DashboardRegressionTests(unittest.TestCase):
             }
         )
         products = pd.DataFrame(
-            [{"product_key": "p1", "product_name": "Bike", "category": "bikes"}]
+            [
+                {
+                    "product_key": "p1",
+                    "product_name": "Bike",
+                    "category": "bikes",
+                    "cost": 5,
+                }
+            ]
         )
         customers = pd.DataFrame(
             [
@@ -90,23 +151,52 @@ class DashboardRegressionTests(unittest.TestCase):
         )
         return sales, products, customers
 
+    @staticmethod
+    def empty_frames():
+        empty_sales = pd.DataFrame(
+            {
+                "sales_item_key": pd.Series([], dtype="str"),
+                "product_key": pd.Series([], dtype="str"),
+                "customer_key": pd.Series([], dtype="str"),
+                "order_date": pd.Series([], dtype="str"),
+                "order_number": pd.Series([], dtype="str"),
+                "quantity": pd.Series([], dtype="int64"),
+                "gross_sales_amount": pd.Series([], dtype="float64"),
+                "unit_price": pd.Series([], dtype="float64"),
+            }
+        )
+        empty_products = pd.DataFrame(
+            {
+                "product_key": pd.Series([], dtype="str"),
+                "product_name": pd.Series([], dtype="str"),
+                "category": pd.Series([], dtype="str"),
+                "cost": pd.Series([], dtype="float64"),
+            }
+        )
+        empty_customers = pd.DataFrame(
+            {
+                "customer_key": pd.Series([], dtype="str"),
+                "first_name": pd.Series([], dtype="str"),
+                "last_name": pd.Series([], dtype="str"),
+                "country": pd.Series([], dtype="str"),
+            }
+        )
+        return empty_sales, empty_products, empty_customers
+
     def test_empty_sources_keep_expected_schema_and_no_dates(self):
-        for frames in [(None, None, None), (pd.DataFrame(),) * 3, self.frames([])]:
-            with self.subTest(frames=type(frames[0]).__name__):
-                (df, start, end, categories, countries), _ = self.load_sales(frames)
-                self.assertTrue(df.empty)
-                self.assertTrue(
-                    {"order_date", "product_name", "country", "gross_sales_amount"}
-                    <= set(df.columns)
-                )
-                self.assertIsNone(start)
-                self.assertIsNone(end)
-                self.assertEqual(
-                    categories, [{"label": "All Categories", "value": "ALL"}]
-                )
-                self.assertEqual(
-                    countries, [{"label": "All Countries", "value": "ALL"}]
-                )
+        sales, products, customers = self.empty_frames()
+        (df, start, end, categories, countries), _ = self.load_sales(
+            sales, products, customers
+        )
+        self.assertTrue(df.empty)
+        self.assertTrue(
+            {"order_date", "product_name", "country", "gross_sales_amount"}
+            <= set(df.columns)
+        )
+        self.assertIsNone(start)
+        self.assertIsNone(end)
+        self.assertEqual(categories, [{"label": "All Categories", "value": "ALL"}])
+        self.assertEqual(countries, [{"label": "All Countries", "value": "ALL"}])
 
     def test_invalid_and_excluded_dates_do_not_crash(self):
         (df, start, end, *_), _ = self.load_sales(
@@ -117,17 +207,14 @@ class DashboardRegressionTests(unittest.TestCase):
         self.assertIsNone(end)
 
     def test_valid_sales_keep_joins_and_totals(self):
-        (df, start, end, categories, _), client = self.load_sales(
+        (df, start, end, categories, _), _ = self.load_sales(
             self.frames(["2010-01-01", "2026-09-01"])
         )
         self.assertEqual(df["gross_sales_amount"].sum(), 40)
         self.assertEqual(list(df["product_name"]), ["Bike", "Bike"])
         self.assertEqual((start, end), ("2010-01-01", "2026-09-01"))
         self.assertEqual(categories[-1]["value"], "bikes")
-        self.assertIn(
-            "WHERE order_date >= DATE '2010-01-01'",
-            client.query.call_args_list[0].args[0],
-        )
+        self.assertEqual(list(df["country"]), ["PH", "PH"])
 
     def test_decimal_amounts_are_normalized_to_float64(self):
         sales, products, customers = self.frames(["2026-09-01", "2026-09-02"])
@@ -154,16 +241,38 @@ class DashboardRegressionTests(unittest.TestCase):
         self.assertTrue(df["gross_sales_amount"].isna().all())
         self.assertTrue(df["unit_price"].isna().all())
 
-    def test_cost_schema_version_separates_cached_datasets(self):
-        loader = data_loader.load_and_prep_data
-        current = loader.make_cache_key(loader.uncached, limit=10000)
-        old = loader.make_cache_key(loader.uncached, limit=10000, cost_schema_version=0)
-        self.assertNotEqual(current, old)
-        (_, *_), client = self.load_sales(self.frames(["2026-09-01"]))
-        self.assertIn("cost", client.query.call_args_list[1].args[0])
+    def test_missing_dimensions_do_not_discard_sales(self):
+        sales, _, _ = self.frames(["2026-09-01"])
+        (df, *_), _ = self.load_sales((sales, None, None))
+        self.assertEqual(len(df), 1)
+        self.assertTrue(df["category"].isna().all())
+
+    def test_loader_reads_the_bundled_gold_database(self):
+        (df, start, end, categories, countries), path = self.load_sales(
+            *self.frames(["2026-09-01"])
+        )
+        self.assertEqual(len(df), 1)
+        self.assertTrue(path.exists())
+
+        bundled = data_loader.load_and_prep_data.uncached()
+        self.assertFalse(bundled[0].empty)
+        self.assertEqual(bundled[0]["gross_sales_amount"].dtype, "float64")
+        self.assertTrue(set(data_loader.MERGED_COLUMNS) <= set(bundled[0].columns))
+        self.assertTrue(bundled[1] <= bundled[2])
+        self.assertTrue(bundled[3][0]["value"] == "ALL")
+        self.assertTrue(bundled[4][0]["value"] == "ALL")
+
+    def test_missing_gold_database_reports_a_clear_error(self):
+        with patch.object(
+            data_loader,
+            "gold_database_path",
+            return_value=Path("/nonexistent/gold.duckdb"),
+        ):
+            with self.assertRaises(FileNotFoundError):
+                data_loader.load_and_prep_data.uncached()
 
     def test_prepared_dataset_reuses_one_frame_per_ttl_window(self):
-        loader = Mock(side_effect=lambda limit=10000: (pd.DataFrame({"a": [1]}),) * 5)
+        loader = Mock(side_effect=lambda limit=None: (pd.DataFrame({"a": [1]}),) * 5)
         data_loader._DATASET_HOT_CACHE.update(
             {"key": None, "value": None, "expires_at": 0.0}
         )
@@ -195,7 +304,7 @@ class DashboardRegressionTests(unittest.TestCase):
         def check_concurrent_load(expired):
             frame = pd.DataFrame({"a": [1]})
             data_loader._DATASET_HOT_CACHE.update(
-                key=(10000,) if expired else None,
+                key=(None,) if expired else None,
                 value=pd.DataFrame({"a": [0]}) if expired else None,
                 expires_at=0.0,
             )
@@ -218,7 +327,7 @@ class DashboardRegressionTests(unittest.TestCase):
                 def __exit__(self, *args):
                     population_lock.release()
 
-            def load(limit=10000):
+            def load(limit=None):
                 loader_started.set()
                 if not release_loader.wait(timeout=5):
                     raise TimeoutError("Test did not release the dataset loader")
@@ -273,11 +382,11 @@ class DashboardRegressionTests(unittest.TestCase):
             self.assertIs(data_loader.get_prepared_dataset(), frame)
             self.assertEqual(data_loader._DATASET_HOT_CACHE["expires_at"], 260)
             self.assertIs(data_loader.get_prepared_dataset(), frame)
-            loader.assert_called_once_with(limit=10000)
+            loader.assert_called_once_with(limit=None)
 
     def test_prepared_dataset_reloads_for_a_different_limit(self):
         frame = pd.DataFrame({"a": [1, 2, 3, 4, 5]})
-        loader = Mock(side_effect=lambda limit=10000: (frame.head(limit),) * 5)
+        loader = Mock(side_effect=lambda limit=None: (frame.head(limit),) * 5)
         data_loader._DATASET_HOT_CACHE.update(
             {"key": None, "value": None, "expires_at": 0.0}
         )
@@ -304,12 +413,6 @@ class DashboardRegressionTests(unittest.TestCase):
         original = frame.copy()
         filter_dataframe(frame, "2026-01-01", "2026-03-31", None, None)
         pd.testing.assert_frame_equal(frame, original)
-
-    def test_missing_dimensions_do_not_discard_sales(self):
-        sales, _, _ = self.frames(["2026-09-01"])
-        (df, *_), _ = self.load_sales((sales, None, None))
-        self.assertEqual(len(df), 1)
-        self.assertTrue(df["category"].isna().all())
 
     def test_filter_handles_none_and_preserves_empty_schema(self):
         self.assertTrue(filter_dataframe(None, "2026-01-01", "2026-09-01").empty)
@@ -447,59 +550,67 @@ class DashboardRegressionTests(unittest.TestCase):
         self.assertIn("UNKNOWN", json.dumps(state, cls=PlotlyJSONEncoder))
 
     def test_ingestion_history_is_bounded_and_parameterized(self):
-        client = Mock()
-        client.query.return_value.to_dataframe.return_value = pd.DataFrame()
-        with patch.object(data_loader, "get_bigquery_client", return_value=client):
-            data_loader.load_table_ingestion_logs.uncached(days_back=7, limit=50)
-        sql = client.query.call_args.args[0]
-        params = client.query.call_args.kwargs["job_config"].query_parameters
-        self.assertIn("LIMIT @limit", sql)
-        self.assertIn("INTERVAL @days_back DAY", sql)
-        self.assertEqual(
-            {p.name: p.value for p in params}, {"days_back": 7, "limit": 50}
-        )
+        self.write_telemetry(self.telemetry_payload())
+        rows = self.ingestion_rows()
+        self.write_telemetry(self.telemetry_payload(rows))
+
+        frame = data_loader.load_table_ingestion_logs.uncached(days_back=7, limit=1)
+        self.assertEqual(len(frame), 1)
+        self.assertIn("source_rows", frame.columns)
+        self.assertIn("destination_rows", frame.columns)
 
     def test_ingestion_query_rejects_invalid_bounds_before_fetch(self):
-        with patch.object(data_loader, "get_bigquery_client") as factory:
-            for kwargs in [
-                {"days_back": 0},
-                {"days_back": 366},
-                {"limit": 0},
-                {"limit": 1001},
-                {"limit": "1; DROP"},
-            ]:
-                with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
-                    data_loader.load_table_ingestion_logs.uncached(**kwargs)
-            factory.assert_not_called()
+        for kwargs in [
+            {"days_back": 0},
+            {"days_back": 366},
+            {"limit": 0},
+            {"limit": 1001},
+            {"limit": "1; DROP"},
+        ]:
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                data_loader.load_table_ingestion_logs.uncached(**kwargs)
 
     def test_latest_ingestion_snapshot_is_independent_of_history_window(self):
-        client = Mock()
-        client.query.return_value.to_dataframe.return_value = pd.DataFrame()
-        with patch.object(data_loader, "get_bigquery_client", return_value=client):
-            data_loader.load_table_ingestion_logs.uncached(latest_only=True)
-        sql = client.query.call_args.args[0]
-        self.assertIn("QUALIFY ROW_NUMBER()", sql)
-        self.assertNotIn("TIMESTAMP_SUB", sql)
-        self.assertNotIn("LIMIT", sql)
+        self.write_telemetry(self.telemetry_payload(self.ingestion_rows()))
+
+        frame = data_loader.load_table_ingestion_logs.uncached(latest_only=True)
+        self.assertEqual(len(frame), 2)
+        self.assertEqual(
+            set(frame["target_table"]), {"bronze.crm_cust_info", "bronze.erp_cust_az12"}
+        )
 
     def test_cache_separates_history_parameters_and_latest_snapshot(self):
-        client = Mock()
-        client.query.return_value.to_dataframe.return_value = pd.DataFrame()
-        with patch.object(data_loader, "get_bigquery_client", return_value=client):
+        self.write_telemetry(self.telemetry_payload(self.ingestion_rows()))
+        with patch.object(
+            data_loader,
+            "ingestion_logs_frame",
+            side_effect=lambda **kwargs: pd.DataFrame(),
+        ) as loader:
             data_loader.load_table_ingestion_logs(days_back=7, limit=10)
             data_loader.load_table_ingestion_logs(days_back=7, limit=10)
             data_loader.load_table_ingestion_logs(days_back=14, limit=10)
             data_loader.load_table_ingestion_logs(latest_only=True)
-        self.assertEqual(client.query.call_count, 3)
+        self.assertEqual(loader.call_count, 3)
 
     def test_source_freshness_uses_latest_successful_load_per_source(self):
-        client = Mock()
-        with patch.object(data_loader, "get_bigquery_client", return_value=client):
-            data_loader.load_source_freshness.uncached()
-        sql = client.query.call_args.args[0]
-        self.assertIn("status IN ('pass', 'success')", sql)
-        self.assertIn("PARTITION BY target_table, node_name", sql)
-        self.assertIn("QUALIFY ROW_NUMBER()", sql)
+        self.write_telemetry(self.telemetry_payload(self.ingestion_rows()))
+
+        frame = data_loader.load_source_freshness.uncached()
+        self.assertEqual(
+            set(frame["target_table"]), {"bronze.crm_cust_info", "bronze.erp_cust_az12"}
+        )
+        self.assertIn("hours_since_load", frame.columns)
+        self.assertIn("minutes_since_load", frame.columns)
+        self.assertTrue((frame["hours_since_load"] >= 0).all())
+
+    def test_missing_telemetry_artifact_degrades_to_empty_frames(self):
+        self.write_telemetry({})
+        self.assertTrue(data_loader.load_pipeline_health_summary.uncached().empty)
+        self.assertTrue(data_loader.load_model_coverage_details.uncached().empty)
+        self.assertTrue(data_loader.load_column_coverage_details.uncached().empty)
+        self.assertTrue(data_loader.load_source_freshness.uncached().empty)
+        self.assertTrue(data_loader.load_dbt_execution_logs.uncached().empty)
+        self.assertTrue(data_loader.load_table_ingestion_logs.uncached().empty)
 
     def test_pipeline_handles_null_summary_and_freshness(self):
         summary = pd.DataFrame(
@@ -513,12 +624,17 @@ class DashboardRegressionTests(unittest.TestCase):
             patch.object(
                 self.pipeline, "load_source_freshness", return_value=freshness
             ),
+            patch.object(
+                self.pipeline,
+                "load_model_coverage_details",
+                return_value=pd.DataFrame(),
+            ),
         ):
-            result = self.pipeline.update_pipeline_data("tab-bq-costs")
+            result = self.pipeline.update_pipeline_data("tab-model-coverage")
         self.assertEqual(result[0].children, "N/A")
         self.assertEqual(result[1].children, "N/A")
         self.assertEqual(result[2].children, "0")
-        self.assertTrue(all(value is header.no_update for value in result[12:]))
+        self.assertIs(result[12], header.no_update)
 
     def test_freshness_kpi_reports_oldest_source_not_newest(self):
         freshness = pd.DataFrame(
@@ -531,8 +647,13 @@ class DashboardRegressionTests(unittest.TestCase):
             patch.object(
                 self.pipeline, "load_source_freshness", return_value=freshness
             ),
+            patch.object(
+                self.pipeline,
+                "load_model_coverage_details",
+                return_value=pd.DataFrame(),
+            ),
         ):
-            result = self.pipeline.update_pipeline_data("tab-bq-costs")
+            result = self.pipeline.update_pipeline_data("tab-model-coverage")
         self.assertEqual(result[0].children, "48h")
 
     def test_stale_snapshot_chart_survives_empty_recent_history(self):
@@ -617,6 +738,95 @@ class DashboardRegressionTests(unittest.TestCase):
         self.assertIn("2025-02-15", result["content"])
         self.assertNotIn("2025-01-15", result["content"])
         self.assertTrue(result["filename"].endswith(".csv"))
+
+    @staticmethod
+    def ingestion_rows():
+        """Two loads of the same table plus one load of a second table.
+
+        The timestamps are relative to now so the ``days_back`` window in the
+        reader stays observable regardless of when the suite runs.
+        """
+        now = datetime.now(UTC)
+        old = (now - timedelta(days=20)).isoformat()
+        recent = (now - timedelta(days=2)).isoformat()
+        recent_later = (now - timedelta(days=1)).isoformat()
+        return [
+            {
+                "log_id": "1",
+                "run_timestamp": old,
+                "resource_type": "csv_to_duckdb",
+                "table_name": "source_crm/cust_info.csv",
+                "target_table": "bronze.crm_cust_info",
+                "source_rows": 100,
+                "destination_rows": 100,
+                "rows_inserted": 100,
+                "duration_seconds": 0.5,
+                "status": "success",
+                "error_message": None,
+            },
+            {
+                "log_id": "2",
+                "run_timestamp": recent,
+                "resource_type": "csv_to_duckdb",
+                "table_name": "source_crm/cust_info.csv",
+                "target_table": "bronze.crm_cust_info",
+                "source_rows": 120,
+                "destination_rows": 120,
+                "rows_inserted": 120,
+                "duration_seconds": 0.6,
+                "status": "success",
+                "error_message": None,
+            },
+            {
+                "log_id": "3",
+                "run_timestamp": recent_later,
+                "resource_type": "csv_to_duckdb",
+                "table_name": "source_erp/CUST_AZ12.csv",
+                "target_table": "bronze.erp_cust_az12",
+                "source_rows": 50,
+                "destination_rows": 50,
+                "rows_inserted": 50,
+                "duration_seconds": 0.2,
+                "status": "success",
+                "error_message": None,
+            },
+        ]
+
+    @staticmethod
+    def source_freshness_rows(ingestion_rows):
+        """Newest successful load per target table."""
+        latest: dict = {}
+        for row in ingestion_rows:
+            if row.get("status") != "success":
+                continue
+            target = row["target_table"]
+            current = latest.get(target)
+            if current is None or row["run_timestamp"] > current["last_loaded"]:
+                latest[target] = {
+                    "source_table": row["table_name"],
+                    "target_table": target,
+                    "last_loaded": row["run_timestamp"],
+                }
+        return list(latest.values())
+
+    @classmethod
+    def telemetry_payload(cls, ingestion_rows=None):
+        rows = ingestion_rows or []
+        return {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "summary": {
+                "last_dbt_run": datetime.now(UTC).isoformat(),
+                "passed_tests": 10,
+                "failed_tests": 0,
+                "warning_tests": 0,
+                "overall_system_status": "HEALTHY",
+            },
+            "execution_logs": [],
+            "model_coverage": [],
+            "column_coverage": [],
+            "source_freshness": cls.source_freshness_rows(rows),
+            "ingestion_logs": rows,
+        }
 
 
 if __name__ == "__main__":

@@ -1,15 +1,3 @@
-/* @datacloud.settings
-{
-  "version": 1,
-  "service": "BIG_QUERY",
-  "connectionInfo": {
-    "billingProjectId": "INHERIT",
-    "location": "us-central1"
-  },
-  "dialect": "GOOGLE_SQL"
-}
-*/
-
 WITH source AS (
     SELECT * FROM {{ source('bronze_source', 'erp_cust_az12') }}
 ),
@@ -22,8 +10,8 @@ parsed_erp AS (
         END AS cid,
 
         COALESCE(
-            SAFE.PARSE_DATE('%Y-%m-%d', bdate),
-            SAFE.PARSE_DATE('%Y%m%d', bdate)
+            {{ qe_safe_parse_date('%Y-%m-%d', 'bdate') }},
+            {{ qe_safe_parse_date('%Y%m%d', 'bdate') }}
         ) AS bdate,
 
         CASE
@@ -37,9 +25,9 @@ SELECT
     cid,
     -- Replaces future birth dates with NULL
     CASE
-        WHEN bdate > CURRENT_DATE() THEN null
+        WHEN bdate > {{ qe_current_date() }} THEN null
         ELSE bdate
     END AS bdate,
     gen,
-    CURRENT_TIMESTAMP() AS ingested_at
+    {{ qe_current_timestamp() }} AS ingested_at
 FROM parsed_erp

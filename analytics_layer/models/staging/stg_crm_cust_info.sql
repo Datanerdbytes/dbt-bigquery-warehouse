@@ -1,15 +1,3 @@
-/* @datacloud.settings
-{
-  "version": 1,
-  "service": "BIG_QUERY",
-  "connectionInfo": {
-    "billingProjectId": "INHERIT",
-    "location": "us-central1"
-  },
-  "dialect": "GOOGLE_SQL"
-}
-*/
-
 WITH source AS (
     SELECT * FROM {{ source('bronze_source', 'crm_cust_info') }}
 ),
@@ -19,15 +7,15 @@ ranked_records AS (
         *,
         -- drop duplicates
         row_number() OVER (
-            PARTITION BY cast(cst_id AS int64)
-            ORDER BY cast(cst_create_date AS timestamp) DESC
+            PARTITION BY cast(cst_id AS BIGINT)
+            ORDER BY cast(cst_create_date AS TIMESTAMP) DESC
         ) AS row_num
     FROM source
     WHERE cst_id IS NOT null
 )
 
 SELECT
-    safe_cast(cst_id AS int64) AS cst_id,
+    {{ qe_safe_cast('cst_id', 'BIGINT') }} AS cst_id,
     trim(cst_key) AS cst_key,
     trim(cst_firstname) AS cst_firstname,
     trim(cst_lastname) AS cst_lastname,
@@ -42,7 +30,7 @@ SELECT
         WHEN upper(trim(cst_gndr)) = 'M' THEN 'Male'
     END AS cst_gndr,
 
-    cast(cst_create_date AS date) AS cst_create_date,
-    current_timestamp() AS ingested_at
+    cast(cst_create_date AS DATE) AS cst_create_date,
+    {{ qe_current_timestamp() }} AS ingested_at
 FROM ranked_records
 WHERE row_num = 1

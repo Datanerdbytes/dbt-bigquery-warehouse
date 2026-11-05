@@ -34,6 +34,7 @@ from dash import (
 # pyrefly: ignore [missing-import]
 from data_loader import get_prepared_dataset
 from flask import Flask
+from keepawake import install_keepawake
 
 # pyrefly: ignore [missing-import]
 from theme import initialize_chart_templates
@@ -49,6 +50,9 @@ initialize_chart_templates()
 # Register authentication before Dash request hooks.
 server = Flask(__name__)
 install_auth(server)
+
+# The scheduled keep-wake keeps the free Supabase project from pausing.
+install_keepawake(server)
 
 # Initialize App
 app = Dash(

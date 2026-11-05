@@ -29,3 +29,4 @@ allow_implicit = False
 [sqlfluff:templater:jinja]
 apply_dbt_builtins = True
 library_path = sqlfluff_libs
+load_macros_from_path = sqlfluff_macros

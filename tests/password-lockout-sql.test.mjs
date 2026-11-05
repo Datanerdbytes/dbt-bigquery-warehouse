@@ -6,29 +6,19 @@ import { readFileSync } from "node:fs";
 const { PGlite } = await import(
   process.env.QE_PGLITE_MODULE || "@electric-sql/pglite"
 );
+const MIGRATIONS = [
+  "supabase/migrations/202610190001_password_lockout.sql",
+  "supabase/migrations/202610190002_account_deletion_guard.sql",
+  "supabase/migrations/202610190003_administrator_access_guard.sql",
+];
 let db;
 before(async () => {
   db = new PGlite();
   await db.exec(`create role anon; create role authenticated; create role service_role;
     create schema auth; create table auth.users(id uuid primary key, email text, encrypted_password text, raw_app_meta_data jsonb default '{}', banned_until timestamptz);`);
-  await db.exec(
-    readFileSync(
-      "supabase/migrations/202610190001_password_lockout.sql",
-      "utf8",
-    ),
-  );
-  await db.exec(
-    readFileSync(
-      "supabase/migrations/202610190002_account_deletion_guard.sql",
-      "utf8",
-    ),
-  );
-  await db.exec(
-    readFileSync(
-      "supabase/migrations/202610190003_administrator_access_guard.sql",
-      "utf8",
-    ),
-  );
+  for (const file of MIGRATIONS) {
+    await db.exec(readFileSync(file, "utf8"));
+  }
 });
 beforeEach(async () =>
   db.exec("truncate public.qe_password_attempts, auth.users;"),
@@ -173,6 +163,12 @@ test("browser roles cannot read counters or call privileged RPC", async () => {
   await db.exec("set role service_role");
   try {
     assert.equal((await attempt("start")).allowed, true);
+    // The keep-wake cron reads this table with the service-role key, so the
+    // grant must not depend on the platform's default privileges.
+    const { rows } = await db.query(
+      "select email from public.qe_password_attempts limit 1",
+    );
+    assert.equal(rows.length, 1);
   } finally {
     await db.exec("reset role");
   }
@@ -181,6 +177,18 @@ test("browser roles cannot read counters or call privileged RPC", async () => {
 async function guardReady() {
   return (
     await db.query("select public.qe_account_deletion_guard_ready() as result")
+  ).rows[0].result.ready;
+}
+async function adminGuardReady() {
+  return (
+    await db.query(
+      "select public.qe_administrator_access_guard_ready() as result",
+    )
+  ).rows[0].result.ready;
+}
+async function lockoutReady() {
+  return (
+    await db.query("select public.qe_password_lockout_ready() as result")
   ).rows[0].result.ready;
 }
 async function member(metadata = {}, bannedUntil = null) {
@@ -290,5 +298,79 @@ test("parallel promotion and suspension cannot leave a suspended administrator",
   );
   await db.exec(
     `update auth.users set raw_app_meta_data='{"qe_role":"admin"}'`,
+  );
+});
+
+test("an owner recorded as a string is still protected from deletion", async () => {
+  // Model a pre-existing account whose owner flag was written as a string.
+  await db.exec(
+    "alter table auth.users disable trigger qe_guard_administrator_access",
+  );
+  try {
+    await member({ qe_owner: "true", qe_suspended: true });
+  } finally {
+    await db.exec(
+      "alter table auth.users enable trigger qe_guard_administrator_access",
+    );
+  }
+  await assert.rejects(
+    db.exec("delete from auth.users"),
+    /Only suspended non-administrator/,
+  );
+  assert.equal(
+    (await db.query("select count(*) as total from auth.users")).rows[0].total,
+    1,
+  );
+});
+
+test("a suspension recorded as a string still blocks a suspended administrator", async () => {
+  await member({});
+  await assert.rejects(
+    db.exec(
+      `update auth.users set raw_app_meta_data='{"qe_role":"admin","qe_suspended":"true"}'`,
+    ),
+    /Revoke administrator access/,
+  );
+  await assert.rejects(
+    db.exec(
+      `update auth.users set raw_app_meta_data='{"qe_owner":"true","qe_suspended":"true"}'`,
+    ),
+    /Revoke administrator access/,
+  );
+});
+
+test("a malformed suspension value leaves the account undeletable", async () => {
+  // The app writes qe_suspended as a JSON boolean. A value it cannot read is
+  // not proof of suspension, so the deletion guard refuses the deletion.
+  await member({ qe_suspended: "yes" });
+  await assert.rejects(
+    db.exec("delete from auth.users"),
+    /Only suspended non-administrator/,
+  );
+});
+
+test("the lockout readiness RPC reports the trigger state", async () => {
+  assert.equal(await lockoutReady(), true);
+  await db.exec("alter table auth.users disable trigger qe_password_changed");
+  try {
+    assert.equal(await lockoutReady(), false);
+  } finally {
+    await db.exec("alter table auth.users enable trigger qe_password_changed");
+  }
+  assert.equal(await lockoutReady(), true);
+});
+
+test("the migrations can be applied again without failing", async () => {
+  for (const file of MIGRATIONS) {
+    await db.exec(readFileSync(file, "utf8"));
+  }
+  assert.equal(await lockoutReady(), true);
+  assert.equal(await guardReady(), true);
+  assert.equal(await adminGuardReady(), true);
+  await member({ qe_suspended: true });
+  await db.exec("delete from auth.users");
+  assert.equal(
+    (await db.query("select count(*) as total from auth.users")).rows[0].total,
+    0,
   );
 });

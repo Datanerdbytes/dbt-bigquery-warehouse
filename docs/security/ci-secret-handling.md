@@ -1,43 +1,44 @@
-# CI Secret Handling
+# CI Credential Handling
 
-This document describes how the CI/CD pipeline (`.github/workflows/ci_pipeline.yml`)
-handles sensitive credentials, the limits of GitHub's automatic secret masking, and
-the guardrails that keep derived or transformed secret values out of logs, artifacts,
-caches, step summaries, and debug bundles.
+This document describes the credential posture of the CI/CD pipeline
+(`.github/workflows/ci_pipeline.yml`) and the guardrails that keep sensitive
+values out of logs, artifacts, caches, step summaries, and debug bundles.
 
 ## Credential Sources
 
-The only credential-bearing input in this pipeline is the repository secret
-`secrets.GCP` (a GCP service-account JSON key). It is injected in two places:
+**There are none.** The BigQuery warehouse this project built against was
+deleted, so the pipeline no longer holds, references, or needs any cloud
+credential:
 
-1. `validate-and-test` → `Setup GCP & dbt Profile` step, as the `GCP_SA_KEY`
-   environment variable, used to materialize a temporary keyfile for dbt.
-2. `deploy-cloud-run` → `Google Auth` step, passed as `credentials_json` to the
-   `google-github-actions/auth@v2` action.
+- The dbt build runs against a local DuckDB file. The bronze tables are
+  loaded from the versioned source CSVs in `data/raw/`, and the profile in
+  `analytics_layer/profiles.yml` resolves every path from an environment
+  variable — it contains no key material.
+- The `deploy-cloud-run` job and the `google-github-actions/auth` step were
+  removed along with the deleted GCP project.
+- The Supabase configuration used by the dashboard is public (anon key only)
+  and is never injected as a CI secret.
 
-No other secret, API key, token, or password is referenced by the workflow. The
-Supabase configuration used by the dashboard is public (anon key only) and is not
-injected as a secret here.
+## Guardrails
 
-## Safe Handling Rules
+These are enforced by `tests/test_ci_secret_handling.py`, which parses the
+workflow YAML statically and never touches a real secret or a hosted runner:
 
-- **Never echo the secret.** The workflow no longer prints the key length, a
-  success banner that includes the value, or any derived/transformed form of the
-  key. Only the boolean outcome of the presence check and the existence of the
-  materialized file can appear in logs.
-- **Materialize to a single restricted file.** The key is written to
-  `/tmp/gcp_key.json` (and the dbt profile to `~/.dbt/profiles.yml`) with `umask 077`
-  and an explicit `chmod 600`. The file path is logged; the file contents are not.
-- **Keep credentials out of command arguments.** The key is never passed on a
-  command line. It reaches dbt through the `keyfile:` field of the profile YAML, and
-  it reaches the deploy action through the action's own `credentials_json` input.
-- **Cleanup runs on both success and failure.** The `Cleanup Service Account Key &
-  Profile` step uses `if: always()` and removes `/tmp/gcp_key.json` and
-  `~/.dbt/profiles.yml`, so no secret-bearing file survives a failed job.
-- **No secret-bearing artifacts or caches.** The workflow produces no uploaded
-  artifacts, caches, or debug bundles that could contain the key. The dbt compile
-  output and test results are text reports; the Docker image is built from the
-  checked-out source, not from the credential materialization.
+- **No cloud credential reference.** The workflow must not mention
+  `secrets.GCP`, `GOOGLE_APPLICATION_CREDENTIALS`, a `credentials_json` action
+  input, or any materialized keyfile path.
+- **No ambient cloud authentication.** No step may configure a cloud auth
+  action, and no step may invoke `gcloud`, `bq`, or `gsutil` — those would
+  authenticate with whatever credentials the runner happened to have.
+- **No credential file is materialized.** Nothing may write a keyfile into the
+  workspace or into `~/.dbt/`, so a failed job cannot leave credential
+  material behind for a later step.
+- **No secret-bearing artifacts.** The workflow uploads no artifacts and
+  configures no caches, so nothing can carry credential material off the
+  runner.
+- **The committed dbt profile holds no key material.** Its `keyfile` entry —
+  in the retained BigQuery target, which is not used by CI — must resolve
+  through an environment variable, never a literal path or key.
 
 ## Limits of GitHub Secret Masking
 
@@ -54,15 +55,18 @@ this protection has well-known limits:
   context, or from printing the secret inside a larger string where the exact
   match is broken by escaping or concatenation.
 
-For these reasons this pipeline avoids relying on masking alone: it does not print
-the secret or any derived form of it at all.
+The current posture sidesteps all of this by holding no secret at all. If a
+credential is ever reintroduced — for example a Vercel deploy token or a
+registry login — these limits apply again, and the pipeline should avoid
+relying on masking alone: it must not print the secret or any derived form of
+it.
 
 ## Verification
 
-Local verification uses only non-sensitive synthetic marker strings in an
-isolated harness. A local harness **cannot** prove that GitHub masks secrets on a
-hosted runner, and this document makes no such claim. The CI job must be reviewed
-in GitHub Actions with a registered secret to confirm masking behavior there.
+Local verification uses only the static workflow parse described above. A local
+harness **cannot** prove that GitHub masks secrets on a hosted runner, and this
+document makes no such claim. Any reintroduced secret must be reviewed in
+GitHub Actions to confirm masking behavior there.
 
 ## Related
 
