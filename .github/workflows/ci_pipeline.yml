@@ -84,6 +84,8 @@ jobs:
     needs: [validate-and-test]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4.2.2
@@ -92,4 +94,4 @@ jobs:
         run: npm install -g vercel@latest
 
       - name: Deploy to Vercel production
-        run: vercel --prod --token ${{ secrets.VERCEL_TOKEN }}
+        run: vercel --prod
