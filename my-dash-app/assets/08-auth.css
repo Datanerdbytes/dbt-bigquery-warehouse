@@ -155,6 +155,25 @@ html[data-auth-ready="true"] #auth-session-loading {
   font-size: 13px;
   margin-top: 24px;
 }
+.auth-about {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--dashboard-border);
+  text-align: center;
+  color: var(--dashboard-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.auth-about-statement {
+  margin: 0;
+}
+.auth-about-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 8px 0 0;
+}
 .auth-card a:not(.auth-brand) {
   color: var(--dashboard-accent);
 }
@@ -820,6 +839,9 @@ html[data-auth-ready="true"] #auth-session-loading {
   color: var(--dashboard-muted);
   font-size: 12px;
 }
+.landing-footer a {
+  color: var(--dashboard-accent);
+}
 .landing-skip-link {
   position: absolute;
   left: 24px;
@@ -926,6 +948,10 @@ html[data-auth-ready="true"] #auth-session-loading {
 .auth-dedicated .auth-note {
   margin-top: 6px;
   font-size: 12px;
+}
+.auth-dedicated .auth-about {
+  margin-top: 14px;
+  padding-top: 12px;
 }
 .auth-dedicated .auth-hint {
   margin: 6px 0 0;
