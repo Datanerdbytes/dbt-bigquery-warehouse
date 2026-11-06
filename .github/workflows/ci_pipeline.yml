@@ -79,3 +79,17 @@ jobs:
             --out "$RUNNER_TEMP/pipeline_telemetry.json"
           uv run --locked python -B Scripts/verify_shipped_telemetry.py \
             --built "$RUNNER_TEMP/pipeline_telemetry.json"
+
+  deploy:
+    needs: [validate-and-test]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4.2.2
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Deploy to Vercel production
+        run: vercel --prod --token ${{ secrets.VERCEL_TOKEN }}
