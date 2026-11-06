@@ -94,4 +94,4 @@ jobs:
         run: npm install -g vercel@latest
 
       - name: Deploy to Vercel production
-        run: vercel --prod --yes
+        run: vercel --prod --yes --project adventureworks-analytics
