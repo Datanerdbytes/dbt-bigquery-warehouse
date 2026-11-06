@@ -12,7 +12,7 @@ from components.kpi_sparklines import kpi_sparkline_figures, sparkline_descripti
 
 # pyrefly: ignore [missing-import]
 from components.panels import chart_panel, create_grid, loading, panel
-from dash import Input, Output, callback, html
+from dash import Input, Output, callback, html, no_update
 
 # pyrefly: ignore [missing-import]
 from data_loader import get_prepared_dataset
@@ -114,6 +114,9 @@ def populate_c360_filter_bar(_):
     prevent_initial_call=True,
 )
 def sync_c360_filters_to_store(start_date, end_date, category, country):
+    if not start_date or not end_date:
+        return no_update
+
     return {
         "start_date": start_date,
         "end_date": end_date,
@@ -149,26 +152,12 @@ def sync_c360_filters_to_store(start_date, end_date, category, country):
     Input("global-filter-store", "data"),
 )
 def update_customer_kpis(filter_data):
-    sparklines = kpi_sparkline_figures(page="customer")
     empty_badge = dbc.Badge("N/A", color="secondary", className="small")
 
+    # A filter without a date range carries no selection yet. Leaving the
+    # current cards untouched keeps a late response from blanking them.
     if not filter_data:
-        return (
-            "0",
-            "$0",
-            "0.00",
-            "0%",
-            empty_badge,
-            empty_badge,
-            empty_badge,
-            empty_badge,
-            "",
-            "",
-            "",
-            "",
-            *sparklines,
-            *sparkline_descriptions(sparklines, "customer"),
-        )
+        return (no_update,) * 20
 
     start_date = filter_data.get("start_date")
     end_date = filter_data.get("end_date")
@@ -176,22 +165,7 @@ def update_customer_kpis(filter_data):
     selected_country = filter_data.get("country")
 
     if not start_date or not end_date:
-        return (
-            "0",
-            "$0",
-            "0.00",
-            "0%",
-            empty_badge,
-            empty_badge,
-            empty_badge,
-            empty_badge,
-            "",
-            "",
-            "",
-            "",
-            *sparklines,
-            *sparkline_descriptions(sparklines, "customer"),
-        )
+        return (no_update,) * 20
 
     df_merged = get_prepared_dataset()
 
@@ -323,12 +297,15 @@ def update_customer_kpis(filter_data):
 )
 def update_rfm_segments(filter_data):
     if not filter_data:
-        return style_figure(px.bar(title="No Data"))
+        return no_update
 
     start_date = filter_data.get("start_date")
     end_date = filter_data.get("end_date")
     selected_category = filter_data.get("category")
     selected_country = filter_data.get("country")
+
+    if not start_date or not end_date:
+        return no_update
 
     df_merged = get_prepared_dataset()
     filtered_df = filter_dataframe(
@@ -407,12 +384,15 @@ def update_rfm_segments(filter_data):
 )
 def update_spend_distribution(filter_data):
     if not filter_data:
-        return style_figure(px.histogram(title="No Data"))
+        return no_update
 
     start_date = filter_data.get("start_date")
     end_date = filter_data.get("end_date")
     selected_category = filter_data.get("category")
     selected_country = filter_data.get("country")
+
+    if not start_date or not end_date:
+        return no_update
 
     df_merged = get_prepared_dataset()
     filtered_df = filter_dataframe(
@@ -466,15 +446,17 @@ def update_spend_distribution(filter_data):
 )
 def update_top_customers_table(filter_data):
     if not filter_data:
-        return html.Div(
-            "No transactions found for selection.",
-            className="text-muted p-3 text-center",
-        )
+        return no_update
 
     start_date = filter_data.get("start_date")
     end_date = filter_data.get("end_date")
     selected_category = filter_data.get("category")
     selected_country = filter_data.get("country")
+
+    # A filter without a date range carries no selection yet. Leaving the
+    # current table untouched keeps a late response from blanking the panel.
+    if not start_date or not end_date:
+        return no_update
 
     df_merged = get_prepared_dataset()
     filtered_df = filter_dataframe(
@@ -527,12 +509,15 @@ def update_top_customers_table(filter_data):
 )
 def update_customer_trend(filter_data):
     if not filter_data:
-        return style_figure(px.line(title="No Data"))
+        return no_update
 
     start_date = filter_data.get("start_date")
     end_date = filter_data.get("end_date")
     selected_category = filter_data.get("category")
     selected_country = filter_data.get("country")
+
+    if not start_date or not end_date:
+        return no_update
 
     df_merged = get_prepared_dataset()
     filtered_df = filter_dataframe(

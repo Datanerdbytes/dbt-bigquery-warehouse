@@ -5,15 +5,18 @@ from dash import dcc, html
 def create_filter_bar(
     df_merged, date_picker_id, category_dropdown_id, country_dropdown_id
 ):
-    # Handle empty DataFrame safely
-    if df_merged is None or df_merged.empty:
-        min_date_allowed = "2023-01-01"
-        max_date_allowed = "2026-12-31"
-        default_start_date = "2023-01-01"
-        default_end_date = "2026-12-31"
-        category_options = [{"label": "All Categories", "value": "ALL"}]
-        country_options = [{"label": "All Countries", "value": "ALL"}]
-    else:
+    # A bar built without the dataset must not select a date window: the
+    # selected range is published to the shared filter store, and a window that
+    # lies outside the dataset renders the dashboard empty.
+    min_date_allowed = "2023-01-01"
+    max_date_allowed = "2026-12-31"
+    default_start_date = None
+    default_end_date = None
+    visible_month = min_date_allowed
+    category_options = [{"label": "All Categories", "value": "ALL"}]
+    country_options = [{"label": "All Countries", "value": "ALL"}]
+
+    if df_merged is not None and not df_merged.empty:
         # Detect category and country columns dynamically
         cat_col = next(
             (
@@ -33,14 +36,12 @@ def create_filter_bar(
         )
 
         # Build options
-        category_options = [{"label": "All Categories", "value": "ALL"}]
         if cat_col:
             category_options += [
                 {"label": str(cat), "value": str(cat)}
                 for cat in sorted(df_merged[cat_col].dropna().unique())
             ]
 
-        country_options = [{"label": "All Countries", "value": "ALL"}]
         if country_col:
             country_options += [
                 {"label": str(country), "value": str(country)}
@@ -62,20 +63,7 @@ def create_filter_bar(
                 latest_year_dates = dates[dates.dt.year == latest_year]
                 default_start_date = latest_year_dates.min().strftime("%Y-%m-%d")
                 default_end_date = latest_year_dates.max().strftime("%Y-%m-%d")
-            else:
-                (
-                    min_date_allowed,
-                    max_date_allowed,
-                    default_start_date,
-                    default_end_date,
-                ) = ("2023-01-01", "2026-12-31", "2023-01-01", "2026-12-31")
-        else:
-            min_date_allowed, max_date_allowed, default_start_date, default_end_date = (
-                "2023-01-01",
-                "2026-12-31",
-                "2023-01-01",
-                "2026-12-31",
-            )
+                visible_month = default_start_date
 
     return html.Div(
         [
@@ -88,7 +76,7 @@ def create_filter_bar(
                         id=date_picker_id,
                         min_date_allowed=min_date_allowed,
                         max_date_allowed=max_date_allowed,
-                        initial_visible_month=default_start_date,
+                        initial_visible_month=visible_month,
                         start_date=default_start_date,
                         end_date=default_end_date,
                         display_format="YYYY-MM-DD",

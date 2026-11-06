@@ -218,6 +218,12 @@ def populate_overview_filter_bar(_):
     prevent_initial_call=True,
 )
 def update_filter_store(start_date, end_date, category, country):
+    # The filter bar is rendered twice: a placeholder without a date window
+    # first, then the real bar once the dataset is loaded. Publishing the
+    # placeholder would overwrite a real selection with an empty one.
+    if not start_date or not end_date:
+        return no_update
+
     return {
         "start_date": start_date,
         "end_date": end_date,
@@ -463,15 +469,17 @@ def update_category_pie(filter_data, view="donut"):
         return figure, title, details, view == "donut", view == "map"
 
     if not filter_data:
-        return result(style_figure(px.scatter(title="Select a date range")))
+        return (no_update,) * 5
 
     start_date = filter_data.get("start_date")
     end_date = filter_data.get("end_date")
     selected_category = filter_data.get("category")
     selected_country = filter_data.get("country")
 
+    # A filter without a date range carries no selection yet. Leaving the
+    # current chart untouched keeps a late response from blanking the panel.
     if not start_date or not end_date:
-        return result(style_figure(px.scatter(title="Select a date range")))
+        return (no_update,) * 5
 
     df_merged = get_prepared_dataset()
     filtered_df = filter_dataframe(
@@ -561,12 +569,16 @@ def update_category_pie(filter_data, view="donut"):
 @callback(Output("top-products-grid", "rowData"), Input("global-filter-store", "data"))
 def update_top_products(filter_data):
     if not filter_data:
-        return []
+        return no_update
+    start_date = filter_data.get("start_date")
+    end_date = filter_data.get("end_date")
+    if not start_date or not end_date:
+        return no_update
     df_merged = get_prepared_dataset()
     filtered = filter_dataframe(
         df_merged,
-        filter_data.get("start_date"),
-        filter_data.get("end_date"),
+        start_date,
+        end_date,
         filter_data.get("category"),
         filter_data.get("country"),
     )

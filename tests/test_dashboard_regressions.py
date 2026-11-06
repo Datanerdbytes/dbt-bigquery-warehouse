@@ -793,6 +793,109 @@ class DashboardRegressionTests(unittest.TestCase):
         ]
 
     @staticmethod
+    def find_component(component, component_id):
+        """Return the props of the component carrying ``component_id``."""
+        if isinstance(component, (list, tuple)):
+            for child in component:
+                found = DashboardRegressionTests.find_component(child, component_id)
+                if found is not None:
+                    return found
+            return None
+        if not hasattr(component, "to_plotly_json"):
+            return None
+        props = component.to_plotly_json()["props"]
+        if props.get("id") == component_id:
+            return props
+        return DashboardRegressionTests.find_component(
+            props.get("children"), component_id
+        )
+
+    def test_placeholder_filter_bar_publishes_no_date_window(self):
+        """The bar rendered before the dataset loads must not select a window.
+
+        The selected range reaches every reader of the shared filter store, so a
+        placeholder window outside the dataset blanks the whole dashboard.
+        """
+        from components.filter_bar import create_filter_bar
+
+        props = self.find_component(
+            create_filter_bar(
+                pd.DataFrame(),
+                date_picker_id="date-picker-range",
+                category_dropdown_id="category-dropdown",
+                country_dropdown_id="country-dropdown",
+            ),
+            "date-picker-range",
+        )
+        self.assertIsNotNone(props)
+        self.assertIsNone(props["start_date"])
+        self.assertIsNone(props["end_date"])
+
+    def test_filter_store_writers_skip_an_incomplete_date_window(self):
+        overview = sys.modules["pages.overview"]
+        customer = sys.modules["pages.customer_360"]
+
+        self.assertIs(
+            overview.update_filter_store(None, None, "ALL", "ALL"),
+            overview.no_update,
+        )
+        self.assertIs(
+            overview.update_filter_store("2014-01-01", None, "ALL", "ALL"),
+            overview.no_update,
+        )
+        self.assertIs(
+            customer.sync_c360_filters_to_store(None, None, "ALL", "ALL"),
+            customer.no_update,
+        )
+        self.assertEqual(
+            overview.update_filter_store("2014-01-01", "2014-01-28", "ALL", "ALL"),
+            dict(
+                start_date="2014-01-01",
+                end_date="2014-01-28",
+                category="ALL",
+                country="ALL",
+            ),
+        )
+
+    def test_store_readers_ignore_a_filter_without_a_date_range(self):
+        """A dateless filter must leave every panel untouched."""
+        overview = sys.modules["pages.overview"]
+        customer = sys.modules["pages.customer_360"]
+        dateless = dict(start_date=None, end_date=None, category="ALL", country="ALL")
+
+        with patch.object(
+            overview,
+            "get_prepared_dataset",
+            side_effect=AssertionError("dataset must not be read"),
+        ):
+            self.assertEqual(
+                overview.update_all_kpis(dateless), (overview.no_update,) * 20
+            )
+            self.assertIs(overview.update_sales_trend(dateless), overview.no_update)
+            self.assertEqual(
+                overview.update_category_pie(dateless), (overview.no_update,) * 5
+            )
+            self.assertIs(overview.update_top_products(dateless), overview.no_update)
+            self.assertIs(overview.update_regional_sales(dateless), overview.no_update)
+
+        with patch.object(
+            customer,
+            "get_prepared_dataset",
+            side_effect=AssertionError("dataset must not be read"),
+        ):
+            self.assertEqual(
+                customer.update_customer_kpis(dateless), (customer.no_update,) * 20
+            )
+            self.assertIs(customer.update_rfm_segments(dateless), customer.no_update)
+            self.assertIs(
+                customer.update_spend_distribution(dateless), customer.no_update
+            )
+            self.assertIs(
+                customer.update_top_customers_table(dateless), customer.no_update
+            )
+            self.assertIs(customer.update_customer_trend(dateless), customer.no_update)
+
+    @staticmethod
     def source_freshness_rows(ingestion_rows):
         """Newest successful load per target table."""
         latest: dict = {}
