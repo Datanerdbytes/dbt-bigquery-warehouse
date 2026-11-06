@@ -142,6 +142,7 @@ demo-database/
 
 ### Deployment targets
 - **Vercel (current):** the function entrypoint is `wsgi.py` at the repository root. It puts `my-dash-app/` on `sys.path` and re-exports the Flask server as `app`. Vercel discovers that file by name; do not add another root-level `app.py`, `index.py`, `server.py`, `main.py` or `asgi.py`, and do not move the entrypoint into an `api/` directory, which would turn it into a file-based route instead of the whole application.
+- `vercel.json` must declare `"framework": "flask"`. Without a framework preset the runtime never looks for a root entrypoint: the build succeeds, produces no function, and every route answers with a static 404. Keep the preset when the config changes.
 - `vercel.json` configures the function keyed by `wsgi.py`: `maxDuration` and `excludeFiles`. The exclusion list must keep `my-dash-app/assets/`, `my-dash-app/data/`, `my-dash-app/templates/`, `my-dash-app/pages/`, `my-dash-app/components/`, `utils/` and `wsgi.py`, and must drop `node_modules/`, `.venv/`, `analytics_layer/`, `data/`, `tests/` and `Notebooks/`.
 - `.vercelignore` governs what is uploaded. It is not `.gitignore`: a local deploy would otherwise upload the virtualenv, the dbt project and the credentials. Keep `.env` and `gcp-key.json` excluded there.
 - The deployed app must not write to disk. The cache is in-process, DuckDB opens the shipped database `read_only=True`, and both artifact paths are resolved relative to the package, never to the working directory.

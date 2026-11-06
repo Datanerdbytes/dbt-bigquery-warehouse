@@ -313,6 +313,9 @@ class EntrypointTest(unittest.TestCase):
 class PackagingConfigTest(unittest.TestCase):
     def test_vercel_json_targets_the_entrypoint(self):
         config = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))
+        # Without an explicit framework preset the runtime ignores a root
+        # entrypoint and the build produces no function at all.
+        self.assertEqual(config["framework"], "flask")
         functions = config["functions"]
         self.assertIn("wsgi.py", functions)
         self.assertEqual(functions["wsgi.py"]["maxDuration"], 300)

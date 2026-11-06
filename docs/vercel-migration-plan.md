@@ -1,7 +1,7 @@
 # Redeploy Plan: Cloud Run + BigQuery → Vercel
 
-**Status:** Phases 1–2 and 5 complete, and the repository side of Phase 3 — the dbt transformation layer is rebuilt on DuckDB, the shippable gold database is built and verified, the app reads that database plus a shipped telemetry artifact instead of BigQuery, the application is packaged for Vercel, and the Supabase auth contract is in place. The Supabase console steps, Phase 4 and Phase 6 remain.
-**Date:** 2026-11-05 (Phase 1 delivered 2026-11-06, Phase 2 delivered 2026-11-06, Phase 5 delivered 2026-11-06, Phase 3 repository side delivered 2026-11-06)
+**Status:** Phases 1–2 and 5 complete, and the repository side of Phase 3 — the dbt transformation layer is rebuilt on DuckDB, the shippable gold database is built and verified, the app reads that database plus a shipped telemetry artifact instead of BigQuery, the application is packaged for Vercel, and the Supabase auth contract is in place. The new Supabase project exists, is migrated and is configured through the Management API, and the app is deployed and serving at `https://adventureworks-analytics-snowy.vercel.app`. What remains is the OAuth apps, the owner account, Phase 4, and the live auth tests in Phase 6.
+**Date:** 2026-11-05 (Phase 1 delivered 2026-11-06, Phase 2 delivered 2026-11-06, Phase 5 delivered 2026-11-06, Phase 3 repository side delivered 2026-11-06, Phase 6 KPI fixture test delivered 2026-11-06, first production deployment delivered 2026-11-06)
 **Scope:** Rebuild the data transformation layer without BigQuery, replace the dead auth provider, and package the Dash app for Vercel.
 
 ---
@@ -524,7 +524,7 @@ Measured installed sizes of the app's dependencies: `dash` 35.7 MB, `plotly` 36.
 6. ✅ `Scripts/export_pipeline_telemetry.py` + `Scripts/verify_shipped_telemetry.py` build and gate the shipped telemetry artifact; the gate runs in CI after the dbt build.
 
 ### Phase 3 — Auth (option A: new Supabase project)
-**Status: the repository side shipped 2026-11-06; the console steps are yours.**
+**Status: the repository side shipped 2026-11-06. The project was created, migrated, configured through the Management API and deployed on 2026-11-06. What remains is the OAuth apps, the owner account and the live auth tests.**
 
 The code needed no rewrite. The app reads the project URL and the keys from the
 environment, the guards live in three replayable SQL migrations, and the
@@ -541,12 +541,12 @@ frontend keeps the Supabase PKCE client. Two additions shipped with this phase:
 **The console steps need your account and a browser.** The full runbook is
 [docs/supabase-auth.md](file:///Users/roelsomido/demo-database/docs/supabase-auth.md):
 
-1. Create the free project and collect the URL, the `anon` key and the `service_role` key.
-2. Apply the three migrations in the SQL editor, in order. Each file is re-appliable, so a second run does not fail.
-3. Enable Google and GitHub, and add `<origin>` and `<origin>/auth/callback` to the redirect URLs. The Google and GitHub consoles want the Supabase callback `https://<project-ref>.supabase.co/auth/v1/callback`, not the app's own callback.
-4. Set the deployment variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `AUTH_APP_ORIGIN`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_PASSWORD_LOCKOUT_ENABLED`, `CRON_SECRET`.
-5. Run `python Scripts/verify_supabase_setup.py` against the new project.
-6. Promote the first account with `Scripts/bootstrap_admin.py`, then confirm `/admin/users` lists, suspends and deletes correctly. Granting or revoking an administrator role is refused until the administrator-access guard is installed.
+1. ✅ Create the free project and collect the URL, the `anon` key and the `service_role` key. The project is `wchygggyfhxrzydqxomn`. Use the legacy `service_role` JWT: the newer `sb_secret_…` key is rejected by PostgREST, the Admin API and the RPCs on this project.
+2. ✅ Apply the three migrations in the SQL editor, in order. Each file is re-appliable, so a second run does not fail.
+3. ⬜ Enable Google and GitHub, and add `<origin>` and `<origin>/auth/callback` to the redirect URLs. The Google and GitHub consoles want the Supabase callback `https://wchygggyfhxrzydqxomn.supabase.co/auth/v1/callback`, not the app's own callback. The redirect allow-list and `site_url` are already set on the project through the Management API; only the two provider client id/secret pairs are missing, and they have to be created in the Google and GitHub consoles first.
+4. ✅ Set the deployment variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `AUTH_APP_ORIGIN`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_PASSWORD_LOCKOUT_ENABLED`, `CRON_SECRET`.
+5. ✅ Run `python Scripts/verify_supabase_setup.py` against the new project. Everything passes except the two OAuth providers, which are waiting on step 3.
+6. ⬜ Promote the first account with `Scripts/bootstrap_admin.py`, then confirm `/admin/users` lists, suspends and deletes correctly. The account itself does not exist yet on the new project: sign up at `https://adventureworks-analytics-snowy.vercel.app/signup`, confirm the email, then run `uv run python Scripts/bootstrap_admin.py --email datanerdbytes@gmail.com --apply`. Granting or revoking an administrator role is refused until the administrator-access guard is installed.
 
 **Two items of the original draft belong to option B and were deliberately not
 done:** rewriting `user_admin.py` to query a local users table instead of the
@@ -577,6 +577,7 @@ Option A keeps the Admin API and the PKCE client.
    ```json
    {
      "$schema": "https://openapi.vercel.sh/vercel.json",
+     "framework": "flask",
      "functions": {
        "wsgi.py": {
          "maxDuration": 300,
@@ -586,6 +587,7 @@ Option A keeps the Admin API and the PKCE client.
    }
    ```
    `excludeFiles` is a project-root glob. It drops `analytics_layer/`, `node_modules/`, `.venv/`, `data/`, `tests/`, `Notebooks/` and `my-dash-app/auth_frontend/`, and keeps `my-dash-app/assets/`, `my-dash-app/data/`, `my-dash-app/templates/`, `my-dash-app/pages/`, `my-dash-app/components/`, `utils/` and `wsgi.py`.
+   **The `framework` key is load-bearing.** The project was created without a framework preset, and without an explicit preset the runtime never looks for a root entrypoint: the build succeeds, produces **no function at all**, and the deployment answers every route with a static 404. The first deploy failed with `[unused_function] The pattern "wsgi.py" defined in 'functions' doesn't match any Serverless Functions inside the 'api' directory`, and the same build with `"framework": "flask"` resolves `wsgi.py` and deploys. `tests/test_vercel_deployment.py` now asserts the preset, so removing it fails the suite instead of the deployment.
 3. `.vercelignore` controls the upload. `.gitignore` is not consulted, so without it a local `vercel deploy` would upload the 1.2 GB virtualenv, the dbt project and the local credentials. `.env`, `.env.*` and `gcp-key.json` are excluded explicitly.
 4. **Runtime dependencies separated from the build tooling.** `[project.dependencies]` now holds only what the app imports at request time (dash, dash-ag-grid, dash-bootstrap-components, duckdb, flask, flask-caching, flask-limiter, numpy, pandas, plotly, python-dotenv, pycountry, werkzeug). dbt, dbt-bigquery, dbt-duckdb, the warehouse drivers, jupyterlab, sqlfluff, ruff, pyrefly and pre-commit moved to the `dev` group. Vercel exports the project without the default groups, so the dev group never reaches the function. Installed footprint: **1.2 GB → 255 MB** across 46 packages, inside the 500 MB limit.
    - `python-dotenv` and `flask` were previously only transitive; they are imported directly, so they are now declared.
@@ -595,15 +597,18 @@ Option A keeps the Admin API and the PKCE client.
 7. `utils/audit_logger.py` no longer imports the warehouse client at module scope. It is wrapped in `try`/`except ImportError` and the function skips the write when the client is absent. The deployed runtime does not ship `google-cloud-bigquery`, and the retired BigQuery telemetry path is the only reason that package was ever imported. `tests/test_vercel_deployment.py` now boots the app with every build-only package blocked, so this class of bug fails the suite instead of the deployment.
 
 **Why the entrypoint is `wsgi.py` and not `api/index.py`:**
-- Vercel's documented entrypoint names are `app.py`, `index.py`, `server.py`, `main.py`, `wsgi.py` and `asgi.py`, at the root or inside `src/`/`app/`. `wsgi.py` at the root is discovered with no configuration at all.
+- Vercel's documented entrypoint names are `app.py`, `index.py`, `server.py`, `main.py`, `wsgi.py` and `asgi.py`, at the root or inside `src/`/`app/`. A root `wsgi.py` is the shortest path, but it is only discovered when a Python framework preset applies — hence the explicit `"framework": "flask"` in `vercel.json`.
 - A file inside `/api` is only a *file-based function*. With a Flask framework preset the framework handles every request and `/api/*.py` do not become routes, so the file would either be dead weight or conflict with the preset.
 - `tool.vercel.entrypoint` takes a `module:variable` value that maps to a file path. The documented examples are all package-qualified (`my_package.api:app` → `./my_package/api.py`). A root-level module would need the undocumented single-segment form, so relying on the default detection is the lower-risk choice.
 - `wsgi.py` cannot be confused with a directory convention, and no other root file matches an entrypoint name.
 
+**Live deployment (2026-11-06):** `https://adventureworks-analytics-snowy.vercel.app`, one `flask` function, 290.68 MB before the bundle optimisation and 50.03 MB after it, 23 s build. The project also carries a `dashboard` container service from the pre-Vercel-migration deployment; with the framework preset declared the build produces the function only, and the service is no longer the serving path.
+
 **Vercel constraints confirmed against current docs (2026-08):**
 - Entry: `app.py`/`index.py`/`server.py`/`main.py`/`wsgi.py`/`asgi.py` at root, `src/`, or `app/`; or `tool.vercel.entrypoint` in `pyproject.toml` ✅
 - WSGI variable must be named `app` ✅
-- `pyproject.toml` + `uv.lock` supported; Vercel prefers `pyproject.toml` over `requirements.txt` and exports without the default groups ✅
+- `pyproject.toml` + `uv.lock` supported; the cloud build installs from `uv.lock` and ships the runtime group only — 290.68 MB before the bundle optimisation ✅
+- The local `vercel build` counts its own wheel cache and the build virtualenv twice, so it reports a bundle far larger than the cloud build does. Treat the local size error as a local artifact: the cloud build log is the authority ✅
 - Python 3.12 / 3.13 / 3.14 — project requires ≥3.12 ✅
 - Duration: Hobby max 300s, Pro max 800s (default 300s) — **ample** for Dash callbacks ✅
 - Bundle limit: 500 MB uncompressed (Python) — use `excludeFiles` ✅
@@ -652,7 +657,7 @@ Plus new coverage required by §11:
 - ✅ A test asserting the merged frame honours the dtype contract (naive datetime, float64 money) — `tests/test_gold_dataset.py` (done in Phase 1).
 - ✅ A test asserting the shipped telemetry artifact matches the export rules and the reader contract — `tests/test_pipeline_telemetry.py` (done in Phase 2).
 - ✅ A test asserting the deployment contract: the entrypoint exposes the WSGI callable, the auth guard runs before any data is served, every reachable third-party import is a runtime dependency, the app still boots when every build-only package is blocked, the bundle exclusions keep the runtime files, and `requirements.txt` matches the locked export — `tests/test_vercel_deployment.py` (done in Phase 5).
-- ❗ A test asserting the KPI values on a known fixture (locks the numbers from §1.5) — still to write.
+- ✅ A test asserting the KPI values on a known fixture (locks the numbers from §1.5) — `tests/test_kpi_fixture.py`. It runs through the app's own loader and callbacks rather than re-implementing the SQL, so it fails when the transformation or the KPI mathematics drift. It locks the merged frame (60,379 rows, 3 categories, 6 countries), the four KPI values and their display strings (`$29.35M`, `27,657`, `60,404`, `18,482`), the tooltip ratios, the revenue per country, the 226,820 revenue of the 337 customers the source never mapped to a country, and the RFM segment counts.
 - ✅ A test asserting the Supabase deployment contract: the keep-wake route rejects a missing or wrong secret, queries the database with the service-role key, never redirects, matches the Vercel cron path, and every RPC the app calls is defined and granted by a migration — `tests/test_supabase_setup.py` (done in Phase 3).
 - ❗ Auth tests against the newly created provider (unauthenticated access, lockout, admin guard, self-deletion block) — the offline suites cover these against mocks, but they must be re-run against the real project once it exists (Phase 3 console steps).
 

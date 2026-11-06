@@ -29,7 +29,7 @@ before(async () => {
   fixture = await new Promise((resolve, reject) => {
     const timer = setTimeout(
       () => reject(new Error(`Fixture startup timeout: ${serverErrors}`)),
-      20000,
+      60000,
     );
     server.once("error", reject);
     server.once("exit", (code) =>

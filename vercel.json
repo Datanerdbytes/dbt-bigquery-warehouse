@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "flask",
   "crons": [
     {
       "path": "/keepawake",
@@ -9,7 +10,7 @@
   "functions": {
     "wsgi.py": {
       "maxDuration": 300,
-      "excludeFiles": "{.git/**,.github/**,.agents/**,.claude/**,.kilocode/**,.kilo/**,.vscode/**,.jupyter/**,.venv/**,node_modules/**,**/__pycache__/**,**/*.pyc,analytics_layer/**,Notebooks/**,docs/**,logs/**,data/**,landing-animations/**,Scripts/**,sqlfluff_libs/**,sqlfluff_macros/**,api_service/**,agent/**,supabase/**,tests/**,cache-directory/**,**/cache-directory/**,my-dash-app/auth_frontend/**,package.json,package-lock.json,skills-lock.json,run_pipeline.sh,Dockerfile,.pre-commit-config.yaml,.secrets.baseline}"
+      "excludeFiles": "{analytics_layer/**,node_modules/**,data/raw/**,tests/**,Notebooks/**,my-dash-app/auth_frontend/**,.venv/**,package.json}"
     }
   }
 }

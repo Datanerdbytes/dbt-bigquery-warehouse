@@ -11,6 +11,7 @@
 .vscode
 .jupyter
 .venv
+.vercel
 node_modules
 **/__pycache__
 **/*.pyc

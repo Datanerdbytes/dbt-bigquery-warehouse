@@ -29,6 +29,10 @@ The service-role key bypasses row-level security. It belongs in the deployment
 environment and in the ignored local `.env`, never in a browser bundle, a
 template, a log, or version control.
 
+Use the legacy `service_role` JWT. The newer `sb_secret_…` key is rejected by
+this project's PostgREST endpoint, the Admin API and the RPCs with
+`401 Invalid API key`, so it cannot replace the JWT.
+
 ### 3. Apply the SQL migrations
 
 Open **SQL Editor** and run these three files in order. Each one is a complete
