@@ -34,7 +34,7 @@ demo-database/
 ├── .agents/skills/                  # Project task capsules and design skills
 ├── .github/workflows/ci_pipeline.yml # Offline checks, offline dbt build on DuckDB
 ├── Scripts/
-│   ├── build-auth.mjs               # Builds auth.bundle.js and showcase.bundle.js
+│   ├── build-auth.mjs               # Builds auth.bundle.js
 │   ├── ingest_bronze.py             # Local CSVs → SQL Server bronze (retired)
 │   ├── ingest_bigquery.py           # SQL Server bronze → BigQuery (retired)
 │   ├── ingest_dbt_artifacts.py      # dbt run results → BigQuery audit telemetry (retired)
@@ -79,12 +79,9 @@ demo-database/
 │   │   └── 00-theme.css             # CSS theme tokens
 │   ├── auth_frontend/
 │   │   ├── main.js
-│   │   ├── supabase-client.js
-│   │   └── showcase.js
+│   │   └── supabase-client.js
 │   ├── templates/
-│   │   ├── auth.html
-│   │   ├── landing.html
-│   │   └── showcase.html
+│   │   └── auth.html
 │   ├── components/                  # Sidebar, header, filters, KPIs, panels, revenue chart
 │   ├── data/                        # Shipped artifacts the app reads
 │   │   ├── analytics.duckdb         # Gold database (fct_sales, dim_products, dim_customers)
@@ -237,7 +234,7 @@ defaultColDef = {"filter": True, "sortable": True}
 ## 12. Authentication & Access Control
 - Keep authentication in the existing Dash/Flask application; do not introduce Next.js routing or SSR middleware. See [Supabase authentication setup](docs/supabase-auth.md).
 - Register `install_auth(server)` from `my-dash-app/auth.py` before constructing Dash so authorization runs before Dash request hooks, data callbacks, and exports.
-- Serve `/login`, `/signup`, and `/auth/callback` as Flask-rendered pages outside the dashboard layout. Product Overview lives at `/dashboard`; authenticated `/` requests redirect there. Keep navigation and route-dependent callbacks consistent.
+- Serve `/login`, `/signup`, and `/auth/callback` as Flask-rendered pages outside the dashboard layout. Product Overview lives at `/dashboard`. `/` has no page of its own: it redirects to `/dashboard` for a verified session and to `/login` otherwise. Keep navigation and route-dependent callbacks consistent.
 - Email/password signup requires email confirmation. Google and GitHub OAuth use PKCE and require separately enabled/configured providers in Supabase. Never assume a rendered provider button means the provider is enabled.
 - Verify access tokens against Supabase Auth on every protected request, then require a nonempty, confirmed email. Any verified account in the configured Supabase project can sign in; legacy `AUTH_ALLOWED_EMAILS` values are ignored. Never authorize from client state, editable metadata, or unverified JWT claims.
 - User management at `/admin/users`, its API routes, and its callbacks require the server-verified `app_metadata.qe_role` admin role. Never trust `user_metadata` for roles. Keep `SUPABASE_SERVICE_ROLE_KEY` server-only; protect the initial `qe_owner` from UI suspension/demotion and reject self-changes. A server-verified `qe_suspended` flag blocks all protected access. Account deletion additionally requires the protected owner, a suspended non-admin target, and matching typed email; block self/owner deletion and never execute real deletions during automated verification.

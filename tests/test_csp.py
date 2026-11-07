@@ -107,16 +107,14 @@ class TestCSPHeaders(unittest.TestCase):
         csp = self._get_csp_header(response)
         self.assertIn("default-src 'self'", csp)
 
-    def test_csp_on_landing_page(self):
-        """Test CSP header on / (landing) route."""
+    def test_csp_on_root_redirect(self):
+        """The root redirects to the sign-in page and carries a CSP header."""
         response = self.client.get("/")
-        self.assertEqual(response.status_code, 200)
-
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/login")
+        self.assertIn("Content-Security-Policy", response.headers)
         csp = self._get_csp_header(response)
         self.assertIn("default-src 'self'", csp)
-        nonce = self._get_nonce_from_html(response)
-        self.assertIsNotNone(nonce, "Nonce should be present in landing page")
-        self.assertIn(f"nonce-{nonce}", csp)
 
     def test_csp_allows_google_fonts(self):
         """Test CSP allows Google Fonts for styles and fonts."""

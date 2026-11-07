@@ -294,7 +294,7 @@ The dashboard uses Supabase Auth with `@supabase/supabase-js` and a Flask author
 | `/auth/session` | Same-origin POST validates a session and sets the access cookie; DELETE clears it |
 | `/dashboard` | Protected Product Overview and successful-login destination |
 | `/customers`, `/pipeline-health` | Protected analytics pages |
-| `/` | Redirects verified users to `/dashboard`; otherwise shows the public landing page |
+| `/` | Redirects to `/dashboard` for a verified session, otherwise to `/login` |
 | `/keepawake` | Daily scheduled query that keeps the free Supabase project awake; requires the deployment's `CRON_SECRET` |
 
 Flask verifies tokens with Supabase and requires a confirmed email before executing Dash callbacks or exports. Browser checks alone do not grant access. The access-token cookie is HttpOnly and SameSite=Lax, with Secure enabled for HTTPS deployments. Authentication and dashboard responses use `private, no-store`.

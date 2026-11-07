@@ -41,13 +41,6 @@ PUBLIC_ASSETS = {
     "/assets/00-theme.css",
     "/assets/08-auth.css",
     "/assets/auth.bundle.js",
-    "/assets/showcase.bundle.js",
-    "/assets/animations/workspace-overview.webm",
-    "/assets/animations/workspace-overview.mp4",
-    "/assets/animations/workspace-overview-poster.png",
-    "/assets/animations/data-lineage.webm",
-    "/assets/animations/data-lineage.mp4",
-    "/assets/animations/data-lineage-poster.png",
 }
 
 
@@ -189,8 +182,8 @@ def install_auth(server):
             if origin not in origins:
                 return jsonify(error="origin_rejected"), 403
             g.auth_origin = origin
-        # The public product page never needs dashboard data or a valid session.
-        # Preserve the existing root redirect for verified users.
+        # The root has no public page: it sends visitors straight to the
+        # sign-in form, and a verified session straight to the dashboard.
         if request.path == "/" and request.method in {"GET", "HEAD"}:
             if request.cookies.get(COOKIE):
                 try:
@@ -199,7 +192,7 @@ def install_auth(server):
                     pass
                 else:
                     return redirect("/dashboard")
-            return render_template("landing.html")
+            return redirect("/login")
         if request.path in PUBLIC or request.path in PUBLIC_ASSETS:
             return None
         try:

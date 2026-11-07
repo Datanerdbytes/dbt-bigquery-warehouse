@@ -241,11 +241,11 @@ regression tests. Actual account sign-in and OAuth provider consent require your
 credentials and provider configuration; automated checks do not create accounts,
 send confirmation emails, or query production analytics.
 
-### Public product landing page
+### Root redirect
 
-Anonymous GET/HEAD requests to `/` render the product showcase without starting Supabase or loading dashboard data. A verified session at `/` still redirects to `/dashboard`; stale, denied, or unavailable sessions can still view the public landing page. `/login` and `/signup` are dedicated authentication pages, linked from the landing page header. Protected dashboard routes, callbacks, and exports retain their existing authorization requirements.
+Anonymous GET/HEAD requests to `/` redirect to `/login` without starting Supabase or loading dashboard data. A verified session at `/` redirects to `/dashboard`; a stale, denied, or unavailable session falls back to `/login`. `/login` and `/signup` are dedicated authentication pages. Protected dashboard routes, callbacks, and exports retain their existing authorization requirements.
 
-`npm run build:auth` builds the authentication bundle and the separate, public `showcase.bundle.js` slideshow. Both are excluded from Dash auto-injection and are loaded only by their respective templates. Docker copies both generated bundles from its Node build stage.
+`npm run build:auth` builds the authentication bundle, which is excluded from Dash auto-injection and loaded only by the authentication template. Docker copies the generated bundle from its Node build stage.
 
 ### Confirmation-link recovery
 
@@ -373,8 +373,6 @@ Verification: Python gateway/route tests and browser tests mock provider/storage
 ### Review fixes and deletion safety
 
 Password-reset sessions use isolated in-memory storage and a unique Supabase storage key/channel. They share only the requesting browser's one-time PKCE verifier, not its normal session. Signing into another account in another tab cannot change which account receives the password update. After a successful reset, the normal browser session is also signed out locally through Supabase JS so a cached access token cannot immediately sign the browser back in. The form also checks the recovered user before updating and closes if its recovery session changes or ends. Known unconfirmed-email and suspended-user errors from the password gateway remain actionable authentication errors and never increment the wrong-password count.
-
-The landing slideshow pauses when keyboard focus enters its controls, including Play. Only activating Play can resume playback while that button is focused. The original six-second slide interval and slide-transition duration are preserved.
 
 Before account deletion is available, apply `supabase/migrations/202610190002_account_deletion_guard.sql` to the matching project. The app checks the installed trigger's readiness before calling Supabase's Admin delete API and refuses deletion if the guard is missing or disabled. The trigger checks the current `auth.users` row inside the delete transaction and rejects active members, administrators, and the protected owner. Therefore a restoration or promotion committed after the confirmation snapshot cannot turn into an unsafe deletion. A concurrent change that starts after deletion has acquired the row lock waits and cannot update the deleted row. No process-local lock or expiring network lease is used to protect deletion.
 

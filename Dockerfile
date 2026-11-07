@@ -33,7 +33,6 @@ RUN uv export --locked --no-dev --no-emit-project --format requirements-txt \
 # 5. Copy the entire repository into /app
 COPY . .
 COPY --from=auth-build /build/my-dash-app/assets/auth.bundle.js /app/my-dash-app/assets/auth.bundle.js
-COPY --from=auth-build /build/my-dash-app/assets/showcase.bundle.js /app/my-dash-app/assets/showcase.bundle.js
 
 # 6. Set working directory to my-dash-app where app.py lives
 WORKDIR /app/my-dash-app

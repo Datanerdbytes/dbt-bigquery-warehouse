@@ -9,39 +9,15 @@ const source = readFileSync("my-dash-app/auth_frontend/main.js", "utf8")
   )
   .replaceAll("location.replace(", "window.navigate(");
 const tick = () => new Promise((resolve) => setTimeout(resolve, 25));
-function stubVideos(window) {
-  for (const video of window.document.querySelectorAll("video")) {
-    Object.defineProperties(video, {
-      paused: { configurable: true, writable: true, value: true },
-      readyState: { configurable: true, value: 1 },
-      currentTime: { configurable: true, writable: true, value: 0 },
-    });
-    video.pause = () => {
-      video.paused = true;
-    };
-    video.play = () => {
-      video.paused = false;
-      return Promise.resolve();
-    };
-  }
-}
 async function fixture(
   mode = "login",
   session = null,
   status = 200,
   query = "",
-  showcase = false,
-  reducedMotion = false,
   authOverrides = {},
 ) {
   const dom = new JSDOM(
-    showcase
-      ? readFileSync("my-dash-app/templates/auth.html", "utf8").replace(
-          "</body>",
-          readFileSync("my-dash-app/templates/showcase.html", "utf8") +
-            "</body>",
-        )
-      : `<html ${mode ? `data-auth-page="${mode}"` : ""}><body><div id="auth-loading"></div><section id="auth-content" hidden><button data-provider="google"></button><button data-provider="github"></button><form id="auth-form"><input id="auth-email" type="email" required><span id="auth-email-error"></span><input id="auth-password" type="password" required><span id="auth-password-error"></span><input id="auth-confirm-password" type="password"><span id="auth-confirm-password-error"></span><button id="auth-show-password" type="button"></button></form></section><div id="auth-message" hidden tabindex="-1"></div><button id="auth-signout" hidden></button><a id="auth-back" hidden></a><div id="auth-session-loading"></div></body></html>`,
+    `<html ${mode ? `data-auth-page="${mode}"` : ""}><body><div id="auth-loading"></div><section id="auth-content" hidden><button data-provider="google"></button><button data-provider="github"></button><form id="auth-form"><input id="auth-email" type="email" required><span id="auth-email-error"></span><input id="auth-password" type="password" required><span id="auth-password-error"></span><input id="auth-confirm-password" type="password"><span id="auth-confirm-password-error"></span><button id="auth-show-password" type="button"></button></form></section><div id="auth-message" hidden tabindex="-1"></div><button id="auth-signout" hidden></button><a id="auth-back" hidden></a><div id="auth-session-loading"></div></body></html>`,
     {
       url: `https://analytics.example.com/${mode || "dashboard"}${query}`,
       runScripts: "outside-only",
@@ -52,29 +28,6 @@ async function fixture(
   let listener;
   let currentSession = session;
   let responseStatus = status;
-  if (showcase) w.document.documentElement.dataset.authPage = mode;
-  let advanceSlide;
-  let motionChanged;
-  const motion = {
-    matches: reducedMotion,
-    addEventListener: (_name, fn) => {
-      motionChanged = fn;
-    },
-  };
-  w.matchMedia = () => motion;
-  if (showcase) {
-    Object.defineProperty(w.document, "hidden", {
-      value: false,
-      configurable: true,
-    });
-    w.setInterval = (fn) => {
-      advanceSlide = fn;
-      return 1;
-    };
-    w.clearInterval = () => {
-      advanceSlide = null;
-    };
-  }
   w.Request = Request;
   w.AbortSignal = AbortSignal;
   w.navigate = (url) => calls.push(["navigate", url]);
@@ -141,10 +94,6 @@ async function fixture(
   };
   Object.assign(auth, authOverrides);
   w.mockClient = { auth };
-  if (showcase) {
-    stubVideos(w);
-    w.eval(readFileSync("my-dash-app/auth_frontend/showcase.js", "utf8"));
-  }
   w.eval(source);
   await tick();
   return {
@@ -154,11 +103,6 @@ async function fixture(
     event: (...args) => listener(...args),
     setStatus: (value) => {
       responseStatus = value;
-    },
-    advanceSlide: () => advanceSlide?.(),
-    setReducedMotion: () => {
-      motion.matches = true;
-      motionChanged?.();
     },
     close: () => w.close(),
   };
@@ -265,235 +209,6 @@ test("canceled confirmation link gives sign-in recovery", async () => {
   );
   assert.equal(f.w.document.getElementById("auth-back").hidden, false);
   f.close();
-});
-
-test("showcase starts with analytics, rotates, and manual navigation pauses", async () => {
-  const f = await fixture("login", null, 200, "", true);
-  const analytics = f.w.document.getElementById("auth-slide-analytics");
-  const lineage = f.w.document.getElementById("auth-slide-lineage");
-  assert.equal(analytics.hidden, false);
-  assert.equal(lineage.hidden, true);
-  f.advanceSlide();
-  assert.equal(lineage.hidden, false);
-  assert.equal(analytics.getAttribute("aria-hidden"), "true");
-  f.w.document.querySelector('[data-carousel="next"]').click();
-  assert.equal(analytics.hidden, false);
-  f.advanceSlide();
-  assert.equal(analytics.hidden, false);
-  f.w.document.querySelector('[data-carousel="previous"]').click();
-  assert.equal(lineage.hidden, false);
-  f.w.document.querySelector('[data-slide="0"]').click();
-  assert.equal(analytics.hidden, false);
-  assert.equal(
-    f.w.document.querySelector('[data-slide="0"]').getAttribute("aria-current"),
-    "true",
-  );
-  f.close();
-});
-test("showcase pauses while signing in and honors reduced motion changes", async () => {
-  const f = await fixture("login", null, 200, "", true);
-  const analytics = f.w.document.getElementById("auth-slide-analytics");
-  f.w.document.getElementById("auth-email").focus();
-  f.advanceSlide();
-  assert.equal(analytics.hidden, false);
-  f.w.document.querySelector('[data-carousel="rotation"]').click();
-  f.advanceSlide();
-  assert.equal(analytics.hidden, true);
-  f.setReducedMotion();
-  f.advanceSlide();
-  assert.equal(analytics.hidden, true);
-  assert.equal(
-    f.w.document.querySelector('[data-carousel="rotation"]').hidden,
-    true,
-  );
-  f.close();
-});
-test("reduced motion keeps the first slide still and manual controls available", async () => {
-  const f = await fixture("signup", null, 200, "", true, true);
-  f.advanceSlide();
-  assert.equal(
-    f.w.document.getElementById("auth-slide-analytics").hidden,
-    false,
-  );
-  f.w.document.querySelector('[data-slide="1"]').click();
-  assert.equal(f.w.document.getElementById("auth-slide-lineage").hidden, false);
-  f.close();
-});
-
-test("showcase stops on pointer interaction and when the page is hidden", async () => {
-  const f = await fixture("login", null, 200, "", true);
-  const analytics = f.w.document.getElementById("auth-slide-analytics");
-  f.w.document
-    .getElementById("auth-showcase")
-    .dispatchEvent(new f.w.Event("pointerenter"));
-  f.advanceSlide();
-  assert.equal(analytics.hidden, false);
-  f.w.document.querySelector('[data-carousel="rotation"]').click();
-  Object.defineProperty(f.w.document, "hidden", {
-    value: true,
-    configurable: true,
-  });
-  f.w.document.dispatchEvent(new f.w.Event("visibilitychange"));
-  f.advanceSlide();
-  assert.equal(analytics.hidden, false);
-  f.close();
-});
-
-test("public landing slideshow works without authentication and preserves focus", () => {
-  const html = readFileSync(
-    "my-dash-app/templates/landing.html",
-    "utf8",
-  ).replace(
-    /\{% include 'showcase.html' %\}/,
-    readFileSync("my-dash-app/templates/showcase.html", "utf8"),
-  );
-  const dom = new JSDOM(html, {
-    url: "https://analytics.example.com/",
-    runScripts: "outside-only",
-  });
-  const w = dom.window;
-  stubVideos(w);
-  w.matchMedia = () => ({ matches: true, addEventListener() {} });
-  w.eval(readFileSync("my-dash-app/auth_frontend/showcase.js", "utf8"));
-  assert.ok([...w.document.querySelectorAll("video")].every((v) => v.paused));
-  assert.equal(w.document.getElementById("auth-form"), null);
-  assert.equal(
-    w.document.querySelector(".landing-login").getAttribute("href"),
-    "/login",
-  );
-  const action = w.document.querySelector(
-    "#auth-slide-analytics .landing-hero-actions button",
-  );
-  action.focus();
-  action.click();
-  assert.equal(w.document.getElementById("auth-slide-lineage").hidden, false);
-  assert.equal(
-    w.document.activeElement,
-    w.document.querySelector('.auth-carousel-tabs [data-slide="1"]'),
-  );
-  w.document.querySelector('.landing-nav [data-slide="0"]').click();
-  assert.equal(w.document.getElementById("auth-slide-analytics").hidden, false);
-  dom.window.close();
-});
-
-test("landing preserves timing with playback control and pauses on hover or focus", async () => {
-  const showcase = readFileSync(
-    "my-dash-app/templates/showcase.html",
-    "utf8",
-  ).replace(/\{% if not landing_showcase %\}[\s\S]*?\{% endif %\}/, "");
-  const dom = new JSDOM(
-    `<body class="landing-page"><button id="test-nav" data-slide="1">Data pipeline</button>${showcase}</body>`,
-    {
-      runScripts: "outside-only",
-    },
-  );
-  const w = dom.window;
-  stubVideos(w);
-  Object.defineProperty(w.document, "hidden", {
-    value: false,
-    configurable: true,
-  });
-  let advance, delay, motionChanged;
-  const motion = {
-    matches: false,
-    addEventListener: (_event, callback) => {
-      motionChanged = callback;
-    },
-  };
-  w.matchMedia = () => motion;
-  w.setInterval = (callback, milliseconds) => {
-    advance = callback;
-    delay = milliseconds;
-    return 1;
-  };
-  w.clearInterval = () => {
-    advance = null;
-  };
-  w.eval(readFileSync("my-dash-app/auth_frontend/showcase.js", "utf8"));
-  const panel = w.document.querySelector(".auth-preview");
-  const analytics = w.document.getElementById("auth-slide-analytics");
-  assert.ok(w.document.querySelector('[data-carousel="rotation"]'));
-  assert.equal(delay, 8000);
-  const rotation = w.document.querySelector('[data-carousel="rotation"]');
-  rotation.click();
-  assert.equal(advance, null);
-  panel.dispatchEvent(new w.Event("pointerleave"));
-  w.dispatchEvent(new w.Event("pageshow"));
-  assert.equal(
-    advance,
-    null,
-    "explicit pause survives automatic resume events",
-  );
-  rotation.click();
-  assert.equal(delay, 8000);
-
-  const overviewVideo = w.document.querySelector(
-    "#auth-slide-analytics video",
-  );
-  const lineageVideo = w.document.querySelector("#auth-slide-lineage video");
-  assert.equal(overviewVideo.paused, false);
-  assert.equal(lineageVideo.paused, true);
-
-  advance();
-  assert.equal(analytics.hidden, true);
-  assert.equal(overviewVideo.paused, true);
-  assert.equal(lineageVideo.paused, false);
-  assert.equal(lineageVideo.currentTime, 0);
-  panel.dispatchEvent(new w.Event("pointerenter"));
-  assert.equal(advance, null);
-  panel.dispatchEvent(new w.Event("pointerleave"));
-  advance();
-  assert.equal(analytics.hidden, false);
-  const tab = w.document.querySelector('[data-slide="0"]');
-  tab.focus();
-  assert.equal(advance, null);
-  panel.dispatchEvent(new w.Event("pointerenter"));
-  panel.dispatchEvent(new w.Event("pointerleave"));
-  assert.equal(advance, null);
-  rotation.focus();
-  await tick();
-  assert.equal(advance, null, "focusing Play must not start rotation");
-  rotation.click();
-  assert.equal(
-    typeof advance,
-    "function",
-    "activating Play may resume while focused",
-  );
-  rotation.blur();
-  await tick();
-  assert.equal(typeof advance, "function");
-  motion.matches = true;
-  motionChanged();
-  panel.dispatchEvent(new w.Event("pointerleave"));
-  assert.equal(advance, null);
-  motion.matches = false;
-  motionChanged();
-  assert.equal(typeof advance, "function");
-  Object.defineProperty(w.document, "hidden", {
-    value: true,
-    configurable: true,
-  });
-  w.document.dispatchEvent(new w.Event("visibilitychange"));
-  assert.equal(advance, null);
-  Object.defineProperty(w.document, "hidden", {
-    value: false,
-    configurable: true,
-  });
-  w.document.dispatchEvent(new w.Event("visibilitychange"));
-  assert.equal(typeof advance, "function");
-  w.dispatchEvent(new w.Event("pagehide"));
-  assert.equal(advance, null);
-  w.dispatchEvent(new w.Event("pageshow"));
-  assert.equal(typeof advance, "function");
-  const outside = w.document.createElement("button");
-  w.document.body.append(outside);
-  outside.focus();
-  assert.equal(typeof advance, "function");
-  // Existing slide selectors outside the showcase must resume autoplay.
-  outside.click();
-  w.document.getElementById("test-nav").click();
-  assert.equal(typeof advance, "function");
-  dom.window.close();
 });
 
 test("throttled login page explains retry without starting auth requests", async () => {
@@ -765,7 +480,7 @@ test("expired and non-recovery PKCE codes cannot open the reset form", async () 
     { data: { session: null }, error: new Error("Expired") },
     { data: { session: { access_token: "ordinary" }, redirectType: null } },
   ]) {
-    const f = await fixture("reset", null, 200, "?code=test", false, false, {
+    const f = await fixture("reset", null, 200, "?code=test", {
       exchangeCodeForSession: async () => result,
     });
     try {

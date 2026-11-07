@@ -55,7 +55,7 @@ spec.loader.exec_module(entrypoint)
 
 dash_module = sys.modules["app"]
 client = entrypoint.app.test_client()
-landing = client.get("/")
+root = client.get("/")
 dashboard = client.get("/dashboard")
 
 print(json.dumps({
@@ -66,7 +66,8 @@ print(json.dumps({
     "assets_folder": dash_module.app.config.assets_folder,
     "pages_folder": dash_module.app.config.pages_folder,
     "template_folder": entrypoint.app.template_folder,
-    "landing_status": landing.status_code,
+    "root_status": root.status_code,
+    "root_location": root.headers.get("Location"),
     "dashboard_status": dashboard.status_code,
     "dashboard_location": dashboard.headers.get("Location"),
 }))
@@ -305,7 +306,8 @@ class EntrypointTest(unittest.TestCase):
     def test_entrypoint_guards_the_dashboard_before_serving_data(self):
         report = run_entrypoint_probe()
 
-        self.assertEqual(report["landing_status"], 200)
+        self.assertEqual(report["root_status"], 302)
+        self.assertEqual(report["root_location"], "/login")
         self.assertEqual(report["dashboard_status"], 302)
         self.assertEqual(report["dashboard_location"], "/login")
 
@@ -379,7 +381,7 @@ class RuntimeDependencyTest(unittest.TestCase):
             "install the dev group so the guard has something to block",
         )
         report = run_entrypoint_probe(blocked=blocked)
-        self.assertEqual(report["landing_status"], 200)
+        self.assertEqual(report["root_status"], 302)
         self.assertEqual(report["dashboard_status"], 302)
 
     @unittest.skipUnless(shutil.which("uv"), "uv is required to export the lock file")

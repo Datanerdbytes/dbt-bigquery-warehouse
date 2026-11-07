@@ -248,10 +248,10 @@ test("Chromium enforces nonce policy: approved scripts run; missing/wrong nonce 
   assert.ok(violations.every((v) => v.disposition === "enforce"));
 });
 
-test("HTML nonces match headers and change on reload; landing bundle runs", async (t) => {
+test("HTML nonces match headers and change on reload", async (t) => {
   const f = await pageFixture(t);
-  const first = await f.page.goto(fixture.origin);
-  await f.page.locator("#auth-slide-analytics").waitFor();
+  const first = await f.page.goto(`${fixture.origin}/login`);
+  await f.page.locator("#auth-content:not([hidden])").waitFor();
   const readNonces = () =>
     f.page.evaluate(() =>
       [...document.querySelectorAll("script")].map((s) => s.nonce),
@@ -274,88 +274,6 @@ test("HTML nonces match headers and change on reload; landing bundle runs", asyn
     ),
   );
   assert.match(second.headers()["cache-control"], /no-store/);
-  await assertHealthy(f);
-});
-
-test("landing autoplay resumes after tab return and pauses only while hovered", async (t) => {
-  const f = await pageFixture(t);
-  await f.page.clock.install();
-  await f.page.goto(fixture.origin);
-  await f.page.locator(".auth-carousel-controls:not([hidden])").waitFor();
-  assert.equal(await f.page.locator('[data-carousel="rotation"]').count(), 1);
-  await f.page.clock.runFor(8100);
-  assert.equal(
-    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
-    true,
-  );
-  await f.page.locator(".auth-slide:not([hidden]) .auth-preview").hover();
-  await f.page.clock.runFor(8100);
-  assert.equal(
-    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
-    true,
-  );
-  await f.page.locator(".landing-header").hover();
-  await f.page.clock.runFor(8100);
-  assert.equal(
-    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
-    false,
-  );
-  await f.page.evaluate(() => {
-    Object.defineProperty(document, "hidden", {
-      value: true,
-      configurable: true,
-    });
-    document.dispatchEvent(new Event("visibilitychange"));
-  });
-  await f.page.clock.runFor(8100);
-  assert.equal(
-    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
-    false,
-  );
-  await f.page.evaluate(() => {
-    Object.defineProperty(document, "hidden", {
-      value: false,
-      configurable: true,
-    });
-    document.dispatchEvent(new Event("visibilitychange"));
-  });
-  await f.page.clock.runFor(8100);
-  assert.equal(
-    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
-    true,
-  );
-  await f.page.locator('.landing-nav [data-slide="0"]').click();
-  await f.page.clock.runFor(8100);
-  assert.equal(
-    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
-    true,
-  );
-  const rotation = f.page.locator('[data-carousel="rotation"]');
-  await rotation.click();
-  await f.page.locator(".landing-header").hover();
-  await f.page.clock.runFor(8100);
-  assert.equal(
-    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
-    true,
-  );
-  assert.equal(
-    await rotation.textContent().then((text) => text.trim()),
-    "Play",
-  );
-  await rotation.focus();
-  await rotation.press("Enter");
-  await f.page.locator(".landing-header").hover();
-  await f.page.clock.runFor(8100);
-  assert.equal(
-    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
-    false,
-  );
-  assert.equal(
-    await f.page
-      .locator("#auth-slide-analytics")
-      .evaluate((el) => getComputedStyle(el).animationDuration),
-    "0.45s",
-  );
   await assertHealthy(f);
 });
 
@@ -988,30 +906,6 @@ test("recovery stays bound to its account when another tab changes the normal se
     stored,
     null,
     "the browser requires a fresh sign-in after recovery",
-  );
-  await assertHealthy(f);
-});
-
-test("keyboard focus on Play does not restart the slideshow without activation", async (t) => {
-  const f = await pageFixture(t);
-  await f.page.clock.install();
-  await f.page.goto(fixture.origin);
-  const selector = f.page.locator('.auth-carousel-tabs [data-slide="0"]');
-  const rotation = f.page.locator('[data-carousel="rotation"]');
-  await selector.focus();
-  await rotation.focus();
-  await f.page.clock.runFor(100);
-  assert.equal((await rotation.textContent()).trim(), "Play");
-  await f.page.clock.runFor(8100);
-  assert.equal(
-    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
-    false,
-  );
-  await rotation.press("Enter");
-  await f.page.clock.runFor(8100);
-  assert.equal(
-    await f.page.locator("#auth-slide-analytics").evaluate((el) => el.hidden),
-    true,
   );
   await assertHealthy(f);
 });

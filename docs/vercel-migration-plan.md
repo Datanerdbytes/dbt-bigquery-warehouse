@@ -629,7 +629,7 @@ The deployment tree was reproduced the way Vercel would build it: `rsync` with `
 | Credentials in the upload tree | none — `.env*` and `gcp-key.json` absent |
 | Runtime virtualenv | 255 MB across 46 packages, inside the 500 MB limit |
 | Boot | entrypoint imported, Flask app served |
-| `GET /` | 200 landing page |
+| `GET /` | 302 to `/login` |
 | `GET /login` | 200 |
 | `GET /auth/config` | 200, public URL and anon key only |
 | `GET /dashboard`, `/customers`, `/pipeline-health` | 302 to `/login` without a session |

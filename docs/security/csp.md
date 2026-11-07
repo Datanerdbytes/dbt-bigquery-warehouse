@@ -8,7 +8,7 @@ HTML response. It preserves the existing authentication order, exact-Origin
 checks, cookies, private/no-store caching, and authorization before data access.
 Nonces come from `secrets.token_urlsafe(16)`, never request input or configuration.
 
-Login, signup, callback, public landing, authenticated Dash pages, HTML redirects,
+Login, signup, callback, authenticated Dash pages, HTML redirects,
 and HTML errors receive CSP. JavaScript/CSS assets and JSON responses do not
 receive a document policy; their loading is governed by the requesting HTML.
 An asset URL returning an HTML error receives CSP like any other HTML response.
@@ -36,7 +36,7 @@ Authentication configuration errors continue to fail closed.
 ### Trusted scripts and dynamic chunks
 
 - Jinja's `{{ csp_nonce }}` authorizes the auth template's timeout script and
-  auth bundle, and the landing template's showcase bundle.
+  auth bundle.
 - Dash's index template uses `{%csp_nonce%}` for the manually included auth bundle.
   Dash does not run Jinja context processors on its index, so an
   `interpolate_index` override replaces that placeholder.
@@ -100,7 +100,7 @@ by the changed bundle formatting; scanning remains enabled.
   `app_entry` script does not receive one. JSON/static responses and unauthorized
   data requests retain their existing behavior.
 - `tests/csp-browser.test.mjs` launches headless Chromium against the real local
-  Flask/Dash app using the built auth/showcase bundles. Its six test groups cover
+  Flask/Dash app using the built auth bundle. Its test groups cover
   browser-enforced missing/wrong nonce rejection, blocked `eval`, allowed nonce
   execution, freshness, password login, signup confirmation, Dash bootstrap and
   dynamic graph chunks, Plotly rendering, callbacks, page navigation, refresh,

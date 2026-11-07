@@ -102,50 +102,39 @@ class AuthTests(unittest.TestCase):
         self.assertNotIn("data-provider=", reset)
         self.loader.assert_not_called()
 
-    def test_public_landing_is_separate_from_signin(self):
+    def test_root_sends_visitors_straight_to_signin(self):
         with patch.object(auth, "urlopen") as remote:
-            page = self.client.get("/")
-            self.assertEqual(page.status_code, 200)
-            html = page.get_data(as_text=True)
-            self.assertIn('href="/login"', html)
-            self.assertIn('id="auth-showcase"', html)
-            self.assertEqual(html.count("landing-video-preview"), 2)
-            self.assertNotIn('id="auth-preview-caption"', html)
-            self.assertNotIn('id="auth-lineage-caption"', html)
-            self.assertIn(
-                'aria-label="Workspace Overview: Sales performance and pipeline health metrics"',
-                html,
-            )
-            self.assertIn(
-                'aria-label="Data Lineage: End-to-end data pipeline flow from CRM and ERP to the DuckDB mart"',
-                html,
-            )
-            self.assertIn('src="/assets/showcase.bundle.js"', html)
-            self.assertNotIn('id="auth-form"', html)
-            self.assertNotIn('src="/assets/auth.bundle.js"', html)
-            self.assertIn('data-carousel="rotation"', html)
-            self.assertNotIn('data-carousel="previous"', html)
-            self.assertNotIn('data-carousel="next"', html)
+            root = self.client.get("/")
+            self.assertEqual(root.status_code, 302)
+            self.assertEqual(root.headers["Location"], "/login")
             login = self.client.get("/login").get_data(as_text=True)
             self.assertIn('id="auth-form"', login)
             self.assertNotIn('id="auth-showcase"', login)
             remote.assert_not_called()
         self.loader.assert_not_called()
 
+    def test_root_redirects_a_verified_session_to_the_dashboard(self):
+        with patch.object(auth, "verify_access", return_value=(USER, 3600)):
+            self.client.set_cookie(auth.COOKIE, "valid")
+            root = self.client.get("/")
+        self.assertEqual(root.status_code, 302)
+        self.assertEqual(root.headers["Location"], "/dashboard")
+
     def test_public_pages_do_not_advertise_the_retired_warehouse(self):
-        for path in ("/", "/login"):
-            html = self.client.get(path).get_data(as_text=True)
-            self.assertNotIn("BigQuery", html)
-        self.assertIn("DuckDB", self.client.get("/").get_data(as_text=True))
+        html = self.client.get("/login").get_data(as_text=True)
+        self.assertNotIn("BigQuery", html)
+        self.assertIn("AdventureWorks", html)
         self.loader.assert_not_called()
 
-    def test_landing_remains_public_with_stale_cookie_or_auth_outage(self):
+    def test_root_redirects_to_login_with_stale_cookie_or_auth_outage(self):
         self.client.set_cookie(auth.COOKIE, "stale")
         for status in (401, 403, 503):
             with patch.object(
                 auth, "verify_access", side_effect=auth.AuthError("unavailable", status)
             ):
-                self.assertEqual(self.client.get("/").status_code, 200)
+                root = self.client.get("/")
+                self.assertEqual(root.status_code, 302)
+                self.assertEqual(root.headers["Location"], "/login")
                 self.assertEqual(self.client.get("/_dash-layout").status_code, status)
         self.loader.assert_not_called()
 
