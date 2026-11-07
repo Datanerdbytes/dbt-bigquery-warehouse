@@ -229,7 +229,7 @@ Built using Plotly Dash's native `dash.register_page` architecture, styled with 
 - **Automated CI Workflow (`.github/workflows/ci_pipeline.yml`)**:
   - **Validate & Test Job**: Triggers on pull requests and pushes to `main`. Automatically provisions Python 3.12 with Astral `uv` and Node 22, builds the authentication bundle and runs offline Python/browser-state tests, then loads the versioned source CSVs into DuckDB bronze tables and runs the full `dbt build` (models + data tests) against the DuckDB target. No warehouse credentials are involved.
   - **Shipped-Artifact Drift Gates**: Compare the committed gold database and the committed telemetry artifact with a fresh build, and fail if they diverge.
-  - **Deploy Job**: removed along with the deleted GCP project; the Vercel deployment path is added in the packaging phase.
+  - **No Deploy Job**: CI stops at validation. The repository is connected to the `dbt-bigquery-warehouse` Vercel project, whose Git integration deploys every push to `main`, so a second deploy path in CI would only race the same project for the production alias.
 - **Production Containerization (`Dockerfile`)**:
   - Node 22 build stage runs `npm ci` and `npm run build:auth`.
   - Python 3.12-slim runtime receives the compiled authentication bundle; Node is not required at runtime.
@@ -253,6 +253,10 @@ The application is packaged for Vercel serverless functions.
 Because the runtime ships only those packages, a module the app imports must not require a build-only one. The retired BigQuery audit helper imports the warehouse client behind a `try`/`except ImportError`, and `tests/test_vercel_deployment.py` boots the app with every build-only package blocked to keep it that way.
 
 **Deploy:**
+
+Production deploys are owned by the **Vercel Git integration**: a push to `main` in this repository triggers the `dbt-bigquery-warehouse` project to build and promote to `dbt-bigquery-warehouse.vercel.app`. CI does not deploy, so there is a single production deployment per push.
+
+To deploy from the CLI instead (for example to test a build before merging):
 
 ```bash
 npm ci
@@ -408,7 +412,7 @@ See [the detailed authentication guide](docs/supabase-auth.md) for session behav
 demo-database/
 ├── .github/
 │   └── workflows/
-│       └── ci_pipeline.yml          # GitHub Actions CI/CD: dbt validation & Cloud Run deploy
+│       └── ci_pipeline.yml          # GitHub Actions CI/CD: offline validation & dbt build
 ├── .agents/skills/
 │   └── loading-spinner/            # Task capsule: standardized dcc.Loading spinner pattern
 ├── analytics_layer/                 # dbt transformation project
