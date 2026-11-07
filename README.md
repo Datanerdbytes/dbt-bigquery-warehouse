@@ -1,12 +1,10 @@
 # 🚀 Enterprise Data Warehouse, Pipeline Observability & Analytics Platform
 
-> ⚠️ **Architecture migration in progress.** The BigQuery project and the Supabase project behind this app were deleted, so the live Cloud Run URL and the credentials below no longer work. The dbt transformation layer has been rebuilt on **DuckDB**, the clean gold database is built and verified, and the app now **reads that database plus a shipped telemetry artifact at runtime — there is no warehouse in the request path**. The remaining work is the auth provider and the Vercel packaging; see [docs/vercel-migration-plan.md](docs/vercel-migration-plan.md) for the current state and the remaining phases.
+> ✅ **Live on Vercel.** The BigQuery project and the Supabase project behind the original Cloud Run deployment were deleted. The dbt transformation layer was rebuilt on **DuckDB**, and the app now **reads a shipped gold database plus a shipped telemetry artifact at runtime — there is no warehouse in the request path**. Authentication runs on a new Supabase project. See [docs/vercel-migration-plan.md](docs/vercel-migration-plan.md) for the full runbook.
 
-> 🌐 **Live Interactive App:** [https://dash-observability-app-1022429033383.us-central1.run.app/](https://dash-observability-app-1022429033383.us-central1.run.app/) *(retired)*
+> 🌐 **Live Interactive App:** [https://dbt-bigquery-warehouse.vercel.app](https://dbt-bigquery-warehouse.vercel.app)
 
-**Login Credentials**
-username: ```nivero9893@moblha.com```
-password: ```pofcu2-siDfes-vimryt```
+Sign in with your own Supabase account, or use the **Continue with Google** / **Continue with GitHub** buttons on the login page.
 
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![dbt](https://img.shields.io/badge/dbt-Core%201.12+-FF694B?style=for-the-badge&logo=dbt&logoColor=white)](https://www.getdbt.com/)
@@ -465,7 +463,6 @@ demo-database/
 │   │   ├── analytics.duckdb         # Shipped gold database (fct_sales, dim_products, dim_customers)
 │   │   └── pipeline_telemetry.json  # Shipped pipeline health, coverage and ingestion facts
 │   ├── app.py                       # Main application entry point & export callbacks
-│   ├── app_observability.py         # Standalone pipeline observability & lineage viewer
 │   ├── data_loader.py               # DuckDB data fetchers with @cache.memoize
 │   ├── keepawake.py                 # Scheduled query that keeps the Supabase project awake
 │   └── pipeline_telemetry.py        # Reads the shipped telemetry artifact

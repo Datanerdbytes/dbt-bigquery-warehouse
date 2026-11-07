@@ -45,7 +45,7 @@ def build_health_state(df_summary):
     if failed_count:
         items.append(
             dbc.DropdownMenuItem(
-                f"{failed_count} dbt Test Failures Detected",
+                f"{failed_count} failing dbt checks in the last build",
                 href="/pipeline-health",
                 className="text-danger",
             )
@@ -62,7 +62,7 @@ def build_health_state(df_summary):
     if not has_alerts:
         items.append(
             dbc.DropdownMenuItem(
-                f"Pipeline healthy ({passed_count} tests passed)",
+                f"Pipeline healthy ({passed_count} checks passed)",
                 className="text-success",
             )
         )
@@ -73,10 +73,10 @@ def build_health_state(df_summary):
                 href="/pipeline-health",
             )
         )
-    items.append(dbc.DropdownMenuItem(f"Last pipeline run: {last_check[:19]}"))
+    items.append(dbc.DropdownMenuItem(f"Last pipeline build: {last_check[:19]}"))
     critical = failed_count > 0 or status == "CRITICAL"
     message = (
-        f"Detected {failed_count} failing dbt assertions."
+        f"Detected {failed_count} failing dbt assertions in the last build."
         if failed_count
         else f"Pipeline status: {status}; {warning_count} test warnings."
     )

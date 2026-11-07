@@ -24,7 +24,7 @@
 - Use Dash Pages with `dash.page_registry` and `dash.register_page(__name__)`, unless the Snapshot Engine is used. With Snapshot Engine, use callback routing instead of Dash Pages.
 - Keep Dash page modules in a `pages/` directory.
 - `my-dash-app/data_loader.py` owns dashboard data access. It reads the shipped gold database at `my-dash-app/data/analytics.duckdb` (override with `GOLD_DATABASE_PATH`) and returns the merged dataset, its date bounds and the filter options. Shared caching lives in root `utils/cache.py`. Cache expensive data-fetching operations server-side.
-- Pipeline Health reads the committed telemetry artifact at `my-dash-app/data/pipeline_telemetry.json` (override with `PIPELINE_TELEMETRY_PATH`) through `my-dash-app/pipeline_telemetry.py`. `Scripts/export_pipeline_telemetry.py` builds that artifact from `analytics_layer/target/run_results.json`, `analytics_layer/target/manifest.json` and `analytics_layer/build/bronze_manifest.json`. `my-dash-app/app_observability.py` also contains manifest parsing helpers.
+- Pipeline Health reads the committed telemetry artifact at `my-dash-app/data/pipeline_telemetry.json` (override with `PIPELINE_TELEMETRY_PATH`) through `my-dash-app/pipeline_telemetry.py`. `Scripts/export_pipeline_telemetry.py` builds that artifact from `analytics_layer/target/run_results.json`, `analytics_layer/target/manifest.json` and `analytics_layer/build/bronze_manifest.json`.
 - The app entry point must expose the Flask server: `server = app.server`.
 
 Current project structure (key source files; generated and local-only files are noted):
@@ -74,7 +74,6 @@ demo-database/
 │   ├── data_loader.py               # Cached dashboard queries and data preparation
 │   ├── keepawake.py                 # Scheduled query that keeps the Supabase project awake
 │   ├── pipeline_telemetry.py        # Reads the shipped telemetry artifact
-│   ├── app_observability.py         # Observability module outside Dash Pages directory
 │   ├── theme.py                     # Shared Python chart and color helpers
 │   ├── assets/                      # Modular CSS, browser JS, generated bundles
 │   │   └── 00-theme.css             # CSS theme tokens
@@ -306,7 +305,7 @@ Status / handoff commit / blockers:
 
 ### 13.4 Shared files and cross-task contracts
 
-- Default to one owner per shared file per batch. Treat `AGENTS.md`, `CLAUDE.md`, root `utils/`, `my-dash-app/app.py`, `auth.py`, `data_loader.py`, `app_observability.py`, `theme.py`, `assets/00-theme.css`, shared components, dependency manifests/locks, `Dockerfile`, CI, `run_pipeline.sh`, and dbt project/package/source definitions as coordination-sensitive. This list supplements each task's explicit path ownership.
+- Default to one owner per shared file per batch. Treat `AGENTS.md`, `CLAUDE.md`, root `utils/`, `my-dash-app/app.py`, `auth.py`, `data_loader.py`, `theme.py`, `assets/00-theme.css`, shared components, dependency manifests/locks, `Dockerfile`, CI, `run_pipeline.sh`, and dbt project/package/source definitions as coordination-sensitive. This list supplements each task's explicit path ownership.
 - Before changing a shared file outside the assignment, send the coordinator the exact path, required change, affected consumers, and dependency impact. Continue independent in-scope work while ownership is resolved. The coordinator either expands the assignment explicitly or assigns a separate prerequisite task; silence is not approval.
 - Ownership records are procedural agreements, not automatic locks. Confirm there is no concurrent writer before changing a shared checkout. Avoid repository-wide formatting, mass renames, and unrelated cleanup during parallel batches.
 - Agree contracts for Dash component IDs/callback outputs, prepared dataset columns and dtypes, cache keys/TTL behavior, authentication routes/response codes, and dbt model/source schemas before dependent work. Notify consumers when a contract changes; update their task records and tests.

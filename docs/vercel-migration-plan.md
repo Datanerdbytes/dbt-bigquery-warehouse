@@ -524,7 +524,7 @@ Measured installed sizes of the app's dependencies: `dash` 35.7 MB, `plotly` 36.
 6. ✅ `Scripts/export_pipeline_telemetry.py` + `Scripts/verify_shipped_telemetry.py` build and gate the shipped telemetry artifact; the gate runs in CI after the dbt build.
 
 ### Phase 3 — Auth (option A: new Supabase project)
-**Status: the repository side shipped 2026-11-06. The project was created, migrated, configured through the Management API and deployed on 2026-11-06. What remains is the OAuth apps, the owner account and the live auth tests.**
+**Status: ✅ Done (2026-11-07).** The repository side shipped 2026-11-06. The project was created, migrated, configured through the Management API and deployed on 2026-11-06; the OAuth apps, the owner account and the Supabase redirect URLs were completed on 2026-11-07, when the canonical Vercel project `dbt-bigquery-warehouse` received its environment and the app became reachable at `https://dbt-bigquery-warehouse.vercel.app`.
 
 The code needed no rewrite. The app reads the project URL and the keys from the
 environment, the guards live in three replayable SQL migrations, and the
@@ -554,10 +554,11 @@ Supabase Admin API, and dropping `@supabase/supabase-js` from the frontend.
 Option A keeps the Admin API and the PKCE client.
 
 ### Phase 4 — `pipeline_health` (repurpose)
+**Status: ✅ Done (2026-11-07).**
 1. ✅ **Done in Phase 2:** the telemetry source is now the build's `run_results.json` + `manifest.json` + the bronze load manifest, baked into the shipped artifact by `Scripts/export_pipeline_telemetry.py`. The build manifest already records source row counts and destination row counts; freshness is derived from the load timestamp.
-2. Rewrite the KPIs/tabs against that source.
-3. Update the header bell copy (it currently says "dbt Test Failures").
-4. Delete or repoint `app_observability.py`.
+2. ✅ The page reads that artifact through `my-dash-app/pipeline_telemetry.py`, exposed as cached frames by `data_loader.py`.
+3. ✅ The header bell now says "failing dbt checks in the last build" and "Last pipeline build", because the numbers come from a recorded build rather than a live dbt run.
+4. ✅ `my-dash-app/app_observability.py` was deleted. It parsed `analytics_layer/target/manifest.json`, which is not deployed, and no module imported it.
 
 ### Phase 5 — Vercel packaging
 **Status: ✅ Done (2026-11-06).** The changes below are the ones that shipped; the original draft is kept in the notes at the end of the section.
