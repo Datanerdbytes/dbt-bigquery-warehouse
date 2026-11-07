@@ -67,28 +67,39 @@ GENERIC_AUTH_ERROR = "Invalid email or password"
 GENERIC_SESSION_ERROR = "Authentication failed"
 
 
+def _trusted_origins():
+    """Return the trusted browser origins, canonical first, without duplicates."""
+    origins = []
+    for candidate in os.getenv("AUTH_APP_ORIGIN", "").split(","):
+        candidate = candidate.strip().rstrip("/")
+        if candidate and candidate not in origins:
+            origins.append(candidate)
+    return origins
+
+
 def settings():
     url = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "").rstrip("/")
     key = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
-    origin = os.getenv("AUTH_APP_ORIGIN", "").rstrip("/")
-    parsed = urlsplit(origin)
-    local = parsed.hostname in {"localhost", "127.0.0.1"}
-    if (
-        not url.startswith("https://")
-        or not key
-        or not parsed.netloc
-        or parsed.path
-        or parsed.query
-        or parsed.fragment
-        or parsed.username
-        or (parsed.scheme != "https" and not (local and parsed.scheme == "http"))
-    ):
+    origins = _trusted_origins()
+    if not url.startswith("https://") or not key or not origins:
         raise AuthError("auth_not_configured", 503)
-    return url, key, origin, parsed.scheme == "https"
+    for origin in origins:
+        parsed = urlsplit(origin)
+        local = parsed.hostname in {"localhost", "127.0.0.1"}
+        if (
+            not parsed.netloc
+            or parsed.path
+            or parsed.query
+            or parsed.fragment
+            or parsed.username
+            or (parsed.scheme != "https" and not (local and parsed.scheme == "http"))
+        ):
+            raise AuthError("auth_not_configured", 503)
+    return url, key, origins
 
 
 def verify_access(token):
-    url, key, _, _ = settings()
+    url, key, _ = settings()
     if not isinstance(token, str) or not token or len(token) > 3500:
         raise AuthError("session_required", 401)
     try:
@@ -171,11 +182,13 @@ def install_auth(server):
 
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             try:
-                _, _, origin, _ = settings()
+                _, _, origins = settings()
             except AuthError as error:
                 return jsonify(error=error.code), error.status
-            if request.headers.get("Origin") != origin:
+            origin = request.headers.get("Origin")
+            if origin not in origins:
                 return jsonify(error="origin_rejected"), 403
+            g.auth_origin = origin
         # The public product page never needs dashboard data or a valid session.
         # Preserve the existing root redirect for verified users.
         if request.path == "/" and request.method in {"GET", "HEAD"}:
@@ -255,7 +268,7 @@ def install_auth(server):
     @server.get("/auth/config")
     def config():
         try:
-            url, key, _, _ = settings()
+            url, key, _ = settings()
         except AuthError as error:
             return jsonify(error=error.code), error.status
         return jsonify(url=url, anonKey=key, passwordLockoutEnabled=lockout_enabled())
@@ -309,7 +322,10 @@ def install_auth(server):
     def session_bridge():
         if request.method == "GET":
             return jsonify(error="method_not_allowed"), 405
-        _, _, _, secure = settings()
+        _, _, _ = settings()
+        # The guard matched this request's origin, so the cookie follows the
+        # scheme of the hostname the browser actually used.
+        secure = getattr(g, "auth_origin", "").startswith("https://")
         if request.method == "DELETE":
             response = jsonify(ok=True)
             response.delete_cookie(

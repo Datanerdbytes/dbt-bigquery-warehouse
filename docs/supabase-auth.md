@@ -74,7 +74,11 @@ https://<app-origin>/reset-password
 ```
 
 `AUTH_APP_ORIGIN` must equal the deployment origin exactly, because the guard
-compares it to the `Origin` header of every mutating request.
+compares it to the `Origin` header of every mutating request. A deployment that
+is published under several hostnames lists them as a comma-separated value, and
+the guard then accepts any of them exactly: `AUTH_APP_ORIGIN=https://a.example,https://b.example`.
+The first entry is the canonical origin; the others are additional trusted
+hostnames. Every listed hostname needs its own entries in the redirect URLs.
 
 **Email volume.** The built-in SMTP service of a free project sends at most
 **two messages per hour**. That is enough to confirm a test account but not
@@ -92,7 +96,7 @@ Variables**, for the Production environment:
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | The project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | The `anon` public key |
-| `AUTH_APP_ORIGIN` | The deployment origin, exactly |
+| `AUTH_APP_ORIGIN` | The deployment origin, exactly; comma separated for several trusted hostnames |
 | `SUPABASE_SERVICE_ROLE_KEY` | The `service_role` key, server only |
 | `AUTH_PASSWORD_LOCKOUT_ENABLED` | `true` once migration 1 is applied |
 | `CRON_SECRET` | A random string of at least 16 characters |
@@ -148,7 +152,9 @@ environment for production:
 - `NEXT_PUBLIC_SUPABASE_URL`: the Supabase project URL.
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: the public anon key, never a service-role key.
 - `AUTH_APP_ORIGIN`: exact browser origin. Use `http://localhost:8050` locally
-  and the deployment origin online.
+  and the deployment origin online. When the app is published under more than
+  one hostname, list them comma separated; each one must also be in the
+  Supabase redirect URLs.
 
 The app loads root `.env` without overriding runtime environment variables.
 Any account in the configured Supabase project with a verified email can sign in

@@ -83,7 +83,7 @@ def _guard_rejected(detail: bytes) -> bool:
 def _service_request(method, path, body=None):
     from auth import settings
 
-    url, _, _, _ = settings()
+    url, _, _ = settings()
     parsed = urlsplit(url)
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     if (

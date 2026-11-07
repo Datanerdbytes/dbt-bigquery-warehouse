@@ -269,7 +269,7 @@ npx vercel deploy --prod
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | Public | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public | Supabase anon key |
-| `AUTH_APP_ORIGIN` | Server | Must equal the deployment origin exactly; the guard compares it to the `Origin` header |
+| `AUTH_APP_ORIGIN` | Server | Must equal the deployment origin exactly; the guard compares it to the `Origin` header. Several trusted hostnames are listed comma separated |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server only | Required for `/admin/users`; never exposed to the browser |
 | `AUTH_PASSWORD_LOCKOUT_ENABLED` | Server | `true` once the password-lockout migration is applied |
 | `CRON_SECRET` | Server | Authorizes the daily keep-wake cron that stops the free Supabase project from pausing |
@@ -595,7 +595,7 @@ Step 4 is the one that matters: if a model changes and an artifact is not re-exp
 
 ### Supabase & OAuth Configuration
 
-The Flask app loads root `.env` without overriding existing environment values. Configure the same auth variables in the Vercel project settings for production, with `AUTH_APP_ORIGIN` equal to the deployment origin. Keep provider secrets server-side. The anon key is intentionally public; never substitute a service-role key.
+The Flask app loads root `.env` without overriding existing environment values. Configure the same auth variables in the Vercel project settings for production, with `AUTH_APP_ORIGIN` equal to the deployment origin. When the app is published under more than one hostname, list them comma separated; each one also needs its own Supabase redirect URLs. Keep provider secrets server-side. The anon key is intentionally public; never substitute a service-role key.
 
 The project that hosted the previous Cloud Run deployment was deleted with its Google Cloud project. The replacement is provisioned from scratch; the full runbook is in [docs/supabase-auth.md](docs/supabase-auth.md). In short:
 
@@ -630,7 +630,7 @@ Google redirects to **Supabase's `/auth/v1/callback`**, and Supabase redirects t
 | Google `redirect_uri_mismatch` | Add the exact Supabase callback above to the Google client's **Authorized redirect URIs**. Retry from the app's login page after the change propagates. |
 | Email confirmed but callback cannot finish | Open confirmation links in the browser where signup began. If already confirmed, return to `/login` and sign in with the existing account. |
 | Verified account still awaits approval | Deploy the updated server and frontend together; legacy `AUTH_ALLOWED_EMAILS` settings are no longer used. |
-| Origin rejected | Match `AUTH_APP_ORIGIN` to the browser's scheme, host, and port. `localhost` and `127.0.0.1` are different origins. |
+| Origin rejected | Match `AUTH_APP_ORIGIN` to the browser's scheme, host, and port. `localhost` and `127.0.0.1` are different origins. A host that is missing from a comma-separated list is rejected. |
 | Dashboard remains on “Loading…” | Build the frontend and deploy all auth source files together. Confirm `/login`, `/auth/config`, and `/auth/session` are registered; an orphaned `auth.bundle.js` cannot function without the backend. |
 | Authentication unavailable | Check runtime variables and Supabase availability; the app intentionally denies data access until verification succeeds. |
 

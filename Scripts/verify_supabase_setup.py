@@ -183,7 +183,9 @@ def main(argv: list[str] | None = None) -> int:
         "--service-role-key", default=os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     )
     parser.add_argument(
-        "--origin", default=os.getenv("AUTH_APP_ORIGIN", ""), help="deployment origin"
+        "--origin",
+        default=os.getenv("AUTH_APP_ORIGIN", ""),
+        help="deployment origin, comma separated for several trusted origins",
     )
     parser.add_argument("--skip-password-grant", action="store_true")
     args = parser.parse_args(argv)
@@ -219,10 +221,14 @@ def main(argv: list[str] | None = None) -> int:
     if not args.skip_password_grant:
         _check_password_grant(report, url, anon)
 
-    origin = (args.origin or "").strip().rstrip("/")
+    origins = [
+        candidate.strip().rstrip("/")
+        for candidate in (args.origin or "").split(",")
+        if candidate.strip()
+    ]
     print("\nManual steps that cannot be checked through the API:")
-    print(f"  - Set AUTH_APP_ORIGIN to {origin or 'the deployment origin'}")
-    print("  - Add that origin and <origin>/auth/callback to the redirect URLs")
+    print(f"  - Set AUTH_APP_ORIGIN to {', '.join(origins) or 'the deployment origin'}")
+    print("  - Add each origin and <origin>/auth/callback to the redirect URLs")
     print("  - Promote the first account to qe_owner in app_metadata")
     print("  - Set AUTH_PASSWORD_LOCKOUT_ENABLED=true in the deployment")
     print("  - Set CRON_SECRET in the deployment so the keep-wake cron can run")

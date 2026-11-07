@@ -34,7 +34,7 @@ def _query_database():
     from auth import AuthError, settings
 
     try:
-        url, _, _, _ = settings()
+        url, _, _ = settings()
     except AuthError:
         raise KeepAwakeError("auth_not_configured") from None
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")

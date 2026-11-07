@@ -143,8 +143,7 @@ class PasswordGatewayTests(unittest.TestCase):
                 return_value=(
                     "https://test.supabase.co",
                     "public",
-                    "https://app.example",
-                    True,
+                    ["https://app.example"],
                 ),
             ),
             patch.dict(os.environ, {"SUPABASE_SERVICE_ROLE_KEY": "server-secret"}),
@@ -184,8 +183,7 @@ class PasswordGatewayTests(unittest.TestCase):
                     return_value=(
                         "https://test.supabase.co",
                         "public",
-                        "https://app.example",
-                        True,
+                        ["https://app.example"],
                     ),
                 ),
                 patch.object(passwords, "build_opener", return_value=opener),

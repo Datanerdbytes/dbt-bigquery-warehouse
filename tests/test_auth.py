@@ -117,7 +117,7 @@ class AuthTests(unittest.TestCase):
                 html,
             )
             self.assertIn(
-                'aria-label="Data Lineage: End-to-end data pipeline flow from CRM and ERP to the BigQuery mart"',
+                'aria-label="Data Lineage: End-to-end data pipeline flow from CRM and ERP to the DuckDB mart"',
                 html,
             )
             self.assertIn('src="/assets/showcase.bundle.js"', html)
@@ -130,6 +130,13 @@ class AuthTests(unittest.TestCase):
             self.assertIn('id="auth-form"', login)
             self.assertNotIn('id="auth-showcase"', login)
             remote.assert_not_called()
+        self.loader.assert_not_called()
+
+    def test_public_pages_do_not_advertise_the_retired_warehouse(self):
+        for path in ("/", "/login"):
+            html = self.client.get(path).get_data(as_text=True)
+            self.assertNotIn("BigQuery", html)
+        self.assertIn("DuckDB", self.client.get("/").get_data(as_text=True))
         self.loader.assert_not_called()
 
     def test_landing_remains_public_with_stale_cookie_or_auth_outage(self):
@@ -213,6 +220,42 @@ class AuthTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Max-Age=0", response.headers["Set-Cookie"])
         self.assertIn("no-store", response.headers["Cache-Control"])
+
+    def test_additional_trusted_origins_are_accepted(self):
+        alias = "https://alias.example.com"
+        env = patch.dict(
+            os.environ,
+            {"AUTH_APP_ORIGIN": f"{ENV['AUTH_APP_ORIGIN']},{alias}"},
+        )
+        env.start()
+        self.addCleanup(env.stop)
+        response = self.client.delete("/auth/session", headers={"Origin": alias})
+        self.assertEqual(response.status_code, 200)
+        with self.remote():
+            response = self.client.post(
+                "/auth/session",
+                json={"access_token": token()},
+                headers={"Origin": alias},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            self.client.post(
+                "/auth/session",
+                json={"access_token": token()},
+                headers={"Origin": "https://other.example.com"},
+            ).status_code,
+            403,
+        )
+        self.loader.assert_not_called()
+
+    def test_untrusted_origin_configuration_is_rejected(self):
+        with patch.dict(
+            os.environ, {"AUTH_APP_ORIGIN": "https://a.example.com,not-an-origin"}
+        ):
+            self.assertEqual(self.client.get("/auth/config").status_code, 503)
+        with patch.dict(os.environ, {"AUTH_APP_ORIGIN": ""}):
+            self.assertEqual(self.client.get("/auth/config").status_code, 503)
+        self.loader.assert_not_called()
 
     def test_auth_page_navigation_does_not_consume_attempt_budget(self):
         with patch.object(auth, "verify_access") as verify:

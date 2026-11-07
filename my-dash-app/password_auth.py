@@ -26,7 +26,7 @@ class _NoRedirect(HTTPRedirectHandler):
 def _request(path, body, privileged=False):
     from auth import settings
 
-    url, anon, _, _ = settings()
+    url, anon, _ = settings()
     parsed = urlsplit(url)
     key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "") if privileged else anon
     if (
