@@ -1,6 +1,0 @@
-# Local HyperFrames state, generated captures, and duplicate app renders.
-**/.hyperframes/
-renders/
-
-# The generated CLAUDE.md files duplicate each project's AGENTS.md.
-**/CLAUDE.md

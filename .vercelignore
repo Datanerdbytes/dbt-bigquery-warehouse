@@ -26,7 +26,6 @@ node_modules
 /docs
 /logs
 /data
-/landing-animations
 /Scripts
 /sqlfluff_libs
 /sqlfluff_macros
