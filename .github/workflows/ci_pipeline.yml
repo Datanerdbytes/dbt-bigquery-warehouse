@@ -93,10 +93,15 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
-      - name: Deploy to Vercel production
-        # Production is served by the dbt-bigquery-warehouse project, which is
-        # the one this repository is connected to. The adventureworks-analytics
-        # project still owns two hostnames that Google Safe Browsing has
-        # flagged for phishing; publishing there would keep the app reachable
-        # under those names.
+      - name: Deploy to the canonical Vercel project
+        # The repository is connected to dbt-bigquery-warehouse, so its
+        # hostname dbt-bigquery-warehouse.vercel.app is the canonical
+        # production host.
         run: vercel --prod --yes --project dbt-bigquery-warehouse
+
+      - name: Deploy to the legacy Vercel project
+        # adventureworks-analytics still owns the two hostnames that Google
+        # Safe Browsing has flagged. Its automatic alias cannot be moved to
+        # another project, so it keeps serving the app until the appeal
+        # resolves and the hostnames are retired.
+        run: vercel --prod --yes --project adventureworks-analytics
