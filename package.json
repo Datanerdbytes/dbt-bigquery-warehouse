@@ -1,20 +1,9 @@
 {
-  "name": "quantum-echo-auth",
+  "name": "quantum-echo-dashboard",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": {
-    "build:auth": "node Scripts/build-auth.mjs",
-    "test:auth": "node --test tests/auth-browser.test.mjs tests/csp-browser.test.mjs tests/password-lockout-sql.test.mjs"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "2.100.0"
-  },
   "devDependencies": {
-    "@electric-sql/pglite": "0.5.10",
-    "esbuild": "0.25.12",
-    "jsdom": "26.1.0",
-    "playwright": "1.64.0",
     "prettier": "3.6.2"
   }
 }

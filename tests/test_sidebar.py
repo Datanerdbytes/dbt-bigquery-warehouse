@@ -1,40 +1,30 @@
-"""Account identity must be built separately for each authenticated request."""
+"""The workspace is public: the sidebar carries navigation only, no account UI."""
 
 import json
 import sys
 import unittest
 from pathlib import Path
 
-from flask import Flask, g
 from plotly.utils import PlotlyJSONEncoder
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "my-dash-app"))
-from components.sidebar import create_account_menu
+from components.sidebar import create_sidebar
 
 
-class SidebarAccountTests(unittest.TestCase):
-    def test_identity_is_request_scoped(self):
-        server = Flask(__name__)
-        for username in ("first-analyst", "second-analyst"):
-            with server.test_request_context():
-                g.auth_user = {
-                    "email": f"{username}@example.com",
-                    "user_metadata": {"username": username},
-                }
-                serialized = json.dumps(create_account_menu(), cls=PlotlyJSONEncoder)
-                self.assertIn(username, serialized)
-                other = (
-                    "second-analyst" if username == "first-analyst" else "first-analyst"
-                )
-                self.assertNotIn(other, serialized)
+class SidebarPublicNavigationTests(unittest.TestCase):
+    def test_sidebar_renders_public_navigation(self):
+        serialized = json.dumps(create_sidebar(), cls=PlotlyJSONEncoder)
+        for href in ("/dashboard", "/customers", "/pipeline-health"):
+            self.assertIn(href, serialized)
 
-    def test_email_fallback_and_layout_without_request(self):
-        server = Flask(__name__)
-        with server.test_request_context():
-            g.auth_user = {"email": "analyst@example.com"}
-            serialized = json.dumps(create_account_menu(), cls=PlotlyJSONEncoder)
-            self.assertIn("Account options for analyst", serialized)
-            self.assertIn("dashboard-signout", serialized)
-        serialized = json.dumps(create_account_menu(), cls=PlotlyJSONEncoder)
-        self.assertIn("Account options for Account", serialized)
-        self.assertNotIn("analyst@example.com", serialized)
+    def test_sidebar_has_no_account_or_admin_artifacts(self):
+        """Regression: removing authentication removed the account menu and the
+        admin link; neither may come back through the shared sidebar."""
+        serialized = json.dumps(create_sidebar(), cls=PlotlyJSONEncoder)
+        self.assertNotIn("sidebar-account", serialized)
+        self.assertNotIn("dashboard-signout", serialized)
+        self.assertNotIn("/admin/users", serialized)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -142,16 +142,14 @@ uv tool run --from pip-audit==2.10.1 pip-audit -r audit-requirements.txt --no-de
 ```
 
 ### Local Node.js Audit
-```bash
-npm ci
-npm audit --json --audit-level=moderate > npm-audit-results.json
-npm sbom --sbom-format=cyclonedx --json > sbom-npm.json
-```
+
+Removed on 2026-11-12 together with the Node.js authentication layer. The
+manifest now pins only Prettier for CSS formatting, and the workflow's
+`npm-audit` job was dropped with it.
 
 ### Run Full Test Suite
 ```bash
 .venv/bin/python -B -m unittest discover -s tests -v
-npm run test:auth
 ```
 
 ---

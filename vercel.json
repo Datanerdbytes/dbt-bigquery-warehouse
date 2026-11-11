@@ -1,16 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "flask",
-  "crons": [
-    {
-      "path": "/keepawake",
-      "schedule": "0 6 * * *"
-    }
-  ],
   "functions": {
     "wsgi.py": {
       "maxDuration": 300,
-      "excludeFiles": "{analytics_layer/**,node_modules/**,data/raw/**,tests/**,Notebooks/**,my-dash-app/auth_frontend/**,.venv/**,package.json}"
+      "excludeFiles": "{analytics_layer/**,node_modules/**,data/raw/**,tests/**,Notebooks/**,.venv/**,package.json}"
     }
   }
 }

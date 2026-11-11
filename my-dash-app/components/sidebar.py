@@ -1,67 +1,5 @@
 import dash_bootstrap_components as dbc
 from dash import html
-from flask import g, has_request_context
-from user_admin import is_admin
-
-
-def create_account_menu():
-    user = getattr(g, "auth_user", {}) if has_request_context() else {}
-    metadata = user.get("user_metadata") or {}
-    email = user.get("email") or ""
-    name = str(
-        metadata.get("username")
-        or metadata.get("full_name")
-        or metadata.get("name")
-        or email.split("@")[0]
-        or "Account"
-    )
-    initials = "".join(part[0] for part in name.split()[:2]).upper()
-
-    def identity():
-        return [
-            html.Span(
-                initials,
-                className="sidebar-account-avatar",
-                **{"aria-hidden": "true"},
-            ),
-            html.Span(
-                [html.Strong(name), html.Span("Analytics workspace")],
-                className="sidebar-account-identity",
-            ),
-        ]
-
-    return html.Details(
-        [
-            html.Summary(
-                identity()
-                + [html.I(className="bi bi-three-dots", **{"aria-hidden": "true"})],
-                className="sidebar-account-trigger",
-                **{"aria-label": f"Account options for {name}"},
-            ),
-            html.Div(
-                [
-                    html.Div(identity(), className="sidebar-account-heading"),
-                    html.Div(email, className="sidebar-account-email"),
-                    html.Hr(),
-                    html.Button(
-                        [
-                            html.I(
-                                className="bi bi-box-arrow-right",
-                                **{"aria-hidden": "true"},
-                            ),
-                            "Log out",
-                        ],
-                        id="dashboard-signout",
-                        className="sidebar-account-action",
-                    ),
-                ],
-                className="sidebar-account-panel",
-                **{"aria-label": "Account options"},
-            ),
-        ],
-        id="sidebar-account",
-        className="sidebar-account",
-    )
 
 
 def create_sidebar():
@@ -70,9 +8,6 @@ def create_sidebar():
         ("Customer 360", "/customers", "bi-people"),
         ("Pipeline Health", "/pipeline-health", "bi-activity"),
     ]
-    user = getattr(g, "auth_user", {}) if has_request_context() else {}
-    if is_admin(user):
-        links.append(("User management", "/admin/users", "bi-person-gear"))
     return html.Aside(
         [
             html.Div(
@@ -115,7 +50,6 @@ def create_sidebar():
                 className="sidebar-navigation",
                 vertical=True,
             ),
-            create_account_menu(),
         ],
         className="sidebar-container",
         **{"aria-label": "Main navigation"},

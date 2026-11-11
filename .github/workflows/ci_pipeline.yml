@@ -41,19 +41,8 @@ jobs:
       - name: Check project types with locked Pyrefly
         run: uv run --locked pyrefly check
 
-      - name: Set up Node for authentication build
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-
-      - name: Build and test dashboard authentication offline
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
-          npm run build:auth
-          npm run test:auth
-          uv run python -B -m unittest discover -s tests -v
+      - name: Run the offline Python test suite
+        run: uv run python -B -m unittest discover -s tests -v
 
       - name: Build bronze and run the dbt pipeline offline
         # The BigQuery warehouse was retired, so CI rebuilds the same models

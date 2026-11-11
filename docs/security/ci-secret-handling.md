@@ -19,8 +19,9 @@ credential:
 - The Vercel `deploy` job was removed on 2026-11-07. The repository's Vercel
   Git integration owns production, so CI no longer reads the `VERCEL_TOKEN`
   secret and holds no deployment credential.
-- The Supabase configuration used by the dashboard is public (anon key only)
-  and is never injected as a CI secret.
+- The Supabase authentication layer was removed on 2026-11-12 with the rest of
+  the account system; the dashboard is fully public and CI holds no auth
+  configuration at all.
 
 ## Guardrails
 

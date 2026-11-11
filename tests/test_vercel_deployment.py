@@ -65,7 +65,6 @@ print(json.dumps({
     "dash_module_file": dash_module.__file__,
     "assets_folder": dash_module.app.config.assets_folder,
     "pages_folder": dash_module.app.config.pages_folder,
-    "template_folder": entrypoint.app.template_folder,
     "root_status": root.status_code,
     "root_location": root.headers.get("Location"),
     "dashboard_status": dashboard.status_code,
@@ -74,9 +73,8 @@ print(json.dumps({
 """
 
 # Directories under the app that hold build-time inputs rather than runtime
-# files. The auth bundle is prebuilt into ``assets/``, and the cache directory
-# only holds a leftover cache entry.
-BUILD_INPUT_DIRECTORIES = ("auth_frontend", "cache-directory")
+# files. The cache directory only holds a leftover cache entry.
+BUILD_INPUT_DIRECTORIES = ("cache-directory",)
 
 # Packages that only the build uses. The deployment guard is inert when none of
 # them can be detected, so the test asserts that they were found.
@@ -87,9 +85,7 @@ BUILD_ARTIFACTS = (
     "analytics_layer/models/marts/sales.sql",
     "node_modules/left-pad/index.js",
     "data/raw/source_crm/customers.csv",
-    "tests/test_auth.py",
     "Notebooks/analysis.ipynb",
-    "my-dash-app/auth_frontend/main.js",
     ".venv/lib/python3.12/site-packages/dash/__init__.py",
     "package.json",
 )
@@ -241,13 +237,6 @@ def reachable_imports():
 def run_entrypoint_probe(blocked=()):
     """Boot the deployment entrypoint in a subprocess and report what it serves."""
     environment = dict(os.environ)
-    environment.update(
-        {
-            "NEXT_PUBLIC_SUPABASE_URL": "https://project.supabase.co",
-            "NEXT_PUBLIC_SUPABASE_ANON_KEY": "test-anon-key",
-            "AUTH_APP_ORIGIN": "https://dashboard.example.com",
-        }
-    )
     result = subprocess.run(
         [
             sys.executable,
@@ -298,18 +287,16 @@ class EntrypointTest(unittest.TestCase):
         self.assertEqual(
             Path(report["pages_folder"]).resolve(), (APP_DIR / "pages").resolve()
         )
-        self.assertEqual(
-            Path(report["template_folder"]).resolve(),
-            (APP_DIR / "templates").resolve(),
-        )
 
-    def test_entrypoint_guards_the_dashboard_before_serving_data(self):
+    def test_entrypoint_serves_the_public_dashboard(self):
         report = run_entrypoint_probe()
 
+        # The workspace is public: the root forwards to the dashboard and the
+        # dashboard answers with data, no session required.
         self.assertEqual(report["root_status"], 302)
-        self.assertEqual(report["root_location"], "/login")
-        self.assertEqual(report["dashboard_status"], 302)
-        self.assertEqual(report["dashboard_location"], "/login")
+        self.assertEqual(report["root_location"], "/dashboard")
+        self.assertEqual(report["dashboard_status"], 200)
+        self.assertIsNone(report["dashboard_location"])
 
 
 class PackagingConfigTest(unittest.TestCase):
@@ -382,7 +369,7 @@ class RuntimeDependencyTest(unittest.TestCase):
         )
         report = run_entrypoint_probe(blocked=blocked)
         self.assertEqual(report["root_status"], 302)
-        self.assertEqual(report["dashboard_status"], 302)
+        self.assertEqual(report["dashboard_status"], 200)
 
     @unittest.skipUnless(shutil.which("uv"), "uv is required to export the lock file")
     def test_requirements_match_the_locked_runtime_export(self):

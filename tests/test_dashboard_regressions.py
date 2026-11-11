@@ -23,7 +23,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "my-dash-app"))
 
-import auth
 import data_loader
 import pipeline_telemetry
 from components import header
@@ -458,32 +457,35 @@ class DashboardRegressionTests(unittest.TestCase):
 
     def test_dash_layout_and_callback_registration_work_without_queries(self):
         client = self.dashboard.server.test_client()
-        with patch("auth.verify_access", return_value=({"id": "test-user"}, 3600)):
-            for path in ["/dashboard", "/_dash-layout", "/_dash-dependencies"]:
-                response = client.get(path)
-                self.assertEqual(
-                    response.status_code, 200, response.get_data(as_text=True)
-                )
-            dependencies = client.get("/_dash-dependencies").get_json()
+        for path in ["/dashboard", "/_dash-layout", "/_dash-dependencies"]:
+            response = client.get(path)
+            self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        dependencies = client.get("/_dash-dependencies").get_json()
         self.assertTrue(
             any("header-health-menu" in callback["output"] for callback in dependencies)
         )
 
-    def test_auth_routes_and_bundle_are_registered_together(self):
+    def test_dashboard_is_public_without_auth_artifacts(self):
+        """Regression: the workspace is public. Every page, layout and data
+        callback must answer without a session, and no auth surface may remain."""
         client = self.dashboard.server.test_client()
-        with patch("auth.verify_access", return_value=({"id": "test-user"}, 3600)):
-            html = client.get("/dashboard").get_data(as_text=True)
-        self.assertEqual(html.count('src="/assets/auth.bundle.js"'), 1)
-        self.assertNotIn("auth.bundle.js?m=", html)
-        self.assertIn('id="auth-session-loading"', html)
-        self.assertIn('id="auth-form"', client.get("/login").get_data(as_text=True))
-        with client.get("/assets/auth.bundle.js") as response:
-            self.assertEqual(response.status_code, 200)
-        with patch(
-            "auth.verify_access",
-            side_effect=auth.AuthError("session_required", 401),
-        ):
-            self.assertEqual(client.get("/_dash-layout").status_code, 401)
+        for path in ["/dashboard", "/customers", "/pipeline-health"]:
+            response = client.get(path)
+            self.assertEqual(response.status_code, 200, path)
+        html = client.get("/dashboard").get_data(as_text=True)
+        self.assertNotIn("auth.bundle.js", html)
+        self.assertNotIn('id="auth-session-loading"', html)
+        self.assertNotIn("dashboard-signout", html)
+        self.assertEqual(client.get("/_dash-layout").status_code, 200)
+        root = client.get("/")
+        self.assertEqual(root.status_code, 302)
+        self.assertEqual(root.headers.get("Location"), "/dashboard")
+        # Dash Pages answers the removed auth and admin routes with its
+        # not-found page; none of them may serve an auth or admin surface.
+        for removed in ("/login", "/auth/config", "/api/admin/users", "/admin/users"):
+            body = client.get(removed).get_data(as_text=True)
+            self.assertNotIn('id="auth-form"', body, removed)
+            self.assertNotIn("User management", body, removed)
 
     def test_empty_header_does_not_claim_healthy(self):
         for frame in [None, pd.DataFrame()]:

@@ -1,5 +1,11 @@
 # Redeploy Plan: Cloud Run + BigQuery → Vercel
 
+> **Superseded (2026-11-12):** the workspace is now fully public. The Supabase
+> authentication contract, the remaining OAuth/owner-account phases and the
+> auth test phases in this plan were removed together with the auth layer, and
+> no environment variables are required for deployment. This document is kept
+> as the historical runbook for the Vercel packaging and the DuckDB rebuild.
+
 **Status:** Phases 1–2 and 5 complete, and the repository side of Phase 3 — the dbt transformation layer is rebuilt on DuckDB, the shippable gold database is built and verified, the app reads that database plus a shipped telemetry artifact instead of BigQuery, the application is packaged for Vercel, and the Supabase auth contract is in place. The new Supabase project exists, is migrated and is configured through the Management API, and the app is deployed and serving at `https://dbt-bigquery-warehouse.vercel.app`. What remains is the OAuth apps, the owner account, Phase 4, and the live auth tests in Phase 6.
 **Date:** 2026-11-05 (Phase 1 delivered 2026-11-06, Phase 2 delivered 2026-11-06, Phase 5 delivered 2026-11-06, Phase 3 repository side delivered 2026-11-06, Phase 6 KPI fixture test delivered 2026-11-06, first production deployment delivered 2026-11-06)
 **Scope:** Rebuild the data transformation layer without BigQuery, replace the dead auth provider, and package the Dash app for Vercel.

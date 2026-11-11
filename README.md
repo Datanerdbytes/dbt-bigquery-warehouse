@@ -1,10 +1,10 @@
 # 🚀 Enterprise Data Warehouse, Pipeline Observability & Analytics Platform
 
-> ✅ **Live on Vercel.** The BigQuery project and the Supabase project behind the original Cloud Run deployment were deleted. The dbt transformation layer was rebuilt on **DuckDB**, and the app now **reads a shipped gold database plus a shipped telemetry artifact at runtime — there is no warehouse in the request path**. Authentication runs on a new Supabase project. See [docs/vercel-migration-plan.md](docs/vercel-migration-plan.md) for the full runbook.
+> ✅ **Live on Vercel.** The BigQuery project and the Supabase project behind the original Cloud Run deployment were deleted. The dbt transformation layer was rebuilt on **DuckDB**, and the app now **reads a shipped gold database plus a shipped telemetry artifact at runtime — there is no warehouse in the request path**. The workspace is fully public: no sign-in, no accounts. See [docs/vercel-migration-plan.md](docs/vercel-migration-plan.md) for the full runbook.
 
 > 🌐 **Live Interactive App:** [https://dbt-bigquery-warehouse.vercel.app](https://dbt-bigquery-warehouse.vercel.app)
 
-Sign in with your own Supabase account, or use the **Continue with Google** / **Continue with GitHub** buttons on the login page.
+Open the URL and browse straight away — the dashboard requires no account, and `/` simply forwards to it.
 
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![dbt](https://img.shields.io/badge/dbt-Core%201.12+-FF694B?style=for-the-badge&logo=dbt&logoColor=white)](https://www.getdbt.com/)
@@ -29,7 +29,6 @@ An end-to-end, production-grade enterprise data engineering and business intelli
   - [3. Pipeline Observability, Test Coverage & Telemetry Logging](#3-pipeline-observability-test-coverage--telemetry-logging)
   - [4. Interactive Multi-Page Dash Application ("Dashdark X")](#4-interactive-multi-page-dash-application-dashdark-x)
   - [5. CI/CD Pipeline & Google Cloud Run Deployment](#5-cicd-pipeline--google-cloud-run-deployment)
-  - [6. Supabase Authentication & Access Control](#6-supabase-authentication--access-control)
 - [Screenshots & Dashboards](#-screenshots--dashboards)
 - [Technology Stack](#-technology-stack)
 - [Project Directory Structure](#-project-directory-structure)
@@ -37,8 +36,6 @@ An end-to-end, production-grade enterprise data engineering and business intelli
   - [Prerequisites](#prerequisites)
   - [Environment Configuration](#environment-configuration)
   - [Running the Ingestion & dbt Pipeline](#running-the-ingestion--dbt-pipeline)
-  - [Supabase & OAuth Configuration](#supabase--oauth-configuration)
-  - [Authentication Troubleshooting](#authentication-troubleshooting)
   - [Running the Dash Web App Locally](#running-the-dash-web-app-locally)
   - [Running with Docker](#running-with-docker)
 - [Data Models & Schema Reference](#-data-models--schema-reference)
@@ -55,7 +52,7 @@ Modern enterprise analytics demands not only timely reporting, but also transpar
 3. **Validates** every stage with automated assertions (uniqueness, referential integrity, range constraints, whitespace validation).
 4. **Captures Telemetry** from dbt artifacts (`manifest.json` and `run_results.json`) to track run durations, failures, warnings, and column-level test coverage over time.
 5. **Presents Business & Data Health Insights** through an interactive, multi-page **Plotly Dash** interface equipped with server-side caching (`Flask-Caching`), client-side session store (`dcc.Store`), asynchronous loading spinners, modal drill-downs, and executive CSV export capabilities.
-6. **Secures Dashboard Access** with Supabase email/password authentication, Google/GitHub OAuth support, verified-email access, and server-side protection of pages, data callbacks, and exports.
+6. **Serves a fully public workspace** — every page, data callback, and export answers without a session; there are no accounts to create and nothing to sign in to.
 7. **Continuous Delivery** automatically compiles and tests dbt models on pull requests and verifies that the artifacts the app ships still match the build.
 
 ---
@@ -227,13 +224,12 @@ Built using Plotly Dash's native `dash.register_page` architecture, styled with 
 > The Cloud Run deployment below is **retired**. CI now builds the dbt models offline against DuckDB and holds no cloud credential; the app is being repackaged for Vercel. See [docs/vercel-migration-plan.md](docs/vercel-migration-plan.md).
 
 - **Automated CI Workflow (`.github/workflows/ci_pipeline.yml`)**:
-  - **Validate & Test Job**: Triggers on pull requests and pushes to `main`. Automatically provisions Python 3.12 with Astral `uv` and Node 22, builds the authentication bundle and runs offline Python/browser-state tests, then loads the versioned source CSVs into DuckDB bronze tables and runs the full `dbt build` (models + data tests) against the DuckDB target. No warehouse credentials are involved.
+  - **Validate & Test Job**: Triggers on pull requests and pushes to `main`. Automatically provisions Python 3.12 with Astral `uv` and runs the offline Python regression suite, then loads the versioned source CSVs into DuckDB bronze tables and runs the full `dbt build` (models + data tests) against the DuckDB target. No warehouse credentials are involved.
   - **Shipped-Artifact Drift Gates**: Compare the committed gold database and the committed telemetry artifact with a fresh build, and fail if they diverge.
   - **No Deploy Job**: CI stops at validation. The repository is connected to the `dbt-bigquery-warehouse` Vercel project, whose Git integration deploys every push to `main`, so a second deploy path in CI would only race the same project for the production alias.
 - **Production Containerization (`Dockerfile`)**:
-  - Node 22 build stage runs `npm ci` and `npm run build:auth`.
-  - Python 3.12-slim runtime receives the compiled authentication bundle; Node is not required at runtime.
-  - Supabase configuration is supplied through Cloud Run runtime environment variables; `.env` is excluded from the image.
+  - Python 3.12-slim runtime with no build stage; Node is not required at build time or at runtime.
+  - `.env` is excluded from the image.
   - Uses `uv` for deterministic dependency resolution.
   - Executes via **Gunicorn** WSGI production server (`--workers 1 --threads 8 app:server`).
 
@@ -259,51 +255,15 @@ Production deploys are owned by the **Vercel Git integration**: a push to `main`
 To deploy from the CLI instead (for example to test a build before merging):
 
 ```bash
-npm ci
-npm run build:auth      # the bundle is committed, but rebuild it if you changed auth_frontend/
 npx vercel deploy       # preview
 npx vercel deploy --prod
 ```
 
-**Environment variables** (Vercel project settings):
+**Environment variables** (Vercel project settings): none are required. The deployment is read-only: the cache is in-process, DuckDB opens the shipped database read-only, and both artifact paths resolve relative to the package rather than the working directory.
 
-| Variable | Scope | Notes |
-| --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | Public | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public | Supabase anon key |
-| `AUTH_APP_ORIGIN` | Server | Must equal the deployment origin exactly; the guard compares it to the `Origin` header. Several trusted hostnames are listed comma separated |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server only | Required for `/admin/users`; never exposed to the browser |
-| `AUTH_PASSWORD_LOCKOUT_ENABLED` | Server | `true` once the password-lockout migration is applied |
-| `CRON_SECRET` | Server | Authorizes the daily keep-wake cron that stops the free Supabase project from pausing |
+### 6. Public Access
 
-The deployment is read-only: the cache is in-process, DuckDB opens the shipped database read-only, and both artifact paths resolve relative to the package rather than the working directory.
-
-A free Supabase project pauses after seven days without database traffic, so `vercel.json` declares a daily cron on `/keepawake`. That route runs one read-only query with the service-role key and refuses to run without the deployment's `CRON_SECRET`.
-
-Provisioning a new Supabase project is a console task: create it, apply the three migrations in `supabase/migrations/` in order, enable the OAuth providers, set the variables above, then run `python Scripts/verify_supabase_setup.py` to confirm the keys, the providers and the migrations. The full runbook is in [docs/supabase-auth.md](docs/supabase-auth.md).
-
-### 6. Supabase Authentication & Access Control
-
-The dashboard uses Supabase Auth with `@supabase/supabase-js` and a Flask authorization layer. Login and signup share the dashboard's dark theme and accessible form controls.
-
-| Route | Behavior |
-| --- | --- |
-| `/login`, `/signup` | Public Flask pages for email/password and Google/GitHub sign-in |
-| `/auth/callback` | Completes the OAuth or email-confirmation PKCE code exchange |
-| `/auth/config` | Returns only the public Supabase project URL and anon key |
-| `/auth/session` | Same-origin POST validates a session and sets the access cookie; DELETE clears it |
-| `/dashboard` | Protected Product Overview and successful-login destination |
-| `/customers`, `/pipeline-health` | Protected analytics pages |
-| `/` | Redirects to `/dashboard` for a verified session, otherwise to `/login` |
-| `/keepawake` | Daily scheduled query that keeps the free Supabase project awake; requires the deployment's `CRON_SECRET` |
-
-Flask verifies tokens with Supabase and requires a confirmed email before executing Dash callbacks or exports. Browser checks alone do not grant access. The access-token cookie is HttpOnly and SameSite=Lax, with Secure enabled for HTTPS deployments. Authentication and dashboard responses use `private, no-store`.
-
-Supabase JS manages session persistence and refresh. The dashboard stays hidden while the browser synchronizes its session with Flask, and sign-out clears the server cookie and local browser session across tabs. Google and GitHub buttons require their respective providers to be enabled in Supabase; they are not enabled by deploying the app.
-
-**User management:** Users register through `/signup` or an enabled OAuth provider. Inspect accounts in Supabase → Authentication → Users. Any account in the configured Supabase project can access the dashboard after verifying its email. No manual approval is required; legacy `AUTH_ALLOWED_EMAILS` settings are ignored. All verified users have the same dashboard capabilities; administrators can manage accounts at `/admin/users`. The initial owner and service-role setup are described in [the authentication guide](docs/supabase-auth.md#administrator-user-management).
-
-See [the detailed authentication guide](docs/supabase-auth.md) for session behavior and deployment notes.
+The workspace is intentionally public. There is no authentication layer: no sign-in page, no accounts, no session cookies, and no admin surface. Every page (`/dashboard`, `/customers`, `/pipeline-health`) and every data callback answers immediately, and `/` simply redirects to the dashboard. The former Supabase authentication, user management and keep-wake cron were removed along with their migrations, scripts, tests and environment variables; the only remaining routes are the dashboard pages and Dash's own `/_dash-*` endpoints.
 
 ---
 
@@ -394,8 +354,6 @@ See [the detailed authentication guide](docs/supabase-auth.md) for session behav
 | **Data Transformation** | **dbt Core (1.12+)** & **dbt-duckdb** | Medallion ELT, star-schema data modeling, incremental execution |
 | **Data Quality & Linting**| **dbt-utils**, **SQLFluff** | Data assertion testing, referential integrity, SQL styling |
 | **Telemetry & Observability** | **Custom dbt Artifact Parsers** | Turning `manifest.json` and `run_results.json` into the shipped telemetry artifact |
-| **Authentication** | **Supabase Auth** & **@supabase/supabase-js** | Email/password, OAuth PKCE, session refresh, and Flask access checks — provider is dead, see the migration plan |
-| **Authentication Build** | **Node.js 22**, **npm**, **esbuild** | Reproducible browser bundle; runtime public configuration |
 | **Dashboard Framework** | **Plotly Dash (4.4+)** | Interactive multi-page web application (`dash.register_page`) |
 | **UI Components & Themes**| **Dash Bootstrap Components (DBC)** | Darkly theme layout, responsive grids, navbars, modals, tooltips |
 | **High-Performance Grids**| **Dash AG Grid (35.3+)** | Enterprise tables with sorting, filtering, and cell styling conditions |
@@ -446,14 +404,6 @@ demo-database/
 │   │   ├── 04-filters.css           # Sticky filter bar, dropdowns, and date picker
 │   │   ├── 05-kpi-cards.css         # Dark KPI cards, number formatting, trend badges
 │   │   ├── 06-components.css        # Modal dialogs and AG Grid overrides
-│   │   ├── 08-auth.css              # Login/signup and session loading states
-│   │   └── auth.bundle.js           # Generated authentication client
-│   ├── auth_frontend/
-│   │   ├── supabase-client.js       # Environment/runtime Supabase client initialization
-│   │   └── main.js                  # Forms, OAuth PKCE, refresh, and session gate
-│   ├── templates/
-│   │   └── auth.html                # Flask login/signup/callback template
-│   ├── auth.py                     # Server authorization and session endpoints
 │   ├── components/                  # Reusable UI component modules
 │   │   ├── filter_bar.py            # Dynamic DatePickerRange and category/country filters
 │   │   ├── header.py                # Top navigation header, alerts bell, toast, export btn
@@ -468,20 +418,16 @@ demo-database/
 │   │   └── pipeline_telemetry.json  # Shipped pipeline health, coverage and ingestion facts
 │   ├── app.py                       # Main application entry point & export callbacks
 │   ├── data_loader.py               # DuckDB data fetchers with @cache.memoize
-│   ├── keepawake.py                 # Scheduled query that keeps the Supabase project awake
 │   └── pipeline_telemetry.py        # Reads the shipped telemetry artifact
 ├── data/raw/                        # Versioned source CSVs (the rebuild input)
 │   ├── source_crm/
 │   └── source_erp/
 ├── Scripts/                         # Data ingestion and DDL scripts
-│   ├── build-auth.mjs              # esbuild authentication bundle build
 │   ├── load_bronze_duckdb.py       # CSV → DuckDB bronze tables + load manifest
 │   ├── export_gold_duckdb.py       # dbt build → the gold-only DuckDB file the app ships
 │   ├── verify_shipped_gold.py      # Fails when the shipped gold artifact drifts from the build
 │   ├── export_pipeline_telemetry.py # dbt artifacts → the telemetry JSON the app ships
 │   ├── verify_shipped_telemetry.py # Fails when the shipped telemetry artifact drifts
-│   ├── verify_supabase_setup.py    # Checks a live Supabase project's configuration
-│   ├── bootstrap_admin.py          # Promotes the first account to the protected owner
 │   ├── create_init_database.sql     # SQL Server database initialization (retired)
 │   ├── ddl_create_bronze_*.sql      # DDL definitions for bronze tables
 │   ├── ingest_bronze.py             # CSV to SQL Server bronze ingestion (retired)
@@ -491,12 +437,11 @@ demo-database/
 │   ├── audit_logger.py              # Centralized BigQuery audit logging helper (retired)
 │   ├── cache.py                     # Flask-Caching SimpleCache instance definition
 │   └── helpers.py                   # Filtering and statistical helper functions
-├── docs/supabase-auth.md            # Authentication configuration and operations
 ├── docs/vercel-migration-plan.md    # Current migration state and the remaining phases
-├── tests/                           # Python regression and JS auth state tests
-├── package.json                     # Auth dependencies and build/test commands
+├── tests/                           # Offline Python regression suites
+├── package.json                     # Prettier only (CSS formatting)
 ├── package-lock.json                # Locked npm dependency versions
-├── .env.example                     # Authentication variable template, no credentials
+├── .env.example                     # Pipeline variable template, no credentials
 ├── Dockerfile                       # Production multi-stage Docker build file
 ├── wsgi.py                          # Vercel WSGI entrypoint (exposes `app`)
 ├── vercel.json                      # Vercel function config and bundle exclusions
@@ -515,10 +460,9 @@ demo-database/
 ### Prerequisites
 
 - **Python**: Version `3.12+`
-- **Node.js**: Version `22+` with npm for the authentication build (Docker supplies its own build stage).
-- **Supabase project**: Email confirmation configured and any desired OAuth providers enabled. The current project is dead — see the migration plan before signing in.
 - **Package Manager**: [`uv`](https://github.com/astral-sh/uv) recommended (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
 - **No warehouse required**: the transformation runs against a local DuckDB file, and the source CSVs are in `data/raw/`. The Google Cloud project and the SQL Server instance are no longer needed.
+- **No accounts or external services**: the app ships its data and serves it publicly.
 
 ---
 
@@ -541,11 +485,6 @@ SOURCE_FOLDER=/path/to/your/raw/csv/files
 GCP_PROJECT_ID=quantum-echo-data-eng-prod
 GCP_KEY_PATH=/path/to/your/gcp-key.json
 TARGET_DATASET=bronze
-
-# Supabase authentication — replace placeholders with your project's public values
-NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<public-anon-key>
-AUTH_APP_ORIGIN=http://localhost:8050
 ```
 
 Ensure the dbt profile is configured for the local DuckDB target. `analytics_layer/profiles.yml` ships with it and needs no credentials:
@@ -594,79 +533,36 @@ Step 4 is the one that matters: if a model changes and an artifact is not re-exp
 
 ---
 
-### Supabase & OAuth Configuration
-
-The Flask app loads root `.env` without overriding existing environment values. Configure the same auth variables in the Vercel project settings for production, with `AUTH_APP_ORIGIN` equal to the deployment origin. When the app is published under more than one hostname, list them comma separated; each one also needs its own Supabase redirect URLs. Keep provider secrets server-side. The anon key is intentionally public; never substitute a service-role key.
-
-The project that hosted the previous Cloud Run deployment was deleted with its Google Cloud project. The replacement is provisioned from scratch; the full runbook is in [docs/supabase-auth.md](docs/supabase-auth.md). In short:
-
-1. Create the free project, then apply the three migrations in `supabase/migrations/` in the SQL editor, in order.
-2. In Supabase **Authentication → Sign In / Providers**, keep **Confirm email** enabled. For Google, open the provider, enter your Google OAuth client ID and secret, turn **Enable Sign in with Google** on, and **Save**. Configure and enable GitHub separately if needed.
-3. In **Google Cloud → Google Auth Platform → Clients → your Web application client**, add the Supabase callback of the new project under **Authorized redirect URIs** and save:
-
-   ```text
-   https://<project-ref>.supabase.co/auth/v1/callback
-   ```
-
-   Adding `https://supabase.co` under JavaScript origins does not register this redirect URI.
-4. In Supabase **Authentication → URL Configuration**, set the Site URL to the production app origin and allow these app redirect URLs:
-
-   ```text
-   http://localhost:8050/auth/callback
-   https://<app-origin>/auth/callback
-   https://<app-origin>/reset-password
-   ```
-
-   Also add `http://localhost:8080/auth/callback` if testing with the Docker command below.
-5. Keep email confirmation enabled. Once a user verifies their email, they can sign in immediately without an environment email list or administrator approval. The built-in SMTP service of a free project sends at most two messages per hour, so a public demo should attach a custom SMTP provider or rely on the OAuth providers, whose accounts Supabase confirms automatically.
-6. Run `python Scripts/verify_supabase_setup.py` to confirm the keys, the enabled providers and the installed migrations.
-
-Google redirects to **Supabase's `/auth/v1/callback`**, and Supabase redirects to **the app's `/auth/callback`**. These are two distinct configuration steps.
-
-### Authentication Troubleshooting
-
-| Symptom | Check or fix |
-| --- | --- |
-| `Unsupported provider: provider is not enabled` | Enable the provider toggle and save in the same Supabase project the app uses; entering client credentials alone is insufficient. |
-| Google `redirect_uri_mismatch` | Add the exact Supabase callback above to the Google client's **Authorized redirect URIs**. Retry from the app's login page after the change propagates. |
-| Email confirmed but callback cannot finish | Open confirmation links in the browser where signup began. If already confirmed, return to `/login` and sign in with the existing account. |
-| Verified account still awaits approval | Deploy the updated server and frontend together; legacy `AUTH_ALLOWED_EMAILS` settings are no longer used. |
-| Origin rejected | Match `AUTH_APP_ORIGIN` to the browser's scheme, host, and port. `localhost` and `127.0.0.1` are different origins. A host that is missing from a comma-separated list is rejected. |
-| Dashboard remains on “Loading…” | Build the frontend and deploy all auth source files together. Confirm `/login`, `/auth/config`, and `/auth/session` are registered; an orphaned `auth.bundle.js` cannot function without the backend. |
-| Authentication unavailable | Check runtime variables and Supabase availability; the app intentionally denies data access until verification succeeds. |
-
 ### Running the Dash Web App Locally
 
-From the repository root, install dependencies, build authentication, then start Dash with hot-reloading:
+From the repository root, install dependencies, then start Dash with hot-reloading:
 
 ```bash
 uv sync
-npm ci
-npm run build:auth
 cd my-dash-app
 uv run python app.py
 ```
 
 Open your browser and navigate to:
 ```text
-http://localhost:8050/login
+http://localhost:8050/dashboard
 ```
 
-- **Login / Signup**: `http://localhost:8050/login` / `http://localhost:8050/signup`
 - **Product Overview**: `http://localhost:8050/dashboard`
 - **Customer 360**: `http://localhost:8050/customers`
 - **Pipeline Health**: `http://localhost:8050/pipeline-health`
 
+The workspace is public: `/` redirects to the dashboard and no page requires a sign-in.
+
 ---
 
-Run offline authentication and dashboard regression checks from the repository root:
+Run the offline dashboard regression checks from the repository root:
 
 ```bash
 .venv/bin/python -B -m unittest discover -s tests -v
-npm run test:auth
 ```
 
-These checks mock authentication/data access. Live provider consent and account sign-in must also be checked with your configured project. Rebuild with `npm run build:auth` after editing `my-dash-app/auth_frontend/`; commit the backend, frontend sources, templates, CSS, package manifests, build script, Dockerfile, and tracked bundle together.
+These checks mock data access and forbid network access. The suite includes public-access regressions: every page and data callback must answer without a session, and no auth surface (login pages, session endpoints, the old browser bundle, admin routes) may reappear.
 
 ### Running with Docker
 
@@ -677,16 +573,10 @@ Build and run the container locally:
 docker build -t dash-observability-app .
 
 # Run the container
-docker run -p 8080:8080 \
-  --env-file .env \
-  -e AUTH_APP_ORIGIN="http://localhost:8080" \
-  -e GCP_PROJECT_ID="quantum-echo-data-eng-prod" \
-  -e GCP_KEY_PATH="/app/gcp-key.json" \
-  -v $(pwd)/gcp-key.json:/app/gcp-key.json:ro \
-  dash-observability-app
+docker run -p 8080:8080 dash-observability-app
 ```
 
-Navigate to `http://localhost:8080/login`. The Node build stage compiles authentication automatically; the Python runtime receives public configuration from environment variables through `/auth/config`. No Supabase build arguments are required. `.env` is excluded from the image and supplied only at runtime.
+Navigate to `http://localhost:8080/dashboard`. The image is a single Python stage; no environment variables are required. `.env` is excluded from the image.
 
 ---
 

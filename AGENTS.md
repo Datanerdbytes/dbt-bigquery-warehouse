@@ -11,8 +11,8 @@
 - **Runtime vs build dependencies:** `[project.dependencies]` holds only what the deployed app imports. dbt, the warehouse drivers, notebooks and linters live in the `dev` dependency group. Vercel exports the project without the default groups, so a tool that lands in `[project.dependencies]` inflates the function bundle for nothing.
 - **Core Framework:** Plotly Dash
 - **Underlying Engine:** Flask, including Flask-Caching
-- **Authentication:** Supabase Auth with `@supabase/supabase-js`, OAuth PKCE, and Flask server-side authorization
-- **Frontend Build:** Node.js 22+, npm, and esbuild for the authentication bundle
+- **Access Model:** Fully public workspace — no authentication, accounts, sessions, or admin surface; there is nothing to sign in to
+- **Frontend Build:** None; npm exists only to pin Prettier for CSS formatting
 - **Hosting:** Vercel serverless functions; the WSGI entrypoint is `wsgi.py` at the repository root
 - **Data Engine:** DuckDB over local files, built by dbt-duckdb; the warehouse that used to hold the models is gone
 - **Data Libraries:** `duckdb`, `pandas`, `numpy`, `json`. `pyarrow` is a build-time dependency; `google-cloud-bigquery` survives only in the retired warehouse scripts.
@@ -34,7 +34,6 @@ demo-database/
 ├── .agents/skills/                  # Project task capsules and design skills
 ├── .github/workflows/ci_pipeline.yml # Offline checks, offline dbt build on DuckDB
 ├── Scripts/
-│   ├── build-auth.mjs               # Builds auth.bundle.js
 │   ├── ingest_bronze.py             # Local CSVs → SQL Server bronze (retired)
 │   ├── ingest_bigquery.py           # SQL Server bronze → BigQuery (retired)
 │   ├── ingest_dbt_artifacts.py      # dbt run results → BigQuery audit telemetry (retired)
@@ -43,7 +42,6 @@ demo-database/
 │   ├── verify_shipped_gold.py       # Fails when the shipped gold artifact drifts
 │   ├── export_pipeline_telemetry.py # dbt artifacts → the telemetry JSON the app ships
 │   ├── verify_shipped_telemetry.py  # Fails when the shipped telemetry artifact drifts
-│   ├── verify_supabase_setup.py      # Checks a live Supabase project's configuration
 │   ├── create_init_database.sql
 │   ├── ddl_table_ingestion_logs.sql
 │   └── ddl_create_bronze_*.sql
@@ -70,18 +68,11 @@ demo-database/
 ├── sqlfluff_macros/                # Lint-time expansions of the qe_* macros
 ├── my-dash-app/
 │   ├── app.py                       # Dash/Flask entry point; exposes server
-│   ├── auth.py                      # Request guard, public config, session bridge
 │   ├── data_loader.py               # Cached dashboard queries and data preparation
-│   ├── keepawake.py                 # Scheduled query that keeps the Supabase project awake
 │   ├── pipeline_telemetry.py        # Reads the shipped telemetry artifact
 │   ├── theme.py                     # Shared Python chart and color helpers
-│   ├── assets/                      # Modular CSS, browser JS, generated bundles
+│   ├── assets/                      # Modular CSS
 │   │   └── 00-theme.css             # CSS theme tokens
-│   ├── auth_frontend/
-│   │   ├── main.js
-│   │   └── supabase-client.js
-│   ├── templates/
-│   │   └── auth.html
 │   ├── components/                  # Sidebar, header, filters, KPIs, panels, revenue chart
 │   ├── data/                        # Shipped artifacts the app reads
 │   │   ├── analytics.duckdb         # Gold database (fct_sales, dim_products, dim_customers)
@@ -97,22 +88,19 @@ demo-database/
 │   └── audit_logger.py
 ├── src/demo_database/__init__.py    # Package/CLI scaffold
 ├── docs/
-│   ├── supabase-auth.md
 │   ├── vercel-migration-plan.md
 │   └── images/                      # Dashboard screenshots
-├── tests/                          # Offline Python regressions and auth browser tests
-│   ├── test_auth.py
+├── tests/                          # Offline Python regression suites
 │   ├── test_dashboard_regressions.py
 │   ├── test_gold_dataset.py
 │   ├── test_pipeline_telemetry.py
 │   ├── test_revenue_chart.py
 │   ├── test_sidebar.py
-│   ├── test_vercel_deployment.py
-│   └── auth-browser.test.mjs
+│   └── test_vercel_deployment.py
 ├── Notebooks/                      # Exploratory analytics and exported figures
 ├── logs/query_log.sql
 ├── run_pipeline.sh                 # Ingestion, dbt execution/tests, artifact upload
-├── Dockerfile                      # Node build stage + Python/Gunicorn runtime
+├── Dockerfile                      # Python/Gunicorn runtime image
 ├── pyproject.toml
 ├── uv.lock
 ├── .python-version
@@ -139,11 +127,11 @@ demo-database/
 ### Deployment targets
 - **Vercel (current):** the function entrypoint is `wsgi.py` at the repository root. It puts `my-dash-app/` on `sys.path` and re-exports the Flask server as `app`. Vercel discovers that file by name; do not add another root-level `app.py`, `index.py`, `server.py`, `main.py` or `asgi.py`, and do not move the entrypoint into an `api/` directory, which would turn it into a file-based route instead of the whole application.
 - `vercel.json` must declare `"framework": "flask"`. Without a framework preset the runtime never looks for a root entrypoint: the build succeeds, produces no function, and every route answers with a static 404. Keep the preset when the config changes.
-- `vercel.json` configures the function keyed by `wsgi.py`: `maxDuration` and `excludeFiles`. The exclusion list must keep `my-dash-app/assets/`, `my-dash-app/data/`, `my-dash-app/templates/`, `my-dash-app/pages/`, `my-dash-app/components/`, `utils/` and `wsgi.py`, and must drop `node_modules/`, `.venv/`, `analytics_layer/`, `data/`, `tests/` and `Notebooks/`.
+- `vercel.json` configures the function keyed by `wsgi.py`: `maxDuration` and `excludeFiles`. The exclusion list must keep `my-dash-app/assets/`, `my-dash-app/data/`, `my-dash-app/pages/`, `my-dash-app/components/`, `utils/` and `wsgi.py`, and must drop `node_modules/`, `.venv/`, `analytics_layer/`, `data/`, `tests/` and `Notebooks/`.
 - `.vercelignore` governs what is uploaded. It is not `.gitignore`: a local deploy would otherwise upload the virtualenv, the dbt project and the credentials. Keep `.env` and `gcp-key.json` excluded there.
 - The deployed app must not write to disk. The cache is in-process, DuckDB opens the shipped database `read_only=True`, and both artifact paths are resolved relative to the package, never to the working directory.
 - A module that the app imports at runtime may not require a build-only package. `utils/audit_logger.py` imports the BigQuery client inside a `try`/`except ImportError` for exactly this reason; the deployed runtime does not ship `google-cloud-bigquery`. Keep new build-only imports behind the same guard, or move them into the function that needs them.
-- `vercel.json` also declares a daily `crons` entry for `/keepawake`. Supabase pauses a free project after seven days without database traffic, so the route runs one read-only PostgREST query with the service-role key. Vercel sends `Authorization: Bearer $CRON_SECRET`; the route must refuse to run without a matching secret, and it must never redirect, because a cron request does not follow a 3xx response. The Hobby plan allows one invocation per day, which is enough.
+- `vercel.json` declares no crons; the Supabase keep-wake cron was removed with authentication.
 - **Docker (retained option):** the image installs the same runtime dependency set with `uv export --locked --no-dev --no-emit-project` and runs `gunicorn app:server` from `/app/my-dash-app`. Vercel ignores the Dockerfile; keep the two paths in sync when the runtime dependencies change.
 
 ## 4. General Architecture
@@ -222,41 +210,25 @@ defaultColDef = {"filter": True, "sortable": True}
 ## 11. Tests
 - Python tests are offline `unittest` suites under `tests/`, discovered from the repository root. They must never reach the network: `tests/test_dashboard_regressions.py` patches `socket.socket.connect` and `socket.create_connection` to raise, and stubs `cache.init_app`.
 - Run the full Python suite with `.venv/bin/python -B -m unittest discover -s tests -v` from the repository root.
-- Run the browser authentication tests with `npm run test:auth` after rebuilding the bundle with `npm run build:auth`.
 - When a test needs the dashboard dataset, patch `get_prepared_dataset` with a DataFrame, not the lower-level `load_and_prep_data` tuple. The exception is a test of the cache wrapper itself, which patches `load_and_prep_data` to assert load counts, TTL expiry, and identity reuse.
 - Add regression coverage for behavior you change. New caching, dtype, and filter-safety behavior needs a test that fails without the change.
 - The dbt models build offline against DuckDB. Rebuild the shipped gold database with `uv run python -B Scripts/load_bronze_duckdb.py --fresh`, then `cd analytics_layer && ../.venv/bin/dbt build --profiles-dir .`, then `uv run python -B Scripts/export_gold_duckdb.py`. `uv run python -B Scripts/verify_shipped_gold.py` fails when the committed artifact drifts from the build; it is also the CI gate. `tests/test_gold_dataset.py` locks the shipped figures.
 - Rebuild the shipped telemetry artifact with `uv run python -B Scripts/export_pipeline_telemetry.py` after every dbt build. `uv run python -B Scripts/verify_shipped_telemetry.py --built <fresh export>` fails when the committed artifact drifts from the build; it is also the CI gate. `tests/test_pipeline_telemetry.py` locks the export rules and the artifact contract.
 - `analytics_layer/macros/portable.sql` holds the adapter-dispatch macros used by the models; `sqlfluff_macros/portable.sql` renders the BigQuery branch of each macro for SQLFluff's offline Jinja templater. Keep the two in sync when a macro is added.
-- `tests/test_vercel_deployment.py` guards the deployment contract: the entrypoint exposes the WSGI callable, the auth guard still runs before any data is served, every third-party import reachable from the entrypoint is a runtime dependency, neither `vercel.json` nor `.vercelignore` drops a file from the app tree, and the app still starts when every package that only the build uses is blocked. It also fails when `requirements.txt` drifts from the locked runtime export. The runtime file set is derived from the tree rather than hand-listed, so a new page, template or asset is covered as soon as it is added.
-- `tests/test_supabase_setup.py` guards the Supabase contract: the keep-wake route rejects a missing or wrong `CRON_SECRET`, queries the database with the service-role key, never redirects, matches the path in `vercel.json`, and every RPC the app calls is defined and granted to the service role by a migration in `supabase/migrations/`. It also requires every migration to be re-appliable: functions use `create or replace` and triggers are dropped before they are recreated. `Scripts/verify_supabase_setup.py` checks the same contract against a live project, including the readiness RPC of each migration; it is an operator command and is never part of the offline suite.
+- `tests/test_vercel_deployment.py` guards the deployment contract: the entrypoint exposes the WSGI callable, the dashboard answers publicly without a session, every third-party import reachable from the entrypoint is a runtime dependency, neither `vercel.json` nor `.vercelignore` drops a file from the app tree, and the app still starts when every package that only the build uses is blocked. It also fails when `requirements.txt` drifts from the locked runtime export. The runtime file set is derived from the tree rather than hand-listed, so a new page, asset or data artifact is covered as soon as it is added.
 
-## 12. Authentication & Access Control
-- Keep authentication in the existing Dash/Flask application; do not introduce Next.js routing or SSR middleware. See [Supabase authentication setup](docs/supabase-auth.md).
-- Register `install_auth(server)` from `my-dash-app/auth.py` before constructing Dash so authorization runs before Dash request hooks, data callbacks, and exports.
-- Serve `/login`, `/signup`, and `/auth/callback` as Flask-rendered pages outside the dashboard layout. Product Overview lives at `/dashboard`. `/` has no page of its own: it redirects to `/dashboard` for a verified session and to `/login` otherwise. Keep navigation and route-dependent callbacks consistent.
-- Email/password signup requires email confirmation. Google and GitHub OAuth use PKCE and require separately enabled/configured providers in Supabase. Never assume a rendered provider button means the provider is enabled.
-- Verify access tokens against Supabase Auth on every protected request, then require a nonempty, confirmed email. Any verified account in the configured Supabase project can sign in; legacy `AUTH_ALLOWED_EMAILS` values are ignored. Never authorize from client state, editable metadata, or unverified JWT claims.
-- User management at `/admin/users`, its API routes, and its callbacks require the server-verified `app_metadata.qe_role` admin role. Never trust `user_metadata` for roles. Keep `SUPABASE_SERVICE_ROLE_KEY` server-only; protect the initial `qe_owner` from UI suspension/demotion and reject self-changes. A server-verified `qe_suspended` flag blocks all protected access. Account deletion additionally requires the protected owner, a suspended non-admin target, and matching typed email; block self/owner deletion and never execute real deletions during automated verification.
-- Keep the public route/asset allowlist explicit. `/auth/config` exposes only the public project URL and anon key; `/auth/session` POST validates the token and sets the access cookie, while DELETE clears it. Authentication endpoints must remain usable before a session exists.
-- Require exact `Origin` matching for mutations. Cookies must be HttpOnly and SameSite=Lax, with Secure enabled except for explicitly configured HTTP localhost development. Preserve `private, no-store` response headers.
-- Keep refresh tokens managed by Supabase JS. Never put access/refresh tokens or provider secrets in `dcc.Store`, logs, templates, or browser configuration.
-- Wait for session synchronization before releasing Dash data requests or revealing the dashboard. Preserve token refresh, sign-out across tabs, callback error recovery, and visible startup failure states. Do not automatically replay rejected mutations.
-- Return 401 for invalid sessions, 403 for denied access, and 503 for configuration/service failures; fail closed before data loaders run. Redirect unauthorized page navigation to `/login`.
-- Read `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `AUTH_APP_ORIGIN` from root `.env` locally or the deployment environment. Runtime environment values take precedence. Use only the public anon key in browser configuration; never a service-role key.
-- Keep browser and server pointed at the same Supabase project. The default build uses `/auth/config` at runtime; optional build-time public values override it. Leave build-time values unset for portable Docker/CI builds.
-- Distinguish Google Cloud's authorized redirect URI (`https://<project-ref>.supabase.co/auth/v1/callback`) from Supabase's allowed app redirect URLs (`<app-origin>/auth/callback`). Do not substitute one for the other.
-- Edit `auth_frontend/` sources, then run `npm ci` and `npm run build:auth`. Never fix authentication by editing only the generated bundle or disabling the server guard. Exclude the bundle from Dash auto-injection and load it exactly once through the index template.
-- Commit the backend, templates, CSS, frontend sources, generated tracked bundle, package manifests, build script, and Docker integration together. Docker builds the bundle in a Node stage and runs only Python/Gunicorn in the final image.
-- After auth changes, run `.venv/bin/python -B -m unittest discover -s tests -v` and `npm run test:auth`. Verify unauthenticated page/data access, email confirmation checks, expiry/refresh, logout, OAuth errors, and loading states without querying the shipped database or creating real accounts.
-- On Vercel, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `AUTH_APP_ORIGIN` are project environment variables, and `AUTH_APP_ORIGIN` must equal the deployment origin exactly because the guard compares it to the `Origin` header. A deployment published under several hostnames sets a comma-separated value, and the guard then accepts each listed origin exactly; the first entry is the canonical origin and every additional hostname needs its own Supabase redirect URLs. `SUPABASE_SERVICE_ROLE_KEY` is a server-only variable; Vercel environment variables are not exposed to the browser, but the value still must never reach `/auth/config`, a template or a log. `CRON_SECRET` authorizes the keep-wake cron and `AUTH_PASSWORD_LOCKOUT_ENABLED` activates the lockout once its migration is applied.
-- The SQL migrations in `supabase/migrations/` are part of the deployment contract and must stay re-appliable: create every function with `create or replace`, drop a trigger before recreating it, and end each file with `commit;`. A guard compares the JSON flags in `raw_app_meta_data` so that a malformed value fails closed: `qe_owner` and `qe_role` are compared as text, and `qe_suspended` is compared as a JSON boolean where a suspension must be proven. The app checks a readiness RPC before it relies on a guard; a role change requires the administrator-access guard and a deletion requires the deletion guard.
+## 12. Public Access
+- The workspace is fully public by decision of the owner. There is no authentication layer: no login/signup pages, no session endpoints, no accounts, no admin surface, and no Supabase dependency. Do not reintroduce sign-in, gating, or user management without an explicit new owner decision.
+- Every page (`/dashboard`, `/customers`, `/pipeline-health`), every Dash data callback, and every export must answer without a session. The only routes are the dashboard pages, Dash's `/_dash-*` endpoints, and the assets. `/` has no page of its own: a small Flask `before_request` hook in `my-dash-app/app.py` redirects it to `/dashboard`; keep that hook when touching the entrypoint.
+- Never route the shipped data through an account system, never place user-specific state in server globals, and keep the app read-only: DuckDB opens the shipped database `read_only=True` and nothing writes to disk in deployment.
+- Keep the codebase free of auth remnants: `my-dash-app/auth.py`, `password_auth.py`, `user_admin.py`, `keepawake.py`, `pages/user_management.py`, `templates/`, `auth_frontend/`, `assets/auth.bundle.js`, `assets/08-auth.css`, `assets/09-account-menu.js`, `assets/12-user-management.css`, `supabase/`, `Scripts/build-auth.mjs`, `Scripts/verify_supabase_setup.py`, `Scripts/bootstrap_admin.py` and the auth test suites are deleted. Regression tests in `tests/test_dashboard_regressions.py` and `tests/test_sidebar.py` fail if any of these surfaces come back.
+- The Supabase-related environment variables (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `AUTH_APP_ORIGIN`, `SUPABASE_SERVICE_ROLE_KEY`, `AUTH_PASSWORD_LOCKOUT_ENABLED`, `CRON_SECRET`) are obsolete. Remove them from any deployment environment; the app requires no environment configuration.
 
 ## 13. Parallel Development & Integration Policy
 
 ### 13.1 Scope, precedence, and actual capabilities
 
-- Sections 1–12 remain in force for every role and worktree. This section adds coordination rules; it does not relax architecture, authentication, production safety, credential handling, or testing requirements. If a task or integration plan conflicts with an existing requirement, report the conflict before acting.
+- Sections 1–12 remain in force for every role and worktree. This section adds coordination rules; it does not relax architecture, the public access model, production safety, credential handling, or testing requirements. If a task or integration plan conflicts with an existing requirement, report the conflict before acting.
 - `AGENTS.md` is policy, not an executable scheduler, a filesystem lock, or merge authorization. It does not itself launch sessions, assign tasks, configure Agent Manager, run checks, merge branches, or enforce permissions.
 - Kilo Agent Manager supports isolated worktree sessions. Its extension `agent_manager` tool can orchestrate sessions when available and permitted; otherwise the user must perform the session-management steps. Check the installed version and available tools before promising automation.
 - Separate sessions inside the same worktree share files, branch, and terminal state. Use separate worktrees for concurrent writers. Independent Agent Manager sessions do not automatically share a Swarm board; maintain explicit coordination records and deliver updates to the affected sessions.
@@ -302,12 +274,12 @@ Status / handoff commit / blockers:
 
 ### 13.4 Shared files and cross-task contracts
 
-- Default to one owner per shared file per batch. Treat `AGENTS.md`, `CLAUDE.md`, root `utils/`, `my-dash-app/app.py`, `auth.py`, `data_loader.py`, `theme.py`, `assets/00-theme.css`, shared components, dependency manifests/locks, `Dockerfile`, CI, `run_pipeline.sh`, and dbt project/package/source definitions as coordination-sensitive. This list supplements each task's explicit path ownership.
+- Default to one owner per shared file per batch. Treat `AGENTS.md`, `CLAUDE.md`, root `utils/`, `my-dash-app/app.py`, `data_loader.py`, `theme.py`, `assets/00-theme.css`, shared components, dependency manifests/locks, `Dockerfile`, CI, `run_pipeline.sh`, and dbt project/package/source definitions as coordination-sensitive. This list supplements each task's explicit path ownership.
 - Before changing a shared file outside the assignment, send the coordinator the exact path, required change, affected consumers, and dependency impact. Continue independent in-scope work while ownership is resolved. The coordinator either expands the assignment explicitly or assigns a separate prerequisite task; silence is not approval.
 - Ownership records are procedural agreements, not automatic locks. Confirm there is no concurrent writer before changing a shared checkout. Avoid repository-wide formatting, mass renames, and unrelated cleanup during parallel batches.
-- Agree contracts for Dash component IDs/callback outputs, prepared dataset columns and dtypes, cache keys/TTL behavior, authentication routes/response codes, and dbt model/source schemas before dependent work. Notify consumers when a contract changes; update their task records and tests.
-- Assign dependency changes to one owner. Regenerate each lockfile with its normal tool from the resolved manifest; do not manually splice conflicting lockfile contents. Preserve the existing rule to build tracked auth bundles from frontend sources and commit the related integration files together.
-- Shared-file ownership does not authorize bypassing authentication, changing production schemas, or weakening tests. Architectural or safety conflicts require escalation.
+- Agree contracts for Dash component IDs/callback outputs, prepared dataset columns and dtypes, cache keys/TTL behavior, page routes, and dbt model/source schemas before dependent work. Notify consumers when a contract changes; update their task records and tests.
+- Assign dependency changes to one owner. Regenerate each lockfile with its normal tool from the resolved manifest; do not manually splice conflicting lockfile contents.
+- Shared-file ownership does not authorize bypassing production safety guards, changing production schemas, or weakening tests. Architectural or safety conflicts require escalation.
 
 ### 13.5 Branch and worktree lifecycle
 
@@ -315,9 +287,9 @@ Status / handoff commit / blockers:
 2. In the primary repository, configure the project's Agent Manager Default Base Branch as `integration`, or explicitly select it when creating each worktree. This is a separate Agent Manager setting; this document does not set it. Verify the actual branch and base commit after creation.
 3. Use one unique task branch and managed worktree per worker, for example `agent/<batch-id>/<task-id>`. Record the actual path; do not assume the directory name equals the branch name. Never check out a branch already in use by another worktree or make direct worker commits on `main` or `integration`.
 4. Establish a known current base without destructive resets. If the local base and its upstream diverge, resolve the intended source before launching work. Prefer the same recorded baseline for independent tasks; launch dependent tasks from the verified integration result that contains their prerequisite.
-5. Prepare each worktree using existing project setup conventions and Python 3.12/uv and Node 22+/npm requirements. Keep credentials local and server-side; never copy secret files into tracked paths or print their contents. A setup script may prepare dependencies, but must not run ingestion, deployment, database writes, or `run_pipeline.sh` by default.
+5. Prepare each worktree using existing project setup conventions and the Python 3.12/uv requirements. Keep credentials local and server-side; never copy secret files into tracked paths or print their contents. A setup script may prepare dependencies, but must not run ingestion, deployment, database writes, or `run_pipeline.sh` by default.
 6. Allocate unique local ports, writable cache directories, test outputs, container names, and temporary resources where supported. The Flask cache is `SimpleCache`, so it lives inside each process and needs no shared path; a Redis cache would need a supported per-worktree namespace or an isolated test instance. Do not modify production cache state or shared cloud resources to simulate isolation.
-7. Commit only reviewed task files; inspect staged changes and exclude secrets, runtime artifacts, and unrelated edits. Preserve the project's explicit requirements for tracked generated auth bundles. No force pushes, destructive resets, or Git stash in worktrees: stashes are shared across the repository. Prefer clean task commits; if a temporary recovery commit/copy is necessary, record and verify it and keep unfinished work out of accepted integration commits.
+7. Commit only reviewed task files; inspect staged changes and exclude secrets, runtime artifacts, and unrelated edits. No force pushes, destructive resets, or Git stash in worktrees: stashes are shared across the repository. Prefer clean task commits; if a temporary recovery commit/copy is necessary, record and verify it and keep unfinished work out of accepted integration commits.
 8. When the base advances, coordinate an update at a safe checkpoint. `/update-from-base` uses a managed worktree's saved base; verify it is the intended `integration` source. Changing the default setting or diff comparison base does not change an existing worktree's saved base. For local-only/unpublished integration commits, explicitly establish the correct source rather than assuming a fetched remote contains them. Preserve and verify staged, unstaged, and untracked edits before updating; stop if preservation cannot be verified.
 9. After any update or worker revision, rerun affected checks and issue a new handoff commit. Previous validation does not certify the new commit. Check Kilo's push-related settings before invoking updates; do not allow automatic push behavior beyond the recorded authorization.
 
@@ -364,7 +336,7 @@ An explicitly authorized direct-to-`integration` workflow may be used instead of
 
 - Resolve a textual conflict autonomously only when both intents and the correct combined behavior are clear from the tasks, contracts, and tests. Inspect the full affected behavior, not just conflict markers. Never choose all `ours`/`theirs` merely to make Git finish.
 - Resolve generated-file conflicts by reconciling sources and rebuilding with the existing toolchain. Recheck the resulting changes. A clean merge can still break callback wiring, schemas, data types, cache behavior, or authorization.
-- Stop the affected merge for incompatible business logic or API/schema contracts, ambiguous ownership, auth/allowlist/cookie changes with unclear intent, destructive production operations, or unexplained failing checks. Continue unrelated safe tasks only if they do not depend on the blocked result.
+- Stop the affected merge for incompatible business logic or API/schema contracts, ambiguous ownership, route/allowlist changes with unclear intent, destructive production operations, or unexplained failing checks. Continue unrelated safe tasks only if they do not depend on the blocked result.
 - Report task IDs, branches/SHAs, affected paths, each side's intended behavior, failure evidence, recovery state, and the smallest decision needed. Keep secrets out of reports.
 - Preserve the conflict state for inspection or abort only the merge initiated by this integrator after verifying recoverability. Do not abort another session's pre-existing operation, discard user edits, or mark the task integrated while conflicts remain.
 
@@ -374,14 +346,12 @@ Run checks from the repository root of the combined candidate. Preserve the exis
 
 ```bash
 .venv/bin/python -B -m unittest discover -s tests -v
-npm run build:auth
-npm run test:auth
 ```
 
-- The full offline Python suite is required for every accepted batch. Keep the network guard and cache stubs intact. Build the auth bundle before running browser authentication tests; verify whether rebuilding leaves tracked bundle changes, and include required changes before certifying the final SHA.
-- For auth work, also follow all section 12 checks: unauthenticated page/data access, email confirmation, expiry/refresh, logout, OAuth errors, and loading states without production data queries or real-account creation.
+- The full offline Python suite is required for every accepted batch. Keep the network guard and cache stubs intact.
+- For anything touching routes or the entrypoint, also follow section 12: the dashboard must answer publicly without a session and `/` must keep forwarding to `/dashboard`.
 - Run applicable existing CI, formatting, and dbt validation checks using the repository's actual configured commands. Inspect `.github/workflows/ci_pipeline.yml` first; do not invent commands or blindly run deployment steps locally. dbt checks must use a verified safe target. Do not execute `dbt clean`, ingestion, artifact upload, `run_pipeline.sh`, or production-connected dashboard queries as routine verification.
-- Check the combined Dash component IDs, callback inputs/outputs, page routes, prepared-data contracts, read-only shared frames, dtypes, cache behavior, auth ordering, and any dbt producer/consumer contracts affected by the batch. Use offline fixtures/mocks; visually verify UI changes when relevant.
+- Check the combined Dash component IDs, callback inputs/outputs, page routes, prepared-data contracts, read-only shared frames, dtypes, cache behavior, and any dbt producer/consumer contracts affected by the batch. Use offline fixtures/mocks; visually verify UI changes when relevant.
 - Inspect final status and diff for conflict markers, unrelated changes, credentials, generated/runtime artifacts, and unintended dependency churn. Confirm acceptance criteria and record the exact tested head SHA, command outcomes, and remaining limitations.
 - If a required check cannot run, report the batch as awaiting verification and retain its worktrees. Do not promote it as verified. Any changes after the gate require relevant checks again; a changed target requires checks on the new combined result.
 

@@ -1,11 +1,3 @@
-FROM node:22-slim AS auth-build
-WORKDIR /build
-COPY package.json package-lock.json ./
-RUN npm ci
-COPY Scripts/build-auth.mjs Scripts/build-auth.mjs
-COPY my-dash-app/auth_frontend my-dash-app/auth_frontend
-RUN npm run build:auth
-
 # 1. Base image
 FROM python:3.12-slim
 
@@ -32,7 +24,6 @@ RUN uv export --locked --no-dev --no-emit-project --format requirements-txt \
 
 # 5. Copy the entire repository into /app
 COPY . .
-COPY --from=auth-build /build/my-dash-app/assets/auth.bundle.js /app/my-dash-app/assets/auth.bundle.js
 
 # 6. Set working directory to my-dash-app where app.py lives
 WORKDIR /app/my-dash-app

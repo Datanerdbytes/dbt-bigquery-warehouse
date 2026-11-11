@@ -77,9 +77,6 @@ class DependencyAuditWorkflowTests(unittest.TestCase):
         self.assertEqual(
             self.step("python-audit", "Upload pip-audit results")["if"], "always()"
         )
-        self.assertEqual(
-            self.step("npm-audit", "Upload npm audit results")["if"], "always()"
-        )
 
     def test_summary_reports_missing_artifacts_and_failed_jobs(self):
         script = self.step("summary", "Print summary")["run"]
@@ -92,22 +89,14 @@ class DependencyAuditWorkflowTests(unittest.TestCase):
                 self.subTest(missing=missing, result=python_result),
                 tempfile.TemporaryDirectory() as tmp,
             ):
-                npm_dir = Path(tmp, "npm-audit")
-                npm_dir.mkdir()
-                (npm_dir / "npm-audit-results.json").write_text(
-                    '{"vulnerabilities":{}}'
-                )
                 if not missing:
                     python_dir = Path(tmp, "python-audit")
                     python_dir.mkdir()
                     (python_dir / "pip-audit-results.json").write_text(
                         '{"dependencies":[{"vulns":[]}]}'
                     )
-                result = self.run_shell(
-                    script, tmp, PYTHON_RESULT=python_result, NPM_RESULT="success"
-                )
+                result = self.run_shell(script, tmp, PYTHON_RESULT=python_result)
                 self.assertEqual(result.returncode == 0, passes, result.stderr)
-                self.assertIn("npm vulnerable packages: 0", result.stdout)
                 if missing:
                     self.assertIn("Python audit report unavailable", result.stdout)
 

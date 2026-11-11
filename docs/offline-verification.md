@@ -1,13 +1,11 @@
 # Local verification without warehouse access
 
-Run from the repository root after `uv sync --locked` and `npm ci`:
+Run from the repository root after `uv sync --locked`:
 
 ```bash
 uv run --locked python Scripts/prepare_dbt_checks.py
 uv run --locked python -m pre_commit run --all-files
 .venv/bin/python -B -m unittest discover -s tests -v
-npm run build:auth
-npm run test:auth
 ```
 
 The preparation hook downloads only the package versions pinned by
