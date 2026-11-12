@@ -78,7 +78,7 @@
   background: var(--dashboard-surface);
   color: var(--dashboard-text);
   border: 1px solid var(--dashboard-border);
-  border-radius: 10px;
+  border-radius: 12px;
 }
 .modal-header,
 .modal-footer {
@@ -93,7 +93,7 @@
 }
 .modal-content .btn-primary {
   background: var(--dashboard-accent);
-  color: var(--dashboard-background);
+  color: var(--dashboard-text);
   border-color: var(--dashboard-accent);
 }
 .tooltip-inner {

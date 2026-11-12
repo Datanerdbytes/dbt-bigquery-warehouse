@@ -54,7 +54,7 @@
 }
 .export-btn {
   background: var(--dashboard-accent);
-  color: var(--dashboard-background);
+  color: var(--dashboard-text);
   border: 1px solid var(--dashboard-accent);
   display: flex;
   align-items: center;
@@ -64,7 +64,7 @@
 .export-btn:hover,
 .export-btn:focus {
   background: color-mix(in srgb, var(--dashboard-accent) 80%, white);
-  color: var(--dashboard-background);
+  color: var(--dashboard-text);
   border-color: var(--dashboard-accent);
 }
 .export-btn:disabled {

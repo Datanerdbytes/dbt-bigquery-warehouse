@@ -70,7 +70,7 @@ select {
 .dark-card {
   background: var(--dashboard-surface);
   border: 1px solid var(--dashboard-border);
-  border-radius: 8px;
+  border-radius: 12px;
 }
 .dashboard-panel {
   min-width: 0;

@@ -514,7 +514,7 @@ def update_category_pie(filter_data, view="donut"):
     fig.update_traces(
         textinfo="none",
         hovertemplate="<b>Category:</b> %{label}<br><b>Revenue:</b> $%{value:,.0f} (%{percent})<extra></extra>",
-        marker=dict(line=dict(color=COLORS["text"], width=2)),
+        marker=dict(line=dict(color=COLORS["surface"], width=2)),
     )
 
     fig.update_layout(

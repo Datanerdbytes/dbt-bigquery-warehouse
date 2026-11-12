@@ -1,23 +1,28 @@
 /* Generated from theme.py; edit shared tokens there. */
 :root {
-  --dashboard-background: #0f172a;
-  --dashboard-surface: #1b2336;
-  --dashboard-raised: #263249;
-  --dashboard-text: #f8fafc;
-  --dashboard-muted: #a7b5c9;
-  --dashboard-border: #354258;
-  --dashboard-accent: #69a5ff;
-  --dashboard-accent-secondary: #f59e0b;
-  --dashboard-accent-tertiary: #22d3ee;
-  --dashboard-grid: #1e293b;
-  --dashboard-success: #5ddd98;
-  --dashboard-warning: #f6c56b;
-  --dashboard-danger: #ff8585;
-  --dashboard-purple: #b6a0ff;
-  --dashboard-spinner: #10b981;
-  --dashboard-font-body: "Fira Sans", system-ui, sans-serif;
-  --dashboard-font-number: "Fira Code", ui-monospace, monospace;
-  --dashboard-font-display: "Share Tech Mono", ui-monospace, monospace;
+  --dashboard-background: #081028;
+  --dashboard-surface: #0b1739;
+  --dashboard-raised: #0a1d50;
+  --dashboard-text: #ffffff;
+  --dashboard-muted: #aeb9e1;
+  --dashboard-border: #343b4f;
+  --dashboard-accent: #8951ff;
+  --dashboard-accent_secondary: #00c2ff;
+  --dashboard-accent_tertiary: #0e43fb;
+  --dashboard-grid: #1e2c4f;
+  --dashboard-success: #14ca74;
+  --dashboard-warning: #fdb52a;
+  --dashboard-danger: #ff5a65;
+  --dashboard-success_bg: #05c16833;
+  --dashboard-warning_bg: #ffb01633;
+  --dashboard-danger_bg: #ff5a6533;
+  --dashboard-purple: #cb3cff;
+  --dashboard-spinner: #00c2ff;
+  --dashboard-font-body: "Work Sans", system-ui, sans-serif;
+  --dashboard-font-number:
+    "Mona Sans Variable", "Mona Sans", "Work Sans", system-ui, sans-serif;
+  --dashboard-font-display:
+    "Mona Sans Variable", "Mona Sans", "Work Sans", system-ui, sans-serif;
   --dashboard-gap: 12px;
   --dashboard-panel: 16px;
   --dashboard-sidebar: 208px;

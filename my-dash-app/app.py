@@ -50,7 +50,10 @@ app = Dash(
     use_pages=True,
     external_stylesheets=[
         dbc.themes.DARKLY,
-        "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600&display=swap",
+        # Dashdark X typography: Work Sans for body text, Mona Sans for
+        # display headings and KPI numbers.
+        "https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,400..700;1,400..700&display=swap",
+        "https://cdn.jsdelivr.net/npm/@fontsource-variable/mona-sans/index.css",
         dbc.icons.BOOTSTRAP,
     ],
     suppress_callback_exceptions=True,
