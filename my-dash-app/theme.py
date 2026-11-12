@@ -1,7 +1,8 @@
 """Shared dashboard tokens. Run this module to regenerate assets/00-theme.css."""
 
-# Dashdark X palette — the coded implementation of the "Free Dark Admin
-# Dashboards" Figma community file (Themewagon, src/theme/colors.ts).
+# Dashdark X palette (Themewagon coded source, src/theme/colors.ts), softened
+# on 2026-11-13: gentler indigo/violet/cyan accents and a calmer status ramp,
+# keeping the original deep-navy chrome.
 COLORS = {
     "background": "#081028",
     "surface": "#0B1739",
@@ -9,25 +10,25 @@ COLORS = {
     "text": "#FFFFFF",
     "muted": "#AEB9E1",
     "border": "#343B4F",
-    "accent": "#8951FF",
-    "accent_secondary": "#00C2FF",
+    "accent": "#7C6AF8",
+    "accent_secondary": "#5EC8F8",
     "accent_tertiary": "#0E43FB",
     "grid": "#1E2C4F",
-    "success": "#14CA74",
-    "warning": "#FDB52A",
-    "danger": "#FF5A65",
-    "success_bg": "#05C16833",
-    "warning_bg": "#FFB01633",
-    "danger_bg": "#FF5A6533",
-    "purple": "#CB3CFF",
-    "spinner": "#00C2FF",
+    "success": "#45D48A",
+    "warning": "#F5B95F",
+    "danger": "#F27D77",
+    "success_bg": "#45D48A33",
+    "warning_bg": "#F5B95F33",
+    "danger_bg": "#F27D7733",
+    "purple": "#B46BFF",
+    "spinner": "#5EC8F8",
 }
 FONTS = {
     "body": '"Work Sans", system-ui, sans-serif',
     "number": '"Mona Sans Variable", "Mona Sans", "Work Sans", system-ui, sans-serif',
     "display": '"Mona Sans Variable", "Mona Sans", "Work Sans", system-ui, sans-serif',
 }
-# Dashdark chart sequence: indigo, purple, cyan, green, yellow, red.
+# Softened Dashdark chart sequence: indigo, violet, cyan, mint, amber, coral.
 CHART_COLORWAY_KEYS = (
     "accent",
     "purple",

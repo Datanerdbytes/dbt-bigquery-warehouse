@@ -6,18 +6,18 @@
   --dashboard-text: #ffffff;
   --dashboard-muted: #aeb9e1;
   --dashboard-border: #343b4f;
-  --dashboard-accent: #8951ff;
-  --dashboard-accent_secondary: #00c2ff;
+  --dashboard-accent: #7c6af8;
+  --dashboard-accent_secondary: #5ec8f8;
   --dashboard-accent_tertiary: #0e43fb;
   --dashboard-grid: #1e2c4f;
-  --dashboard-success: #14ca74;
-  --dashboard-warning: #fdb52a;
-  --dashboard-danger: #ff5a65;
-  --dashboard-success_bg: #05c16833;
-  --dashboard-warning_bg: #ffb01633;
-  --dashboard-danger_bg: #ff5a6533;
-  --dashboard-purple: #cb3cff;
-  --dashboard-spinner: #00c2ff;
+  --dashboard-success: #45d48a;
+  --dashboard-warning: #f5b95f;
+  --dashboard-danger: #f27d77;
+  --dashboard-success_bg: #45d48a33;
+  --dashboard-warning_bg: #f5b95f33;
+  --dashboard-danger_bg: #f27d7733;
+  --dashboard-purple: #b46bff;
+  --dashboard-spinner: #5ec8f8;
   --dashboard-font-body: "Work Sans", system-ui, sans-serif;
   --dashboard-font-number:
     "Mona Sans Variable", "Mona Sans", "Work Sans", system-ui, sans-serif;
